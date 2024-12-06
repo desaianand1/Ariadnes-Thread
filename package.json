@@ -1,0 +1,46 @@
+{
+  "name": "ariadnes-thread",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com:desaianand1/Ariadnes-Thread.git"
+  },
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint src --ext .js,.ts,.svelte",
+    "lint:fix": "eslint src --ext .js,.ts,.svelte --fix",
+    "format": "prettier --write \"src/**/*.{js,ts,svelte,css}\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.6",
+    "@sveltejs/vite-plugin-svelte": "^5.0.1",
+    "@tsconfig/svelte": "^5.0.4",
+    "@types/node": "^22.10.1",
+    "autoprefixer": "^10.4.20",
+    "bits-ui": "^0.21.16",
+    "clsx": "^2.1.1",
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-svelte": "^2.46.1",
+    "postcss": "^8.4.49",
+    "prettier": "^3.4.2",
+    "prettier-plugin-svelte": "^3.3.2",
+    "shadcn-svelte": "^0.14.0",
+    "svelte": "^5.7.1",
+    "svelte-check": "^4.1.1",
+    "tailwind-merge": "^2.5.5",
+    "tailwindcss": "^3.4.16",
+    "tslib": "^2.8.1",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.3"
+  },
+  "dependencies": {
+    "lucide-svelte": "^0.468.0"
+  }
+}
