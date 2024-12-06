@@ -20,7 +20,7 @@
       "$styles/*": ["./src/styles/*"],
       "$assets/*": ["./src/assets/*"]
     },
-    "baseUrl": "."
+    "baseUrl": "./"
   },
   "include": [
     "src/**/*.d.ts",
