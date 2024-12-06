@@ -2,9 +2,9 @@ name: Status Checks
 
 on:
   pull_request:
-    branches: ['release']
+    branches: ['main','release']
   push:
-    branches: ['release']
+    branches: ['main','release']
 
 jobs:
   lint:
