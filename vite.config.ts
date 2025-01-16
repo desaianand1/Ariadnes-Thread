@@ -8,9 +8,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '$lib': path.resolve(__dirname, './src/lib'),
+      '$ui': path.resolve(__dirname, './src/lib/components/ui'),
       '$components': path.resolve(__dirname, './src/lib/components'),
       '$utils': path.resolve(__dirname, './src/lib/utils'),
-      '$styles': path.resolve(__dirname, './src/styles'),
+      '$schema': path.resolve(__dirname, './src/lib/schema'),
+      '$api': path.resolve(__dirname, './src/lib/api'),
+      '$config': path.resolve(__dirname, './src/config'),
       '$assets': path.resolve(__dirname, './src/assets')
     }
   },

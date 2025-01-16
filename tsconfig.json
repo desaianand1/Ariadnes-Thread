@@ -15,9 +15,12 @@
     "paths": {
       "$lib": ["./src/lib"],
       "$lib/*": ["./src/lib/*"],
+      "$ui/*": ["./src/lib/components/ui/*"],
       "$components/*": ["./src/lib/components/*"],
       "$utils/*": ["./src/lib/utils/*"],
-      "$styles/*": ["./src/styles/*"],
+      "$schema/*": ["src/lib/schema/*"],
+      "$api/*": ["src/lib/api/*"],
+      "$config/*": ["src/config/*"],
       "$assets/*": ["./src/assets/*"]
     },
     "baseUrl": "./"
