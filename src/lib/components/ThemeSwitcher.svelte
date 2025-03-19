@@ -2,7 +2,6 @@
   import Sun from 'lucide-svelte/icons/sun';
   import Moon from 'lucide-svelte/icons/moon';
   import System from 'lucide-svelte/icons/monitor-cog';
-
   import { mode, resetMode, setMode } from 'mode-watcher';
   import { buttonVariants } from '$ui/button';
   import * as DropdownMenu from '$ui/dropdown-menu';
@@ -36,6 +35,7 @@
               : `${index === 0 ? '' : '-'}rotate-90 scale-0 opacity-0`
           )}
         />
+        <div class="w-min"></div>
       {/each}
     </div>
     <span class="sr-only">Toggle theme</span>

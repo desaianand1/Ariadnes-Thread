@@ -1,3 +1,4 @@
+import { fetchClosure } from '$state/fetch.svelte';
 import { appDefaults, envConfig, type RetryBackoffStrategy } from '$config/env';
 import { stripTrailingSlash } from '$lib/utils';
 import { ClientError, ServerError, RateLimitError } from '$api/error';
@@ -61,7 +62,7 @@ class APIClient {
       headers: this.getHeaders()
     };
     try {
-      const response = await fetch(this.baseUrl, requestOptions);
+      const response = await fetchClosure()(this.baseUrl, requestOptions);
       const metadata = await this.handleResponse<ModrinthAPIMetadata>(response);
       this.apiVersion = metadata?.version ?? undefined;
       console.info(`Utilizing Modrinth API version ${this.apiVersion} ...`);
@@ -77,7 +78,7 @@ class APIClient {
     queryParams: Record<string, string> = {}
   ): string {
     const path = pathParams.join('/');
-    const url = new URL(`${endpoint}/${path}`, `${this.baseUrl}/${version}`);
+    const url = new URL(`${endpoint}/${path}`, `${this.baseUrl}/${version}/`);
     Object.entries(queryParams).forEach(([key, value]) => url.searchParams.append(key, value));
     return url.toString();
   }
@@ -175,7 +176,7 @@ class APIClient {
         // Deprecated endpoint, don't retry!
         throw error;
       }
-      if (error instanceof RateLimitError && error.retryAfter !== 'never') {
+      if (error instanceof RateLimitError && error.retryAfter === 'never') {
         // Max retries reached, fatal failure
         throw error;
       }
@@ -211,27 +212,19 @@ class APIClient {
     queryParams: Record<string, string> = {},
     options: RequestOptions = {}
   ): Promise<T> {
-    // As of Jan 2025, Modrinth's API only has a collection endpoint on v3
-    const url = this.buildUrl(
-      endpoint,
-      endpoint === 'collection' ? 'v3' : version,
-      pathParams,
-      queryParams
-    );
+    const url = this.buildUrl(endpoint, version, pathParams, queryParams);
     const requestOptions: RequestInit = {
       method: options.method || 'GET',
       headers: this.getHeaders(options.headers),
       body: options.body ? JSON.stringify(options.body) : undefined
     };
 
-    await this.handleRateLimit();
-
-    return this.retry(
-      async () => {
-        const response = await fetch(url, requestOptions);
-        return this.handleResponse<T>(response);
-      }
-    );
+    const attemptRequest = async () => {
+      await this.handleRateLimit();
+      const response = await fetchClosure()(url, requestOptions);
+      return this.handleResponse<T>(response);
+    };
+    return this.retry(attemptRequest);
   }
 
   // Semaphore-based concurrency handling

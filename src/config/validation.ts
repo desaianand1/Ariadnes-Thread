@@ -20,7 +20,10 @@ const appDefaultsSchema = z.object({
     .max(300, 'Cannot be longer than 5 minutes! (300 seconds)'),
   VITE_MAX_REQUEST_RETRIES: z.number().positive().max(10, 'Must not exceed 10 retry limit!'),
   VITE_RETRY_BACKOFF_STRATEGY: BackoffStrategySchema.default('exponential'),
-  VITE_RETRY_DELAY_IN_MS: z.number().positive().max(10000,"Must not exceed 10 seconds (10,000 ms)!")
+  VITE_RETRY_DELAY_IN_MS: z
+    .number()
+    .positive()
+    .max(10000, 'Must not exceed 10 seconds (10,000 ms)!')
 });
 
 type AppEnv = z.infer<typeof envSchema>;
@@ -31,12 +34,12 @@ function parseAppEnv(): AppEnv {
     const parsedAppEnv: AppEnv = envSchema.parse({
       VITE_MODRINTH_API_URL: import.meta.env.VITE_MODRINTH_API_URL,
       VITE_MODRINTH_USER_AGENT: import.meta.env.VITE_MODRINTH_USER_AGENT,
-      IS_PROD: import.meta.env.PROD,
+      IS_PROD: Boolean(import.meta.env.PROD),
       VITE_DONATION_URL: import.meta.env.VITE_DONATION_URL,
       VITE_WEBSITE_DOMAIN_URL: import.meta.env.VITE_WEBSITE_DOMAIN_URL
     });
-    console.debug('Environment variables validated successfully:', parsedAppEnv);
-    return parsedEnv;
+    console.debug('Environment variables validated successfully!');
+    return parsedAppEnv;
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('Environment variable validation errors:');
@@ -53,12 +56,13 @@ function parseAppEnv(): AppEnv {
 function parseAppDefaults(): AppDefaults {
   try {
     const parsedDefaults: AppDefaults = appDefaultsSchema.parse({
-      VITE_MAX_REQUESTS_PER_MINUTE: import.meta.env.VITE_MAX_REQUESTS_PER_MINUTE,
-      VITE_RESET_INTERVAL_IN_SECONDS: import.meta.env.VITE_RESET_INTERVAL_IN_SECONDS,
-      VITE_MAX_REQUEST_RETRIES: import.meta.env.VITE_MAX_REQUEST_RETRIES,
-      VITE_RETRY_BACKOFF_STRATEGY: import.meta.env.VITE_RETRY_BACKOFF_STRATEGY
+      VITE_MAX_REQUESTS_PER_MINUTE: Number(import.meta.env.VITE_MAX_REQUESTS_PER_MINUTE),
+      VITE_RESET_INTERVAL_IN_SECONDS: Number(import.meta.env.VITE_RESET_INTERVAL_IN_SECONDS),
+      VITE_MAX_REQUEST_RETRIES: Number(import.meta.env.VITE_MAX_REQUEST_RETRIES),
+      VITE_RETRY_BACKOFF_STRATEGY: import.meta.env.VITE_RETRY_BACKOFF_STRATEGY,
+      VITE_RETRY_DELAY_IN_MS: Number(import.meta.env.VITE_RETRY_DELAY_IN_MS)
     });
-    console.debug('App Defaults variables validated successfully:', parsedDefaults);
+    console.debug('App Defaults variables validated successfully!');
     return parsedDefaults;
   } catch (error) {
     if (error instanceof z.ZodError) {

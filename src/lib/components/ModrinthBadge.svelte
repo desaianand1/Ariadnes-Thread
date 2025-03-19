@@ -1,5 +1,5 @@
 <span
-  class="uppercase bg-emerald-50 dark:bg-emerald-600/20 text-xs text-emerald-600 py-2 w-60 ring-2 ring-emerald-600 rounded-xl tracking-widest font-raleway font-bold md:rounded-2xl flex items-center justify-center text-center"
+  class="flex items-center justify-center text-center py-2 w-60 text-xs bg-emerald-50 dark:bg-emerald-600/20 text-emerald-600 ring-2 ring-emerald-600 rounded-xl md:rounded-2xl tracking-widest font-raleway font-bold uppercase"
 >
   Made For &nbsp;
   <svg

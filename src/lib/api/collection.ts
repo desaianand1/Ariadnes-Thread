@@ -1,8 +1,9 @@
-import { ClientError, RateLimitError, ServerError } from '$api/error';
-import { apiClient } from '$api/client';
-import type { DateTime } from 'luxon';
+import { ClientError, handleError, RateLimitError, ServerError } from '$api/error';
+import { apiClient, type ModrinthAPIVersion } from '$api/client';
+import { DateTime } from 'luxon';
+import { convertDecimalToHex } from '$utils/colors';
 
-interface ModrinthCollection {
+interface ModrinthCollectionResponse {
   id: string;
   user: string;
   name: string;
@@ -10,23 +11,40 @@ interface ModrinthCollection {
   icon_url: string;
   color?: number;
   status: 'listed' | 'unlisted' | 'private';
-  created: DateTime;
-  updated: DateTime;
+  created: string;
+  updated: string;
   projects: string[];
 }
 
-async function getCollection(id: string): Promise<ModrinthCollection> {
+export interface ModrinthCollection
+  extends Omit<ModrinthCollectionResponse, 'created' | 'updated' | 'color'> {
+  color?: string;
+  created: DateTime;
+  updated: DateTime;
+}
+
+async function getCollection(
+  id: string,
+  apiVersion: ModrinthAPIVersion = 'v3'
+): Promise<ModrinthCollection> {
   try {
-    // Try v3 first
-    return await apiClient.request<ModrinthCollection>('collection', 'v3', [id]);
+    // As of Jan 2025, Modrinth's API only has a collection endpoint on v3
+    const response = await apiClient.request<ModrinthCollectionResponse>('collection', apiVersion, [
+      id
+    ]);
+    return {
+      ...response,
+      color: convertDecimalToHex(response.color),
+      created: DateTime.fromISO(response.created),
+      updated: DateTime.fromISO(response.updated)
+    };
   } catch (error) {
     // Fallback to v2 if v3 fails
-    if (error instanceof ClientError && error.status === 410) {
-      return await apiClient.request<ModrinthCollection>('collection', 'v2', [id]);
-    } else if (error instanceof ServerError) {
-      //TODO: throw toast showing that server is unavailable. Try again later
-    } else if (error instanceof RateLimitError && error.retryAfter === 'never') {
-      //TODO: throw toast showing that you are rate limited hard and failed all retries. Fatal failure
+    if (apiVersion === 'v3' && error instanceof ClientError && error.status === 410) {
+      return await getCollection(id, 'v2');
+    } else {
+      //TODO: add toast for errors
+      handleError(error);
     }
     throw error;
   }
@@ -38,5 +56,7 @@ async function getSeveralCollections(ids: string[]): Promise<ModrinthCollection[
   const failedResults = results.filter((r) => r.status === 'rejected');
   //TODO: show failed results on screen or via toast
   const successfulResults = results.filter((r) => r.status === 'fulfilled');
-  return successfulResults.map(s => s.value)
+  return successfulResults.map((s) => s.value);
 }
+
+export { getCollection, getSeveralCollections };

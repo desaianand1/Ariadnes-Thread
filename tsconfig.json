@@ -1,5 +1,5 @@
 {
-  "extends": "@tsconfig/svelte/tsconfig.json",
+  "extends": "./.svelte-kit/tsconfig.json",
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,
@@ -12,18 +12,10 @@
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "paths": {
-      "$lib": ["./src/lib"],
-      "$lib/*": ["./src/lib/*"],
-      "$ui/*": ["./src/lib/components/ui/*"],
-      "$components/*": ["./src/lib/components/*"],
-      "$utils/*": ["./src/lib/utils/*"],
-      "$schema/*": ["src/lib/schema/*"],
-      "$api/*": ["src/lib/api/*"],
-      "$config/*": ["src/config/*"],
-      "$assets/*": ["./src/assets/*"]
-    },
-    "baseUrl": "./"
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "sourceMap": true,
+    "moduleResolution": "bundler",
   },
   "include": [
     "src/**/*.d.ts",

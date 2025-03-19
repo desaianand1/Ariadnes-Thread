@@ -1,57 +1,34 @@
-import globals from 'globals'
-import js from '@eslint/js'
-import tseslint from 'typescript-eslint'
-import eslintPluginSvelte from 'eslint-plugin-svelte'
-import prettierConfig from 'eslint-config-prettier'
+import prettier from 'eslint-config-prettier';
+import js from '@eslint/js';
+import { includeIgnoreFile } from '@eslint/compat';
+import svelte from 'eslint-plugin-svelte';
+import globals from 'globals';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript-eslint';
+const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
 export default tseslint.config(
+  includeIgnoreFile(gitignorePath),
+  js.configs.recommended,
+  ...ts.configs.recommended,
+  ...svelte.configs['flat/recommended'],
+  prettier,
+  ...svelte.configs['flat/prettier'],
   {
-    // Global configuration
-    files: ['**/*.{js,ts,svelte}'],
-    ignores: ['node_modules/**', 'dist/**'],
     languageOptions: {
       globals: {
         ...globals.browser,
-        ...globals.es2021
-      },
-      parserOptions: {
-        ecmaVersion: 'latest',
-        sourceType: 'module'
-      }
-    },
-    plugins: {
-      svelte: eslintPluginSvelte
-    },
-    // Base configuration for all files
-    rules: {
-      ...js.configs.recommended.rules,
-      ...prettierConfig.rules
-    }
-  },
-  // TypeScript files configuration
-  {
-    files: ['**/*.ts'],
-    extends: [
-      ...tseslint.configs.recommendedTypeChecked,
-      ...tseslint.configs.strictTypeChecked
-    ],
-    languageOptions: {
-      parser: tseslint.parser,
-      parserOptions: {
-        project: './tsconfig.json'
+        ...globals.node
       }
     }
   },
-  // Svelte files configuration
   {
     files: ['**/*.svelte'],
-    extends: [eslintPluginSvelte.configs.recommended],
+
     languageOptions: {
-      parser: eslintPluginSvelte.parser
-    },
-    rules: {
-      'svelte/valid-compile': 'error',
-      'svelte/no-implicit-any': 'error'
+      parserOptions: {
+        parser: ts.parser
+      }
     }
   }
-)
+);

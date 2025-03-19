@@ -3,10 +3,10 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/png" href="/favicon.ico" />
+  <link rel="icon" type="image/png" href="%sveltekit.assets%/favicon.ico" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="canonical" href="https://modrinth.download" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
   <meta name="theme-color" content="#8165F1" />
   <title>Modrinth Collections Downloader - Ariadne's Thread</title>
   <meta name="title" content="Modrinth Collections Downloader - Ariadne's Thread" />
@@ -33,29 +33,30 @@
   <meta property="twitter:title" content="Modrinth Collections Downloader - Ariadne's Thread" />
   <meta property="twitter:description"
     content="Ariadne's Thread is a one-stop solution for managing and downloading Modrinth collections. Simplify Minecraft modpack & data pack downloads!" />
-  <meta property="twitter:image" content="https://modrinth.download/public/og-image.png" />
+  <meta property="twitter:image" content="https://modrinth.download/static/og-image.png" />
 
   <!-- Structured Data -->
   <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "Modrinth Collections Downloader - Ariadne's Thread",
-      "url": "https://modrinth.download/",
-      "author": {
-        "@type": "Person",
-        "name": "Anand Desai"
-      },
-      "description": "Ariadne's Thread is a one-stop solution for managing and downloading Modrinth collections. Simplify Minecraft modpack & data pack downloads."
-    }
-    </script>
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Modrinth Collections Downloader - Ariadne's Thread",
+        "url": "https://modrinth.download/",
+        "author": {
+          "@type": "Person",
+          "name": "Anand Desai"
+        },
+        "description": "Ariadne's Thread is a one-stop solution for managing and downloading Modrinth collections. Simplify Minecraft modpack & data pack downloads."
+      }
+  </script>
+  %sveltekit.head%
 </head>
 
-<body>
+<body data-sveltekit-preload-data="hover">
   <div id="app">
     <noscript>Please enable JavaScript to use this application.</noscript>
   </div>
-  <script type="module" src="/src/main.ts"></script>
+  <div style="display: contents">%sveltekit.body%</div>
 </body>
 
 </html>
