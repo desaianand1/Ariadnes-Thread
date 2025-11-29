@@ -1,57 +1,25 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
 node_modules
-dist
-dist-ssr
-*.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Test coverage
-coverage
-*.lcov
-
-# Optional eslint cache
-.eslintcache
-
-# dotenv environment variables file
-.env
-.env.*
-!.env.example
-# build output
+# Output
+.output
 .vercel
-.svelte-kit
-.cloudflare
-.pnpm-debug.log
 .netlify
-.turbo
+.wrangler
+/.svelte-kit
+/build
 
-# OS-specific
+# OS
 .DS_Store
-tmp
-benchmarking/compare/.results
+Thumbs.db
 
-# Misc
-test-results/
+# Env
+.env
+.env.local
+!.env.example
+.env.development
+.env.production
+!.env.test
+
+# Vite
 vite.config.js.timestamp-*
-/packages/create-svelte/template/CHANGELOG.md
-/packages/package/test/**/package
-/documentation/types.js
-.test-tmp
-symlink-from
+vite.config.ts.timestamp-*
