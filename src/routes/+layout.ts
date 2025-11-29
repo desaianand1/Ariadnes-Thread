@@ -1,7 +1,2 @@
-import { setFetchFunction } from '$state/fetch.svelte';
-import type { LayoutLoad } from '$routes/$types';
-
-export const load = (async ({fetch}) => {
-    setFetchFunction(fetch);
-    return {};
-  }) satisfies LayoutLoad;
+// SSR is enabled by default with Cloudflare adapter
+// Individual pages can opt-in to prerendering with export const prerender = true
