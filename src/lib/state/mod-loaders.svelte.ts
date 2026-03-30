@@ -5,6 +5,7 @@
 
 import { getCachedData, setCachedData } from '$lib/utils/cache';
 import { getTextColorByModLoader } from '$lib/utils/colors';
+import { getLoaderDisplayName } from '$lib/utils/format';
 import { STORAGE_KEYS, CACHE_TTL, getLoaderCategory } from '$lib/config/constants';
 import type { LoaderCategory } from '$lib/config/constants';
 import type { ModrinthLoader } from '$lib/api/types';
@@ -74,7 +75,7 @@ export async function loadModLoaders(): Promise<void> {
             const slug = loader.name.toLowerCase();
 
             return {
-                name: loader.name,
+                name: getLoaderDisplayName(slug),
                 slug,
                 icon: loader.icon,
                 colorClass: getTextColorByModLoader(slug),

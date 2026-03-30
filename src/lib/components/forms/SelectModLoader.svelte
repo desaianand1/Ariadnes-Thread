@@ -3,6 +3,7 @@
     import * as Select from '$lib/components/ui/select';
     import { Spinner } from '$lib/components/ui/spinner';
     import { loaderState, loadModLoaders, getGroupedLoaders } from '$lib/state/mod-loaders.svelte';
+    import { cn } from '$lib/utils';
 
     interface Props {
         value?: string;
@@ -31,7 +32,7 @@
 </script>
 
 <Select.Root type="single" {value} onValueChange={handleValueChange} {disabled}>
-    <Select.Trigger {id} class="w-full min-w-[180px]">
+    <Select.Trigger {id} class="w-full min-w-45">
         {#if loaderState.isLoading}
             <span class="flex items-center gap-2">
                 <Spinner class="size-4" />
@@ -39,7 +40,7 @@
             </span>
         {:else if selectedLoader}
             <span class="flex items-center gap-2">
-                <span class={selectedLoader.colorClass} aria-hidden="true">
+                <span class={cn(selectedLoader.colorClass)} aria-hidden="true">
                     {@html selectedLoader.icon}
                 </span>
                 {selectedLoader.name}
@@ -49,7 +50,7 @@
         {/if}
     </Select.Trigger>
 
-    <Select.Content class="max-h-[300px]">
+    <Select.Content class="max-h-75">
         {#if loaderState.error}
             <div class="px-2 py-4 text-center text-sm text-destructive">
                 {loaderState.error}
@@ -61,7 +62,7 @@
                     {#each grouped.popular as loader (loader.slug)}
                         <Select.Item value={loader.slug}>
                             <span class="flex items-center gap-2">
-                                <span class={loader.colorClass} aria-hidden="true">
+                                <span class={cn(loader.colorClass)} aria-hidden="true">
                                     {@html loader.icon}
                                 </span>
                                 {loader.name}
@@ -79,7 +80,7 @@
                     {#each grouped.other as loader (loader.slug)}
                         <Select.Item value={loader.slug}>
                             <span class="flex items-center gap-2">
-                                <span class={loader.colorClass} aria-hidden="true">
+                                <span class={cn(loader.colorClass)} aria-hidden="true">
                                     {@html loader.icon}
                                 </span>
                                 {loader.name}
@@ -97,7 +98,7 @@
                     {#each grouped.plugins as loader (loader.slug)}
                         <Select.Item value={loader.slug}>
                             <span class="flex items-center gap-2">
-                                <span class={loader.colorClass} aria-hidden="true">
+                                <span class={cn(loader.colorClass)} aria-hidden="true">
                                     {@html loader.icon}
                                 </span>
                                 {loader.name}

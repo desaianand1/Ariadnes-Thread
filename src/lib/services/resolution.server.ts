@@ -130,11 +130,17 @@ export async function resolveVersion(
         usedFallbackLoader,
         resolvedLoader,
         categories: project.categories,
-        downloads: project.downloads,
-        license: project.license
-            ? { id: project.license.id, name: project.license.name }
-            : undefined,
-        datePublished: best.date_published
+        downloadCount: project.downloads,
+        licenseName: project.license?.name,
+        licenseUrl: project.license?.url,
+        lastUpdated: best.date_published,
+        changelog: best.changelog ?? undefined,
+        gallery: project.gallery?.map((g) => ({
+            url: g.url,
+            featured: g.featured,
+            title: g.title,
+            description: g.description
+        }))
     };
 
     return { resolved, warnings };

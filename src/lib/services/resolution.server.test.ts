@@ -94,6 +94,46 @@ describe('resolveVersion', () => {
         expect(result!.warnings).toHaveLength(0);
     });
 
+    it('populates Tier 2/3 metadata fields from project and version', async () => {
+        const project = makeProject({
+            categories: ['adventure', 'utility'],
+            downloads: 50_000,
+            license: { id: 'MIT', name: 'MIT' },
+            gallery: [
+                {
+                    url: 'https://cdn.modrinth.com/gallery.png',
+                    featured: true,
+                    title: 'Screenshot',
+                    description: 'A screenshot',
+                    created: '2024-01-01T00:00:00Z',
+                    ordering: 0
+                }
+            ]
+        });
+        const version = makeVersion({
+            changelog: '## Changes\n- Fixed a bug',
+            date_published: '2024-06-15T12:00:00Z'
+        });
+
+        vi.spyOn(client, 'requestVersion').mockResolvedValueOnce([version]);
+
+        const result = await resolveVersion(client, project, makeOptions());
+        expect(result).not.toBeNull();
+        const r = result!.resolved;
+
+        // Tier 2
+        expect(r.categories).toEqual(['adventure', 'utility']);
+        expect(r.downloadCount).toBe(50_000);
+        expect(r.licenseName).toBe('MIT');
+        expect(r.lastUpdated).toBe('2024-06-15T12:00:00Z');
+
+        // Tier 3
+        expect(r.changelog).toBe('## Changes\n- Fixed a bug');
+        expect(r.gallery).toHaveLength(1);
+        expect(r.gallery![0].url).toBe('https://cdn.modrinth.com/gallery.png');
+        expect(r.gallery![0].featured).toBe(true);
+    });
+
     it('returns null when no versions match', async () => {
         vi.spyOn(client, 'requestVersion').mockResolvedValueOnce([]);
 

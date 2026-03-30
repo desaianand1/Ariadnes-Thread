@@ -14,6 +14,18 @@
         sideFilter = $bindable('all'),
         statusFilter = $bindable('all')
     }: Props = $props();
+
+    let inputValue = $state(searchQuery);
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function onInput(e: Event) {
+        const target = e.target as HTMLInputElement;
+        inputValue = target.value;
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            searchQuery = inputValue;
+        }, 200);
+    }
 </script>
 
 <div class="flex flex-wrap items-center gap-3 px-4 py-3">
@@ -26,7 +38,8 @@
             type="text"
             placeholder="Filter mods by name..."
             class="pl-9"
-            bind:value={searchQuery}
+            value={inputValue}
+            oninput={onInput}
         />
     </div>
 

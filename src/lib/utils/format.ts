@@ -32,7 +32,15 @@ const LOADER_DISPLAY_NAMES: Record<string, string> = {
     velocity: 'Velocity',
     purpur: 'Purpur',
     folia: 'Folia',
-    sponge: 'Sponge'
+    sponge: 'Sponge',
+    rift: 'Rift',
+    babric: 'Babric',
+    ornithe: 'Ornithe',
+    bukkit: 'Bukkit',
+    spigot: 'Spigot',
+    paper: 'Paper',
+    geyser: 'Geyser',
+    datapack: 'Datapack'
 };
 
 export function getLoaderDisplayName(slug: string): string {
@@ -47,4 +55,47 @@ export function formatNumber(n: number): string {
         }
     }
     return n.toString();
+}
+
+export function formatSpeed(bytesPerSec: number): string {
+    if (bytesPerSec <= 0) return '0 B/s';
+    let unitIndex = 0;
+    let size = bytesPerSec;
+    while (size >= 1024 && unitIndex < BYTE_UNITS.length - 1) {
+        size /= 1024;
+        unitIndex++;
+    }
+    const formatted = unitIndex === 0 ? size.toString() : size.toFixed(1).replace(/\.0$/, '');
+    return `${formatted} ${BYTE_UNITS[unitIndex]}/s`;
+}
+
+export function formatEta(seconds: number): string {
+    if (!isFinite(seconds) || isNaN(seconds)) return '∞';
+    if (seconds <= 0) return '< 1s';
+    if (seconds < 60) return `${Math.ceil(seconds)}s`;
+    if (seconds < 3600) {
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.ceil(seconds % 60);
+        return secs === 0 ? `${minutes}m` : `${minutes}m ${secs}s`;
+    }
+    if (seconds < 86400) {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.ceil((seconds % 3600) / 60);
+        return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+    }
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.ceil((seconds % 86400) / 3600);
+    return hours === 0 ? `${days}d` : `${days}d ${hours}h`;
+}
+
+export function formatRelativeTime(isoDate: string): string {
+    const date = new Date(isoDate);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 30) return `${diffDays}d ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+    return `${Math.floor(diffDays / 365)}y ago`;
 }

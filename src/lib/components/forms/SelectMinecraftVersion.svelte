@@ -1,7 +1,10 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import * as Select from '$lib/components/ui/select';
+    import { Badge } from '$lib/components/ui/badge';
     import { Spinner } from '$lib/components/ui/spinner';
+    import { VERSION_TYPE_BADGE_CLASSES } from '$lib/utils/colors';
+    import { cn } from '$lib/utils';
     import {
         versionState,
         loadMinecraftVersions,
@@ -32,7 +35,7 @@
 </script>
 
 <Select.Root type="single" {value} onValueChange={handleValueChange} {disabled}>
-    <Select.Trigger {id} class="w-full min-w-[180px]">
+    <Select.Trigger {id} class="w-full min-w-45">
         {#if versionState.isLoading}
             <span class="flex items-center gap-2">
                 <Spinner class="size-4" />
@@ -45,7 +48,7 @@
         {/if}
     </Select.Trigger>
 
-    <Select.Content class="max-h-[300px]">
+    <Select.Content class="max-h-75">
         {#if versionState.error}
             <div class="px-2 py-4 text-center text-sm text-destructive">
                 {versionState.error}
@@ -54,9 +57,22 @@
             {#if grouped.popular.length > 0}
                 <Select.Group>
                     <Select.GroupHeading>Popular Releases</Select.GroupHeading>
-                    {#each grouped.popular.slice(0, 10) as version (version.value)}
+                    {#each grouped.popular as version (version.value)}
                         <Select.Item value={version.value}>
-                            {version.label}
+                            <span class="flex items-center gap-2">
+                                {version.label}
+                                {#if version.versionType !== 'release'}
+                                    <Badge
+                                        variant="secondary"
+                                        class={cn(
+                                            'text-[10px] leading-tight',
+                                            VERSION_TYPE_BADGE_CLASSES[version.versionType]
+                                        )}
+                                    >
+                                        {version.versionType}
+                                    </Badge>
+                                {/if}
+                            </span>
                         </Select.Item>
                     {/each}
                 </Select.Group>
@@ -71,11 +87,15 @@
                         <span class="flex items-center gap-2">
                             {version.label}
                             {#if version.versionType !== 'release'}
-                                <span
-                                    class="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                                <Badge
+                                    variant="secondary"
+                                    class={cn(
+                                        'text-[10px] leading-tight',
+                                        VERSION_TYPE_BADGE_CLASSES[version.versionType]
+                                    )}
                                 >
                                     {version.versionType}
-                                </span>
+                                </Badge>
                             {/if}
                         </span>
                     </Select.Item>

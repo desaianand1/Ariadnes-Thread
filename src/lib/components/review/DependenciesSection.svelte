@@ -2,6 +2,8 @@
     import type { ResolvedProject, ResolutionWarning } from '$lib/services/types';
     import * as Collapsible from '$lib/components/ui/collapsible';
     import ModCard from './ModCard.svelte';
+    import CompactRow from './CompactRow.svelte';
+    import { cn } from '$lib/utils';
     import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
     import PackageIcon from '@lucide/svelte/icons/package';
 
@@ -11,10 +13,21 @@
         warningsByProject: Map<string, ResolutionWarning[]>;
         conflictProjectIds: Set<string>;
         loader: string;
+        viewMode?: 'detailed' | 'compact';
+        onExclude?: (id: string) => void;
+        excludedIds?: Set<string>;
     }
 
-    let { dependencies, projectTitleMap, warningsByProject, conflictProjectIds, loader }: Props =
-        $props();
+    let {
+        dependencies,
+        projectTitleMap,
+        warningsByProject,
+        conflictProjectIds,
+        loader,
+        viewMode = 'detailed',
+        onExclude,
+        excludedIds = new Set()
+    }: Props = $props();
 
     let open = $state(true);
 
@@ -59,9 +72,10 @@
             </div>
 
             <ChevronDownIcon
-                class="size-4 text-muted-foreground transition-transform duration-200 {open
-                    ? 'rotate-180'
-                    : ''}"
+                class={cn(
+                    'size-4 text-muted-foreground transition-transform duration-200',
+                    open ? 'rotate-180' : ''
+                )}
             />
         </Collapsible.Trigger>
 
@@ -73,17 +87,34 @@
                         <h4 class="mb-2 text-sm font-medium text-muted-foreground">
                             {label} ({projects.length})
                         </h4>
-                        <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                            {#each projects as project, i (project.projectId)}
-                                <ModCard
-                                    {project}
-                                    warnings={warningsByProject.get(project.projectId) ?? []}
-                                    isConflict={conflictProjectIds.has(project.projectId)}
-                                    {loader}
-                                    index={i}
-                                />
-                            {/each}
-                        </div>
+                        {#if viewMode === 'compact'}
+                            <div class="space-y-1">
+                                {#each projects as project (project.projectId)}
+                                    <CompactRow
+                                        {project}
+                                        warnings={warningsByProject.get(project.projectId) ?? []}
+                                        isConflict={conflictProjectIds.has(project.projectId)}
+                                        {loader}
+                                        {onExclude}
+                                        isExcluded={excludedIds.has(project.projectId)}
+                                    />
+                                {/each}
+                            </div>
+                        {:else}
+                            <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                {#each projects as project, i (project.projectId)}
+                                    <ModCard
+                                        {project}
+                                        warnings={warningsByProject.get(project.projectId) ?? []}
+                                        isConflict={conflictProjectIds.has(project.projectId)}
+                                        {loader}
+                                        index={i}
+                                        {onExclude}
+                                        isExcluded={excludedIds.has(project.projectId)}
+                                    />
+                                {/each}
+                            </div>
+                        {/if}
                     </div>
                 {/each}
             </div>

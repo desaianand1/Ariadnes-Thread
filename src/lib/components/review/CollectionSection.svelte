@@ -3,6 +3,7 @@
     import * as Collapsible from '$lib/components/ui/collapsible';
     import * as Avatar from '$lib/components/ui/avatar';
     import ModCard from './ModCard.svelte';
+    import CompactRow from './CompactRow.svelte';
     import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 
     interface Props {
@@ -11,6 +12,9 @@
         conflictProjectIds: Set<string>;
         loader: string;
         defaultOpen?: boolean;
+        viewMode?: 'detailed' | 'compact';
+        onExclude?: (id: string) => void;
+        excludedIds?: Set<string>;
     }
 
     let {
@@ -18,7 +22,10 @@
         warningsByProject,
         conflictProjectIds,
         loader,
-        defaultOpen = true
+        defaultOpen = true,
+        viewMode = 'detailed',
+        onExclude,
+        excludedIds = new Set()
     }: Props = $props();
 
     let open = $state(defaultOpen);
@@ -91,18 +98,38 @@
                             <h4 class="mb-2 text-sm font-medium text-muted-foreground">
                                 {label} ({projects.length})
                             </h4>
-                            <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                                {#each projects as project, i (project.projectId)}
-                                    <ModCard
-                                        {project}
-                                        warnings={warningsByProject.get(project.projectId) ?? []}
-                                        isConflict={conflictProjectIds.has(project.projectId)}
-                                        alsoIn={group.alsoInMap[project.projectId]}
-                                        {loader}
-                                        index={i}
-                                    />
-                                {/each}
-                            </div>
+                            {#if viewMode === 'compact'}
+                                <div class="space-y-1">
+                                    {#each projects as project (project.projectId)}
+                                        <CompactRow
+                                            {project}
+                                            warnings={warningsByProject.get(project.projectId) ??
+                                                []}
+                                            isConflict={conflictProjectIds.has(project.projectId)}
+                                            alsoIn={group.alsoInMap[project.projectId]}
+                                            {loader}
+                                            {onExclude}
+                                            isExcluded={excludedIds.has(project.projectId)}
+                                        />
+                                    {/each}
+                                </div>
+                            {:else}
+                                <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                    {#each projects as project, i (project.projectId)}
+                                        <ModCard
+                                            {project}
+                                            warnings={warningsByProject.get(project.projectId) ??
+                                                []}
+                                            isConflict={conflictProjectIds.has(project.projectId)}
+                                            alsoIn={group.alsoInMap[project.projectId]}
+                                            {loader}
+                                            index={i}
+                                            {onExclude}
+                                            isExcluded={excludedIds.has(project.projectId)}
+                                        />
+                                    {/each}
+                                </div>
+                            {/if}
                         </div>
                     {/each}
                 {/if}

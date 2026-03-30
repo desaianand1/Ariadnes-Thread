@@ -101,6 +101,16 @@ export function getBadgeClassesByModLoader(slug: string): string {
 }
 
 /**
+ * Tailwind classes for version type badges (snapshot, beta, alpha)
+ * Shared across ModCard and SelectMinecraftVersion
+ */
+export const VERSION_TYPE_BADGE_CLASSES: Record<string, string> = {
+    snapshot: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    beta: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+    alpha: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+};
+
+/**
  * Convert Modrinth decimal color to hex string
  * Modrinth stores colors as integers (e.g., 16711680 = #FF0000)
  * @param decimal - Decimal color value from Modrinth API

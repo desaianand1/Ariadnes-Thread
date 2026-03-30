@@ -56,11 +56,16 @@ export interface ResolvedProject {
     /** The actual loader the resolved version targets, if different from requested */
     resolvedLoader?: string;
 
-    // Tier 2 metadata for hover card
+    // Tier 2
     categories?: string[];
-    downloads?: number;
-    license?: { id: string; name: string };
-    datePublished?: string;
+    downloadCount?: number;
+    licenseName?: string;
+    licenseUrl?: string;
+    lastUpdated?: string;
+
+    // Tier 3
+    changelog?: string;
+    gallery?: Array<{ url: string; featured: boolean; title?: string; description?: string }>;
 }
 
 // =============================================================================

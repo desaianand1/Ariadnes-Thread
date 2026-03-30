@@ -249,7 +249,8 @@ export const load: PageServerLoad = async ({ url, platform }) => {
         context: {
             gameVersion: reviewOptions.gameVersion,
             loader: reviewOptions.loader,
-            collectionIds: reviewOptions.collectionIds
+            collectionIds: reviewOptions.collectionIds,
+            excludedProjectIds: Array.from(reviewOptions.excludedProjectIds)
         }
     };
 };
