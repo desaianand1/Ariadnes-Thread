@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { cn } from '$lib/utils';
+	import { slide, fade } from 'svelte/transition';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import XIcon from '@lucide/svelte/icons/x';
 	import CheckIcon from '@lucide/svelte/icons/check';
@@ -53,11 +54,17 @@
 
 					<div class="absolute inset-y-0 right-0 flex items-center pr-3">
 						{#if entry.status === 'validating'}
-							<Spinner class="size-4" />
+							<span in:fade={{ duration: 150 }}>
+								<Spinner class="size-4" />
+							</span>
 						{:else if entry.status === 'valid'}
-							<CheckIcon class="size-4 text-green-500" />
+							<span in:fade={{ duration: 150 }}>
+								<CheckIcon class="size-4 text-green-500" />
+							</span>
 						{:else if entry.status === 'invalid'}
-							<AlertCircleIcon class="size-4 text-destructive" />
+							<span in:fade={{ duration: 150 }}>
+								<AlertCircleIcon class="size-4 text-destructive" />
+							</span>
 						{/if}
 					</div>
 				</div>
@@ -80,11 +87,16 @@
 			</div>
 
 			{#if entry.status === 'invalid' && entry.error}
-				<p class="ml-12 text-sm text-destructive">{entry.error}</p>
+				<p class="ml-12 text-sm text-destructive" transition:slide={{ duration: 200 }}>
+					{entry.error}
+				</p>
 			{/if}
 
 			{#if entry.status === 'valid' && entry.collection}
-				<div class="ml-12 rounded-md border border-green-500/20 bg-green-500/5 p-3">
+				<div
+					class="ml-12 rounded-md border border-green-500/20 bg-green-500/5 p-3"
+					transition:slide={{ duration: 200 }}
+				>
 					<div class="flex items-center gap-2">
 						{#if entry.collection.iconUrl}
 							<img src={entry.collection.iconUrl} alt="" class="size-6 rounded" />

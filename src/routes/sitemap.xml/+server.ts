@@ -1,11 +1,10 @@
 import { getCanonicalUrl } from '$lib/config/site';
-import { env } from '$env/dynamic/public';
 import type { RequestHandler } from './$types';
 
-const routes = ['/'];
+const routes = ['/', '/review'];
 
 export const GET: RequestHandler = () => {
-	const baseUrl = getCanonicalUrl(env);
+	const baseUrl = getCanonicalUrl();
 	const today = new Date().toISOString().split('T')[0];
 
 	const urls = routes

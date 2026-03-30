@@ -17,6 +17,7 @@ export interface APIClientConfig {
 	maxRetries: number;
 	retryDelayMs: number;
 	retryBackoffStrategy: RetryBackoffStrategy;
+	fetchTimeoutMs: number;
 }
 
 /**
@@ -29,7 +30,8 @@ const DEFAULT_CONFIG: APIClientConfig = {
 	resetIntervalSeconds: 60,
 	maxRetries: 3,
 	retryDelayMs: 1000,
-	retryBackoffStrategy: 'exponential'
+	retryBackoffStrategy: 'exponential',
+	fetchTimeoutMs: 30_000
 };
 
 /**
@@ -112,17 +114,10 @@ export class ModrinthClient {
 	 * Determines if we should fallback to v2 API
 	 */
 	private shouldFallbackToV2(error: unknown, currentVersion: ModrinthAPIVersion): boolean {
-		// Don't fallback if already on v2
 		if (currentVersion === 'v2') return false;
 
 		if (error instanceof ClientError) {
-			// 410 Gone = deprecated endpoint
-			// 404 Not Found = endpoint doesn't exist in v3
 			return error.status === 410 || error.status === 404;
-		}
-		if (error instanceof ServerError) {
-			// Server errors might be v3-specific issues
-			return error.status >= 500;
 		}
 		return false;
 	}
@@ -143,23 +138,30 @@ export class ModrinthClient {
 		const url = this.buildUrl(endpoint, version, pathParams, queryParams);
 
 		const requestFn = async (): Promise<T> => {
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), this.config.fetchTimeoutMs);
+
 			try {
 				const response = await fetch(url, {
 					method,
 					headers: this.getHeaders(),
-					body: body ? JSON.stringify(body) : undefined
+					body: body ? JSON.stringify(body) : undefined,
+					signal: controller.signal
 				});
 
-				// Update rate limit tracking from response headers
 				this.updateRateLimitFromResponse(response);
 
 				return this.handleResponse<T>(response, url);
 			} catch (error) {
+				if (error instanceof Error && error.name === 'AbortError') {
+					throw new NetworkError(`Request timed out after ${this.config.fetchTimeoutMs}ms`, error);
+				}
 				if (error instanceof Error && error.name === 'TypeError') {
-					// Network error (fetch failed)
 					throw new NetworkError('Failed to connect to Modrinth API', error);
 				}
 				throw error;
+			} finally {
+				clearTimeout(timeoutId);
 			}
 		};
 
@@ -214,7 +216,7 @@ export class ModrinthClient {
 
 				// Wait if we've exhausted our quota
 				if (this.remainingRequests <= 0) {
-					const waitTime = this.config.resetIntervalSeconds * 1000 - timeSinceReset;
+					const waitTime = Math.max(0, this.config.resetIntervalSeconds * 1000 - timeSinceReset);
 					console.warn(`Rate limit reached. Waiting ${waitTime}ms...`);
 					await this.sleep(waitTime);
 					this.remainingRequests = this.config.maxRequestsPerMinute;

@@ -16,37 +16,31 @@ export const collectionUrlOrIdSchema = z
 	.string()
 	.min(1, 'Collection URL or ID is required')
 	.transform((val) => val.trim())
-	.refine(
-		(val) => {
-			// Check if it's a URL
-			try {
-				const url = new URL(val.startsWith('http') ? val : `https://${val}`);
-				const match = url.pathname.match(/^\/collection\/([a-zA-Z0-9]+)$/);
-				return match !== null;
-			} catch {
-				// Check if it's a valid raw ID
-				return COLLECTION_ID_PATTERN.test(val);
-			}
-		},
-		{ message: 'Must be a valid Modrinth collection URL or ID' }
-	);
+	.refine((val) => parseCollectionId(val) !== null, {
+		message: 'Must be a valid Modrinth collection URL or ID'
+	});
 
 /**
  * Extracts collection ID from URL or validates raw ID
  */
 export function parseCollectionId(input: string): string | null {
 	const trimmed = input.trim();
+	if (!trimmed) return null;
 
-	// Check if it's a URL
+	// Try URL extraction first — only for modrinth.com domains
 	try {
 		const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
-		const match = url.pathname.match(/^\/collection\/([a-zA-Z0-9]+)$/);
-		if (match) return match[1];
-	} catch {
-		// Not a URL, check if it's a valid ID
-		if (COLLECTION_ID_PATTERN.test(trimmed)) {
-			return trimmed;
+		if (/(?:www\.)?modrinth\.com$/i.test(url.hostname)) {
+			const match = url.pathname.match(/^\/collection\/([a-zA-Z0-9]{8})$/);
+			if (match) return match[1];
 		}
+	} catch {
+		// Not a parseable URL — fall through to raw ID check
+	}
+
+	// Check if it's a valid raw ID
+	if (COLLECTION_ID_PATTERN.test(trimmed)) {
+		return trimmed;
 	}
 
 	return null;
@@ -106,6 +100,7 @@ export function parseReviewOptions(params: ReviewParams): {
 	collectionIds: string[];
 	gameVersion: string;
 	loader: string;
+	includeDependencies: boolean;
 	includeOptionalDeps: boolean;
 	enableCrossLoaderFallback: boolean;
 	allowAlphaBeta: boolean;
@@ -118,7 +113,8 @@ export function parseReviewOptions(params: ReviewParams): {
 		collectionIds: params.c.split(',').filter(Boolean),
 		gameVersion: params.v,
 		loader: params.l,
-		includeOptionalDeps: flags.includes('d'),
+		includeDependencies: flags.includes('d'),
+		includeOptionalDeps: flags.includes('o'),
 		enableCrossLoaderFallback: flags.includes('f'),
 		allowAlphaBeta: flags.includes('a'),
 		excludedProjectIds: new Set(params.x.split(',').filter(Boolean)),

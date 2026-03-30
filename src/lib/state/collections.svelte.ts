@@ -103,6 +103,16 @@ export async function validateCollectionEntry(index: number): Promise<void> {
 		return;
 	}
 
+	// Check for duplicates across other entries
+	const isDuplicate = state.entries.some(
+		(e, i) => i !== index && e.collection?.id === collectionId
+	);
+	if (isDuplicate) {
+		state.entries[index].status = 'invalid';
+		state.entries[index].error = 'Collection already added';
+		return;
+	}
+
 	// Start validation
 	state.entries[index].status = 'validating';
 	state.entries[index].error = undefined;

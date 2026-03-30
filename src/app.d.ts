@@ -26,6 +26,12 @@ declare global {
 
 				// Download Configuration
 				MAX_CONCURRENT_DOWNLOADS?: string;
+
+				// Network
+				FETCH_TIMEOUT_MS?: string;
+
+				// Optional services
+				RESEND_API_KEY?: string;
 			};
 			context: {
 				waitUntil(promise: Promise<unknown>): void;

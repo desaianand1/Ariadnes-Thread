@@ -183,11 +183,10 @@ export async function resolveCollection(
 		}
 	}
 
-	// Resolve dependencies
-	const depResult =
-		options.includeOptionalDeps !== false
-			? await resolveDependencies(client, resolved, options)
-			: { resolved: [], conflicts: [], warnings: [], unresolved: [] };
+	// Resolve dependencies (skipped entirely when includeDependencies is false)
+	const depResult = options.includeDependencies
+		? await resolveDependencies(client, resolved, options)
+		: { resolved: [], conflicts: [], warnings: [], unresolved: [] };
 
 	// Deduplicate: deps already in the main resolved set are skipped
 	const mainIds = new Set(resolved.map((r) => r.projectId));
