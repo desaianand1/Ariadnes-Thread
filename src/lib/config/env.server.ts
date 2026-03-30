@@ -17,34 +17,34 @@ export type RetryBackoffStrategy = 'exponential' | 'linear' | 'fixed';
  * Zod schema for environment variables validation
  */
 const envSchema = z.object({
-	// Modrinth API Configuration
-	MODRINTH_API_URL: z.url().default('https://api.modrinth.com'),
-	MODRINTH_USER_AGENT: z.string().min(1).default(`${siteConfig.shortName}/${APP_VERSION}`),
+    // Modrinth API Configuration
+    MODRINTH_API_URL: z.url().default('https://api.modrinth.com'),
+    MODRINTH_USER_AGENT: z.string().min(1).default(`${siteConfig.shortName}/${APP_VERSION}`),
 
-	// Rate Limiting
-	MAX_REQUESTS_PER_MINUTE: z.coerce.number().int().positive().max(500).default(300),
-	RESET_INTERVAL_SECONDS: z.coerce.number().int().positive().max(300).default(60),
+    // Rate Limiting
+    MAX_REQUESTS_PER_MINUTE: z.coerce.number().int().positive().max(500).default(300),
+    RESET_INTERVAL_SECONDS: z.coerce.number().int().positive().max(300).default(60),
 
-	// Retry Configuration
-	MAX_RETRIES: z.coerce.number().int().positive().max(10).default(MAX_RETRIES),
-	RETRY_DELAY_MS: z.coerce.number().int().positive().max(10000).default(RETRY_DELAY_MS),
-	RETRY_BACKOFF_STRATEGY: z
-		.enum(['exponential', 'linear', 'fixed'])
-		.default('exponential') as z.ZodType<RetryBackoffStrategy>,
+    // Retry Configuration
+    MAX_RETRIES: z.coerce.number().int().positive().max(10).default(MAX_RETRIES),
+    RETRY_DELAY_MS: z.coerce.number().int().positive().max(10000).default(RETRY_DELAY_MS),
+    RETRY_BACKOFF_STRATEGY: z
+        .enum(['exponential', 'linear', 'fixed'])
+        .default('exponential') as z.ZodType<RetryBackoffStrategy>,
 
-	// Download Configuration
-	MAX_CONCURRENT_DOWNLOADS: z.coerce
-		.number()
-		.int()
-		.positive()
-		.max(10)
-		.default(MAX_CONCURRENT_DOWNLOADS),
+    // Download Configuration
+    MAX_CONCURRENT_DOWNLOADS: z.coerce
+        .number()
+        .int()
+        .positive()
+        .max(10)
+        .default(MAX_CONCURRENT_DOWNLOADS),
 
-	// Network
-	FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+    // Network
+    FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
-	// Optional services
-	RESEND_API_KEY: z.string().optional()
+    // Optional services
+    RESEND_API_KEY: z.string().optional()
 });
 
 /**
@@ -57,14 +57,14 @@ export type EnvConfig = z.infer<typeof envSchema>;
  * Returns validated config or throws an error with details
  */
 function parseEnv(): EnvConfig {
-	const result = envSchema.safeParse(env);
+    const result = envSchema.safeParse(env);
 
-	if (!result.success) {
-		console.error('Environment validation failed:', result.error.format());
-		throw new Error('Invalid server configuration');
-	}
+    if (!result.success) {
+        console.error('Environment validation failed:', result.error.format());
+        throw new Error('Invalid server configuration');
+    }
 
-	return result.data;
+    return result.data;
 }
 
 /**
@@ -74,10 +74,10 @@ function parseEnv(): EnvConfig {
 let _config: EnvConfig | null = null;
 
 export function getEnvConfig(): EnvConfig {
-	if (!_config) {
-		_config = parseEnv();
-	}
-	return _config;
+    if (!_config) {
+        _config = parseEnv();
+    }
+    return _config;
 }
 
 /**
@@ -85,18 +85,18 @@ export function getEnvConfig(): EnvConfig {
  * Use this in request handlers that have access to platform.env
  */
 export function getEnvConfigFromPlatform(
-	platformEnv: Record<string, string | undefined> | undefined
+    platformEnv: Record<string, string | undefined> | undefined
 ): EnvConfig {
-	if (!platformEnv) {
-		return getEnvConfig();
-	}
+    if (!platformEnv) {
+        return getEnvConfig();
+    }
 
-	const result = envSchema.safeParse(platformEnv);
+    const result = envSchema.safeParse(platformEnv);
 
-	if (!result.success) {
-		console.warn('Platform env validation failed, falling back to default env');
-		return getEnvConfig();
-	}
+    if (!result.success) {
+        console.warn('Platform env validation failed, falling back to default env');
+        return getEnvConfig();
+    }
 
-	return result.data;
+    return result.data;
 }

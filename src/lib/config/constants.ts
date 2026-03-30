@@ -10,14 +10,14 @@
  * Loaders to exclude from the selection (not relevant for mod downloads)
  */
 export const EXCLUDED_LOADERS = [
-	'minecraft',
-	'vanilla',
-	'optifine',
-	'canvas',
-	'iris',
-	'modloader',
-	'java-agent',
-	'legacy-fabric'
+    'minecraft',
+    'vanilla',
+    'optifine',
+    'canvas',
+    'iris',
+    'modloader',
+    'java-agent',
+    'legacy-fabric'
 ] as const;
 export type ExcludedLoader = (typeof EXCLUDED_LOADERS)[number];
 
@@ -31,17 +31,17 @@ export type PopularLoader = (typeof POPULAR_LOADERS)[number];
  * Plugin loaders (server-side only platforms)
  */
 export const PLUGIN_LOADERS = [
-	'bukkit',
-	'spigot',
-	'paper',
-	'purpur',
-	'folia',
-	'velocity',
-	'bungeecord',
-	'waterfall',
-	'sponge',
-	'geyser',
-	'bta-babric'
+    'bukkit',
+    'spigot',
+    'paper',
+    'purpur',
+    'folia',
+    'velocity',
+    'bungeecord',
+    'waterfall',
+    'sponge',
+    'geyser',
+    'bta-babric'
 ] as const;
 export type PluginLoader = (typeof PLUGIN_LOADERS)[number];
 
@@ -49,12 +49,12 @@ export type PluginLoader = (typeof PLUGIN_LOADERS)[number];
  * Other known loaders (not popular or plugin)
  */
 export const OTHER_LOADERS = [
-	'liteloader',
-	'rift',
-	'datapack',
-	'babric',
-	'nilloader',
-	'ornithe'
+    'liteloader',
+    'rift',
+    'datapack',
+    'babric',
+    'nilloader',
+    'ornithe'
 ] as const;
 export type OtherLoader = (typeof OTHER_LOADERS)[number];
 
@@ -72,30 +72,30 @@ export type LoaderCategory = 'popular' | 'plugin' | 'other';
  * Type guard to check if a loader is a popular loader
  */
 export function isPopularLoader(slug: string): slug is PopularLoader {
-	return (POPULAR_LOADERS as readonly string[]).includes(slug);
+    return (POPULAR_LOADERS as readonly string[]).includes(slug);
 }
 
 /**
  * Type guard to check if a loader is a plugin loader
  */
 export function isPluginLoader(slug: string): slug is PluginLoader {
-	return (PLUGIN_LOADERS as readonly string[]).includes(slug);
+    return (PLUGIN_LOADERS as readonly string[]).includes(slug);
 }
 
 /**
  * Type guard to check if a loader is excluded
  */
 export function isExcludedLoader(slug: string): slug is ExcludedLoader {
-	return (EXCLUDED_LOADERS as readonly string[]).includes(slug);
+    return (EXCLUDED_LOADERS as readonly string[]).includes(slug);
 }
 
 /**
  * Get the category for a loader
  */
 export function getLoaderCategory(slug: string): LoaderCategory {
-	if (isPopularLoader(slug)) return 'popular';
-	if (isPluginLoader(slug)) return 'plugin';
-	return 'other';
+    if (isPopularLoader(slug)) return 'popular';
+    if (isPluginLoader(slug)) return 'plugin';
+    return 'other';
 }
 
 // =============================================================================
@@ -107,8 +107,8 @@ export function getLoaderCategory(slug: string): LoaderCategory {
  * in order. Quilt can load Fabric mods; NeoForge can sometimes load Forge mods.
  */
 export const CROSS_LOADER_FALLBACKS: Record<string, string[]> = {
-	quilt: ['fabric'],
-	neoforge: ['forge']
+    quilt: ['fabric'],
+    neoforge: ['forge']
 };
 
 /**
@@ -124,21 +124,21 @@ export const MAX_DEPENDENCY_DEPTH = 10;
  * Cache TTL values in milliseconds
  */
 export const CACHE_TTL = {
-	/** Cache versions for 2 hours */
-	VERSIONS: 2 * 60 * 60 * 1000,
-	/** Cache loaders for 2 hours */
-	LOADERS: 2 * 60 * 60 * 1000,
-	/** Cache collections for 30 minutes */
-	COLLECTIONS: 30 * 60 * 1000
+    /** Cache versions for 2 hours */
+    VERSIONS: 2 * 60 * 60 * 1000,
+    /** Cache loaders for 2 hours */
+    LOADERS: 2 * 60 * 60 * 1000,
+    /** Cache collections for 30 minutes */
+    COLLECTIONS: 30 * 60 * 1000
 } as const;
 
 /**
  * LocalStorage keys for caching
  */
 export const STORAGE_KEYS = {
-	MINECRAFT_VERSIONS: 'ariadnes-thread-mc-versions',
-	MOD_LOADERS: 'ariadnes-thread-loaders',
-	THEME: 'ariadnes-thread-theme'
+    MINECRAFT_VERSIONS: 'ariadnes-thread-mc-versions',
+    MOD_LOADERS: 'ariadnes-thread-loaders',
+    THEME: 'ariadnes-thread-theme'
 } as const;
 
 // =============================================================================
@@ -174,7 +174,7 @@ export const RETRY_DELAY_MS = 1000;
  * Matches: https://modrinth.com/collection/{id} or modrinth.com/collection/{id}
  */
 export const COLLECTION_URL_PATTERN =
-	/(?:https?:\/\/)?(?:www\.)?modrinth\.com\/collection\/([a-zA-Z0-9]{8})/;
+    /(?:https?:\/\/)?(?:www\.)?modrinth\.com\/collection\/([a-zA-Z0-9]{8})/;
 
 /**
  * Regex pattern to validate a collection ID (Modrinth base62, 8 characters)
@@ -189,19 +189,19 @@ export const COLLECTION_ID_PATTERN = /^[a-zA-Z0-9]{8}$/;
  * Toast notification durations in milliseconds
  */
 export const TOAST_DURATION = {
-	SUCCESS: 3000,
-	ERROR: 5000,
-	INFO: 4000,
-	WARNING: 4000
+    SUCCESS: 3000,
+    ERROR: 5000,
+    INFO: 4000,
+    WARNING: 4000
 } as const;
 
 /**
  * Animation durations in milliseconds
  */
 export const ANIMATION_DURATION = {
-	FAST: 150,
-	NORMAL: 200,
-	SLOW: 300
+    FAST: 150,
+    NORMAL: 200,
+    SLOW: 300
 } as const;
 
 // =============================================================================

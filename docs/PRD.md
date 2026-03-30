@@ -363,10 +363,10 @@ Server-side via Resend API, using `better-svelte-email` for templates.
 
 - Subject: "{Curator name}'s Minecraft Mods — Ariadne's Thread"
 - Body:
-  - Personal message from curator (if provided)
-  - Summary: collection names, mod count, MC version, loader
-  - Branded "Download Mods" button linking to the `/review` shareable URL
-  - Footer: site branding, support link
+    - Personal message from curator (if provided)
+    - Summary: collection names, mod count, MC version, loader
+    - Branded "Download Mods" button linking to the `/review` shareable URL
+    - Footer: site branding, support link
 
 ---
 
@@ -578,13 +578,13 @@ JSON-LD `WebApplication` schema on the home page:
 
 ```json
 {
-	"@context": "https://schema.org",
-	"@type": "WebApplication",
-	"name": "Ariadne's Thread",
-	"description": "Modrinth mod collection downloader with version resolution and dependency management",
-	"url": "https://modrinth.download",
-	"applicationCategory": "GameApplication",
-	"operatingSystem": "Any"
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Ariadne's Thread",
+    "description": "Modrinth mod collection downloader with version resolution and dependency management",
+    "url": "https://modrinth.download",
+    "applicationCategory": "GameApplication",
+    "operatingSystem": "Any"
 }
 ```
 

@@ -11,50 +11,56 @@ export type SideClassification = 'client' | 'server' | 'both';
 // =============================================================================
 
 export interface ResolutionOptions {
-	gameVersion: string;
-	loader: string;
-	/** Master toggle: when false, skip dependency resolution entirely */
-	includeDependencies: boolean;
-	/** When true, also include optional dependencies */
-	includeOptionalDeps: boolean;
-	enableCrossLoaderFallback: boolean;
-	allowAlphaBeta: boolean;
-	excludedProjectIds: Set<string>;
+    gameVersion: string;
+    loader: string;
+    /** Master toggle: when false, skip dependency resolution entirely */
+    includeDependencies: boolean;
+    /** When true, also include optional dependencies */
+    includeOptionalDeps: boolean;
+    enableCrossLoaderFallback: boolean;
+    allowAlphaBeta: boolean;
+    excludedProjectIds: Set<string>;
 }
 
 export interface ResolvedProject {
-	projectId: string;
-	projectSlug: string;
-	projectTitle: string;
-	projectDescription: string;
-	projectType: ProjectType;
-	iconUrl?: string;
+    projectId: string;
+    projectSlug: string;
+    projectTitle: string;
+    projectDescription: string;
+    projectType: ProjectType;
+    iconUrl?: string;
 
-	versionId: string;
-	versionNumber: string;
-	versionType: VersionType;
-	fileName: string;
-	fileUrl: string;
-	fileSize: number;
-	fileHashes: { sha1: string; sha512: string };
+    versionId: string;
+    versionNumber: string;
+    versionType: VersionType;
+    fileName: string;
+    fileUrl: string;
+    fileSize: number;
+    fileHashes: { sha1: string; sha512: string };
 
-	loaders: string[];
-	dependencyCount: number;
+    loaders: string[];
+    dependencyCount: number;
 
-	side: SideClassification;
-	folder: string;
-	clientSide: SideRequirement;
-	serverSide: SideRequirement;
+    side: SideClassification;
+    folder: string;
+    clientSide: SideRequirement;
+    serverSide: SideRequirement;
 
-	/** Set when this project was resolved as a dependency of another */
-	dependencyOf?: string;
-	dependencyType?: DependencyType;
-	dependencyDepth?: number;
+    /** Set when this project was resolved as a dependency of another */
+    dependencyOf?: string;
+    dependencyType?: DependencyType;
+    dependencyDepth?: number;
 
-	/** True if the resolved version came from a fallback loader (e.g. Quilt→Fabric) */
-	usedFallbackLoader: boolean;
-	/** The actual loader the resolved version targets, if different from requested */
-	resolvedLoader?: string;
+    /** True if the resolved version came from a fallback loader (e.g. Quilt→Fabric) */
+    usedFallbackLoader: boolean;
+    /** The actual loader the resolved version targets, if different from requested */
+    resolvedLoader?: string;
+
+    // Tier 2 metadata for hover card
+    categories?: string[];
+    downloads?: number;
+    license?: { id: string; name: string };
+    datePublished?: string;
 }
 
 // =============================================================================
@@ -62,14 +68,14 @@ export interface ResolvedProject {
 // =============================================================================
 
 export interface CollectionGroup {
-	id: string;
-	name: string;
-	iconUrl?: string;
-	color?: string;
-	totalProjectCount: number;
-	resolved: ResolvedProject[];
-	/** projectId → names of other collections containing it */
-	alsoInMap: Record<string, string[]>;
+    id: string;
+    name: string;
+    iconUrl?: string;
+    color?: string;
+    totalProjectCount: number;
+    resolved: ResolvedProject[];
+    /** projectId → names of other collections containing it */
+    alsoInMap: Record<string, string[]>;
 }
 
 // =============================================================================
@@ -77,20 +83,20 @@ export interface CollectionGroup {
 // =============================================================================
 
 export interface DependencyNode {
-	projectId: string;
-	/** The version_id pinned by the parent, if any */
-	versionId?: string;
-	dependencyType: DependencyType;
-	requiredBy: string;
-	depth: number;
-	resolved?: ResolvedProject;
+    projectId: string;
+    /** The version_id pinned by the parent, if any */
+    versionId?: string;
+    dependencyType: DependencyType;
+    requiredBy: string;
+    depth: number;
+    resolved?: ResolvedProject;
 }
 
 export interface DependencyResult {
-	resolved: ResolvedProject[];
-	conflicts: ConflictEntry[];
-	warnings: ResolutionWarning[];
-	unresolved: UnresolvedDependency[];
+    resolved: ResolvedProject[];
+    conflicts: ConflictEntry[];
+    warnings: ResolutionWarning[];
+    unresolved: UnresolvedDependency[];
 }
 
 // =============================================================================
@@ -98,29 +104,29 @@ export interface DependencyResult {
 // =============================================================================
 
 export interface ConflictEntry {
-	projectId: string;
-	conflictsWith: string;
-	declaredBy: string;
+    projectId: string;
+    conflictsWith: string;
+    declaredBy: string;
 }
 
 export type ResolutionWarningType =
-	| 'no-compatible-version'
-	| 'depth-exceeded'
-	| 'cycle'
-	| 'fallback-used'
-	| 'alpha-beta-version'
-	| 'dependency-not-found';
+    | 'no-compatible-version'
+    | 'depth-exceeded'
+    | 'cycle'
+    | 'fallback-used'
+    | 'alpha-beta-version'
+    | 'dependency-not-found';
 
 export interface ResolutionWarning {
-	type: ResolutionWarningType;
-	projectId: string;
-	message: string;
+    type: ResolutionWarningType;
+    projectId: string;
+    message: string;
 }
 
 export interface UnresolvedDependency {
-	projectId: string;
-	requiredBy: string;
-	reason: string;
+    projectId: string;
+    requiredBy: string;
+    reason: string;
 }
 
 // =============================================================================
@@ -128,20 +134,20 @@ export interface UnresolvedDependency {
 // =============================================================================
 
 export interface ResolutionStats {
-	totalProjects: number;
-	resolvedCount: number;
-	unresolvedCount: number;
-	dependencyCount: number;
-	conflictCount: number;
-	warningCount: number;
-	totalDownloadSize: number;
+    totalProjects: number;
+    resolvedCount: number;
+    unresolvedCount: number;
+    dependencyCount: number;
+    conflictCount: number;
+    warningCount: number;
+    totalDownloadSize: number;
 }
 
 export interface ResolutionResult {
-	resolved: ResolvedProject[];
-	dependencies: ResolvedProject[];
-	conflicts: ConflictEntry[];
-	warnings: ResolutionWarning[];
-	unresolved: UnresolvedDependency[];
-	stats: ResolutionStats;
+    resolved: ResolvedProject[];
+    dependencies: ResolvedProject[];
+    conflicts: ConflictEntry[];
+    warnings: ResolutionWarning[];
+    unresolved: UnresolvedDependency[];
+    stats: ResolutionStats;
 }

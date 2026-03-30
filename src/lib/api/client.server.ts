@@ -15,21 +15,21 @@ import { ModrinthClient } from './client';
 let _sharedClient: ModrinthClient | null = null;
 
 export function createClientFromPlatform(platform?: App.Platform): ModrinthClient {
-	if (_sharedClient) return _sharedClient;
+    if (_sharedClient) return _sharedClient;
 
-	const platformEnv = platform?.env as Record<string, string | undefined> | undefined;
-	const config = getEnvConfigFromPlatform(platformEnv);
+    const platformEnv = platform?.env as Record<string, string | undefined> | undefined;
+    const config = getEnvConfigFromPlatform(platformEnv);
 
-	_sharedClient = new ModrinthClient({
-		baseUrl: config.MODRINTH_API_URL,
-		userAgent: config.MODRINTH_USER_AGENT,
-		maxRequestsPerMinute: config.MAX_REQUESTS_PER_MINUTE,
-		resetIntervalSeconds: config.RESET_INTERVAL_SECONDS,
-		maxRetries: config.MAX_RETRIES,
-		retryDelayMs: config.RETRY_DELAY_MS,
-		retryBackoffStrategy: config.RETRY_BACKOFF_STRATEGY,
-		fetchTimeoutMs: config.FETCH_TIMEOUT_MS
-	});
+    _sharedClient = new ModrinthClient({
+        baseUrl: config.MODRINTH_API_URL,
+        userAgent: config.MODRINTH_USER_AGENT,
+        maxRequestsPerMinute: config.MAX_REQUESTS_PER_MINUTE,
+        resetIntervalSeconds: config.RESET_INTERVAL_SECONDS,
+        maxRetries: config.MAX_RETRIES,
+        retryDelayMs: config.RETRY_DELAY_MS,
+        retryBackoffStrategy: config.RETRY_BACKOFF_STRATEGY,
+        fetchTimeoutMs: config.FETCH_TIMEOUT_MS
+    });
 
-	return _sharedClient;
+    return _sharedClient;
 }

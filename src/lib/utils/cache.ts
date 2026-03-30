@@ -4,8 +4,8 @@
  */
 
 interface CachedData<T> {
-	data: T;
-	timestamp: number;
+    data: T;
+    timestamp: number;
 }
 
 /**
@@ -15,30 +15,30 @@ interface CachedData<T> {
  * @returns Cached data or null if expired/not found
  */
 export function getCachedData<T>(key: string, maxAge: number): T | null {
-	if (typeof localStorage === 'undefined') return null;
+    if (typeof localStorage === 'undefined') return null;
 
-	try {
-		const cached = localStorage.getItem(key);
-		if (!cached) return null;
+    try {
+        const cached = localStorage.getItem(key);
+        if (!cached) return null;
 
-		const parsed: CachedData<T> = JSON.parse(cached);
-		const age = Date.now() - parsed.timestamp;
+        const parsed: CachedData<T> = JSON.parse(cached);
+        const age = Date.now() - parsed.timestamp;
 
-		if (age > maxAge) {
-			localStorage.removeItem(key);
-			return null;
-		}
+        if (age > maxAge) {
+            localStorage.removeItem(key);
+            return null;
+        }
 
-		return parsed.data;
-	} catch {
-		// Invalid JSON or other error - clear the corrupted data
-		try {
-			localStorage.removeItem(key);
-		} catch {
-			// Ignore removal errors
-		}
-		return null;
-	}
+        return parsed.data;
+    } catch {
+        // Invalid JSON or other error - clear the corrupted data
+        try {
+            localStorage.removeItem(key);
+        } catch {
+            // Ignore removal errors
+        }
+        return null;
+    }
 }
 
 /**
@@ -47,18 +47,18 @@ export function getCachedData<T>(key: string, maxAge: number): T | null {
  * @param data - Data to cache
  */
 export function setCachedData<T>(key: string, data: T): void {
-	if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage === 'undefined') return;
 
-	try {
-		const cached: CachedData<T> = {
-			data,
-			timestamp: Date.now()
-		};
-		localStorage.setItem(key, JSON.stringify(cached));
-	} catch (error) {
-		// Storage full or other error - log and continue
-		console.warn(`Failed to cache data for key "${key}":`, error);
-	}
+    try {
+        const cached: CachedData<T> = {
+            data,
+            timestamp: Date.now()
+        };
+        localStorage.setItem(key, JSON.stringify(cached));
+    } catch (error) {
+        // Storage full or other error - log and continue
+        console.warn(`Failed to cache data for key "${key}":`, error);
+    }
 }
 
 /**
@@ -66,13 +66,13 @@ export function setCachedData<T>(key: string, data: T): void {
  * @param key - Storage key to remove
  */
 export function clearCachedData(key: string): void {
-	if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage === 'undefined') return;
 
-	try {
-		localStorage.removeItem(key);
-	} catch {
-		// Ignore removal errors
-	}
+    try {
+        localStorage.removeItem(key);
+    } catch {
+        // Ignore removal errors
+    }
 }
 
 /**
@@ -80,18 +80,18 @@ export function clearCachedData(key: string): void {
  * @param prefix - Key prefix to match
  */
 export function clearCachedDataByPrefix(prefix: string): void {
-	if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage === 'undefined') return;
 
-	try {
-		const keysToRemove: string[] = [];
-		for (let i = 0; i < localStorage.length; i++) {
-			const key = localStorage.key(i);
-			if (key?.startsWith(prefix)) {
-				keysToRemove.push(key);
-			}
-		}
-		keysToRemove.forEach((key) => localStorage.removeItem(key));
-	} catch {
-		// Ignore errors
-	}
+    try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key?.startsWith(prefix)) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach((key) => localStorage.removeItem(key));
+    } catch {
+        // Ignore errors
+    }
 }

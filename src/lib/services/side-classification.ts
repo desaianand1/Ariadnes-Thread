@@ -6,7 +6,7 @@ import type { SideClassification } from './types';
  * only needs to handle three values: required, optional, unsupported.
  */
 function normalize(side: SideRequirement): Exclude<SideRequirement, 'unknown'> {
-	return side === 'unknown' ? 'optional' : side;
+    return side === 'unknown' ? 'optional' : side;
 }
 
 /**
@@ -31,23 +31,23 @@ function normalize(side: SideRequirement): Exclude<SideRequirement, 'unknown'> {
  * | unsupported   | unsupported   | both    |
  */
 export function classifySide(
-	clientSide: SideRequirement,
-	serverSide: SideRequirement
+    clientSide: SideRequirement,
+    serverSide: SideRequirement
 ): SideClassification {
-	const client = normalize(clientSide);
-	const server = normalize(serverSide);
+    const client = normalize(clientSide);
+    const server = normalize(serverSide);
 
-	if (client === 'unsupported' && server === 'unsupported') {
-		return 'both';
-	}
+    if (client === 'unsupported' && server === 'unsupported') {
+        return 'both';
+    }
 
-	if (client === 'unsupported') {
-		return 'server';
-	}
+    if (client === 'unsupported') {
+        return 'server';
+    }
 
-	if (server === 'unsupported') {
-		return 'client';
-	}
+    if (server === 'unsupported') {
+        return 'client';
+    }
 
-	return 'both';
+    return 'both';
 }

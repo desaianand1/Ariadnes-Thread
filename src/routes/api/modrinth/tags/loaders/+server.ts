@@ -12,55 +12,58 @@ import { EXCLUDED_LOADERS } from '$lib/config/constants';
 import DOMPurify from 'isomorphic-dompurify';
 
 export const GET: RequestHandler = async ({ platform }) => {
-	const client = createClientFromPlatform(platform);
+    const client = createClientFromPlatform(platform);
 
-	try {
-		// Tags are stable in v2 API
-		const loaders = await client.request<ModrinthLoader[]>('tag/loader', {
-			preferredVersion: 'v2'
-		});
+    try {
+        // Tags are stable in v2 API
+        const loaders = await client.request<ModrinthLoader[]>('tag/loader', {
+            preferredVersion: 'v2'
+        });
 
-		// Filter and sanitize loaders
-		const filtered = loaders
-			// Exclude loaders that aren't relevant for mod downloads
-			.filter(
-				(loader) =>
-					!EXCLUDED_LOADERS.includes(loader.name.toLowerCase() as (typeof EXCLUDED_LOADERS)[number])
-			)
-			// Include loaders that support any project type found in collections
-			.filter((loader) => {
-				const types = loader.supported_project_types;
-				return (
-					types.includes('mod') ||
-					types.includes('resourcepack') ||
-					types.includes('shader') ||
-					types.includes('datapack') ||
-					types.includes('plugin')
-				);
-			})
-			// Sanitize SVG icons to prevent XSS
-			.map((loader) => ({
-				...loader,
-				icon: DOMPurify.sanitize(loader.icon, {
-					USE_PROFILES: { svg: true, svgFilters: true },
-					ADD_TAGS: ['use']
-				})
-			}));
+        // Filter and sanitize loaders
+        const filtered = loaders
+            // Exclude loaders that aren't relevant for mod downloads
+            .filter(
+                (loader) =>
+                    !EXCLUDED_LOADERS.includes(
+                        loader.name.toLowerCase() as (typeof EXCLUDED_LOADERS)[number]
+                    )
+            )
+            // Include loaders that support any project type found in collections
+            .filter((loader) => {
+                const types = loader.supported_project_types;
+                return (
+                    types.includes('mod') ||
+                    types.includes('resourcepack') ||
+                    types.includes('shader') ||
+                    types.includes('datapack') ||
+                    types.includes('plugin')
+                );
+            })
+            // Sanitize SVG icons to prevent XSS
+            .map((loader) => ({
+                ...loader,
+                icon: DOMPurify.sanitize(loader.icon, {
+                    USE_PROFILES: { svg: true, svgFilters: true },
+                    ADD_TAGS: ['use']
+                })
+            }));
 
-		return json(
-			{ loaders: filtered },
-			{
-				headers: {
-					'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400'
-				}
-			}
-		);
-	} catch (error) {
-		console.error('Failed to fetch loaders:', error);
+        return json(
+            { loaders: filtered },
+            {
+                headers: {
+                    'Cache-Control':
+                        'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400'
+                }
+            }
+        );
+    } catch (error) {
+        console.error('Failed to fetch loaders:', error);
 
-		const status = isModrinthAPIError(error) ? error.status : 500;
-		const message = getErrorMessage(error);
+        const status = isModrinthAPIError(error) ? error.status : 500;
+        const message = getErrorMessage(error);
 
-		return json({ error: message }, { status });
-	}
+        return json({ error: message }, { status });
+    }
 };
