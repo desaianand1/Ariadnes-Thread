@@ -7,16 +7,19 @@
 	<div
 		class="container mx-auto flex max-w-4xl flex-col items-center gap-3 px-4 sm:flex-row sm:justify-between"
 	>
-		<p>
-			Not affiliated with <a
-				href={MODRINTH_ATTRIBUTION_URL}
-				target="_blank"
-				rel="noopener noreferrer external"
-				class="underline underline-offset-4 hover:text-foreground">Modrinth</a
-			>.
-		</p>
+		<div class="text-center sm:text-left">
+			<p class="text-xs">Resolve, review, and download Modrinth mod collections.</p>
+			<p class="mt-1">
+				Not affiliated with <a
+					href={MODRINTH_ATTRIBUTION_URL}
+					target="_blank"
+					rel="noopener noreferrer external"
+					class="underline underline-offset-4 hover:text-foreground">Modrinth</a
+				>.
+			</p>
+		</div>
 
-		<div class="flex items-center gap-4">
+		<nav class="flex items-center gap-4" aria-label="Footer">
 			<a
 				href={siteConfig.links.github}
 				target="_blank"
@@ -28,7 +31,7 @@
 				rel="external"
 				class="underline underline-offset-4 hover:text-foreground">Support</a
 			>
-		</div>
+		</nav>
 
 		<p>&copy; {new Date().getFullYear()} {siteConfig.legalEntity} &middot; v{APP_VERSION}</p>
 	</div>

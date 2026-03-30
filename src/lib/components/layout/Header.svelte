@@ -10,7 +10,10 @@
 <header
 	class="sticky top-0 z-50 border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/60"
 >
-	<div class="container mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
+	<nav
+		class="container mx-auto flex h-14 max-w-4xl items-center justify-between px-4"
+		aria-label="Main"
+	>
 		<a href={resolve('/')} class="flex items-center gap-2">
 			<img src={logo} alt="" class="size-8" />
 			<span class="hidden font-semibold sm:inline">{siteConfig.name}</span>
@@ -29,5 +32,5 @@
 			</Button>
 			<ThemeToggle />
 		</div>
-	</div>
+	</nav>
 </header>

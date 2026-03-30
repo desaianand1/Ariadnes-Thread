@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { navigating } from '$app/stores';
 	import { superForm, type SuperValidated, type Infer } from 'sveltekit-superforms';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { downloadFormSchema, type DownloadFormSchema } from '$lib/schemas/collection';
@@ -8,7 +11,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { Button } from '$lib/components/ui/button';
-	import DownloadIcon from '@lucide/svelte/icons/download';
+	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
 	import SelectMinecraftVersion from './SelectMinecraftVersion.svelte';
 	import SelectModLoader from './SelectModLoader.svelte';
 	import CollectionInput from './CollectionInput.svelte';
@@ -26,34 +29,42 @@
 	let { data }: Props = $props();
 
 	const form = superForm(data, {
-		validators: zod4Client(downloadFormSchema),
-		onSubmit: ({ formData, cancel }) => {
-			const validCollections = getValidCollectionIds();
-
-			if (validCollections.length === 0) {
-				cancel();
-				return;
-			}
-
-			formData.delete('collections');
-			for (const id of validCollections) {
-				formData.append('collections', id);
-			}
-		}
+		validators: zod4Client(downloadFormSchema)
 	});
 
-	const { form: formData, enhance, submitting } = form;
+	const { form: formData } = form;
 
-	// Check if form is ready to submit
+	let isNavigating = $derived(!!$navigating);
+
 	let canSubmit = $derived(
 		$formData.modLoader && $formData.minecraftVersion && hasValidCollection() && !isValidating()
 	);
 
-	// Total project count for display
 	let totalProjects = $derived(getValidCollections().reduce((sum, c) => sum + c.projectCount, 0));
+
+	function handleSubmit(e: SubmitEvent) {
+		e.preventDefault();
+
+		const collectionIds = getValidCollectionIds();
+		if (collectionIds.length === 0) return;
+
+		const params = new SvelteURLSearchParams();
+		params.set('c', collectionIds.join(','));
+		params.set('v', $formData.minecraftVersion);
+		params.set('l', $formData.modLoader);
+
+		// Build opts: d=deps, f=cross-loader fallback (both on by default)
+		const opts: string[] = ['f'];
+		if ($formData.includeDependencies) {
+			opts.push('d');
+		}
+		params.set('opts', opts.join(','));
+
+		goto(resolve(`/review?${params.toString()}`));
+	}
 </script>
 
-<form method="POST" use:enhance>
+<form onsubmit={handleSubmit}>
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Download Modrinth Collections</Card.Title>
@@ -73,7 +84,7 @@
 								<SelectMinecraftVersion
 									{...props}
 									bind:value={$formData.minecraftVersion}
-									disabled={$submitting}
+									disabled={isNavigating}
 								/>
 							</div>
 						{/snippet}
@@ -89,7 +100,7 @@
 								<SelectModLoader
 									{...props}
 									bind:value={$formData.modLoader}
-									disabled={$submitting}
+									disabled={isNavigating}
 								/>
 							</div>
 						{/snippet}
@@ -101,7 +112,7 @@
 			<!-- Collection Inputs -->
 			<div class="space-y-2">
 				<Label>Collection URLs or IDs</Label>
-				<CollectionInput disabled={$submitting} />
+				<CollectionInput disabled={isNavigating} />
 			</div>
 
 			<!-- Options -->
@@ -113,7 +124,7 @@
 								{...props}
 								id="include-deps"
 								bind:checked={$formData.includeDependencies}
-								disabled={$submitting}
+								disabled={isNavigating}
 							/>
 							<Label for="include-deps" class="font-normal">Include required dependencies</Label>
 						</div>
@@ -129,13 +140,13 @@
 				</p>
 			{/if}
 
-			<Button type="submit" size="lg" class="w-full" disabled={!canSubmit || $submitting}>
-				{#if $submitting}
+			<Button type="submit" size="lg" class="w-full" disabled={!canSubmit || isNavigating}>
+				{#if isNavigating}
 					<Spinner class="mr-2 size-4" />
-					Preparing...
+					Loading...
 				{:else}
-					<DownloadIcon class="mr-2 size-4" />
-					Download as ZIP
+					Next
+					<ArrowRightIcon class="ml-2 size-4" />
 				{/if}
 			</Button>
 		</Card.Footer>

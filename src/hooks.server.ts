@@ -13,10 +13,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 			"default-src 'self'",
 			"script-src 'self' 'unsafe-inline'",
 			"style-src 'self' 'unsafe-inline'",
-			"img-src 'self' https://cdn.modrinth.com data:",
+			"img-src 'self' https://cdn.modrinth.com https://cdn-raw.modrinth.com data:",
 			"font-src 'self'",
-			"connect-src 'self' https://api.modrinth.com",
-			"frame-ancestors 'none'"
+			"connect-src 'self' https://api.modrinth.com https://cdn-raw.modrinth.com",
+			"frame-ancestors 'none'",
+			"base-uri 'self'",
+			"form-action 'self'"
 		].join('; ')
 	);
 

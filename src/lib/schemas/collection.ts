@@ -81,8 +81,8 @@ export type DownloadFormData = z.infer<typeof downloadFormSchema>;
  */
 export const reviewParamsSchema = z.object({
 	c: z.string().min(1, 'At least one collection ID is required'),
-	v: z.string().min(1, 'Minecraft version is required'),
-	l: z.string().min(1, 'Loader is required'),
+	v: z.string().min(1, 'Minecraft version is required (e.g., 1.20.1)'),
+	l: z.string().min(1, 'Loader is required (e.g., fabric, forge, quilt)'),
 	opts: z
 		.string()
 		.default('')

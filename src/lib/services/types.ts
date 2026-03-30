@@ -26,6 +26,7 @@ export interface ResolvedProject {
 	projectId: string;
 	projectSlug: string;
 	projectTitle: string;
+	projectDescription: string;
 	projectType: ProjectType;
 	iconUrl?: string;
 
@@ -36,6 +37,9 @@ export interface ResolvedProject {
 	fileUrl: string;
 	fileSize: number;
 	fileHashes: { sha1: string; sha512: string };
+
+	loaders: string[];
+	dependencyCount: number;
 
 	side: SideClassification;
 	folder: string;
@@ -51,6 +55,21 @@ export interface ResolvedProject {
 	usedFallbackLoader: boolean;
 	/** The actual loader the resolved version targets, if different from requested */
 	resolvedLoader?: string;
+}
+
+// =============================================================================
+// Collection Grouping (for review page)
+// =============================================================================
+
+export interface CollectionGroup {
+	id: string;
+	name: string;
+	iconUrl?: string;
+	color?: string;
+	totalProjectCount: number;
+	resolved: ResolvedProject[];
+	/** projectId → names of other collections containing it */
+	alsoInMap: Record<string, string[]>;
 }
 
 // =============================================================================
