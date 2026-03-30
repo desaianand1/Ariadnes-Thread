@@ -13,7 +13,6 @@
 	import SelectModLoader from './SelectModLoader.svelte';
 	import CollectionInput from './CollectionInput.svelte';
 	import {
-		collectionsState,
 		getValidCollections,
 		getValidCollectionIds,
 		isValidating,
@@ -46,16 +45,11 @@
 
 	// Check if form is ready to submit
 	let canSubmit = $derived(
-		$formData.modLoader &&
-		$formData.minecraftVersion &&
-		hasValidCollection() &&
-		!isValidating()
+		$formData.modLoader && $formData.minecraftVersion && hasValidCollection() && !isValidating()
 	);
 
 	// Total project count for display
-	let totalProjects = $derived(
-		getValidCollections().reduce((sum, c) => sum + c.projectCount, 0)
-	);
+	let totalProjects = $derived(getValidCollections().reduce((sum, c) => sum + c.projectCount, 0));
 </script>
 
 <form method="POST" use:enhance>
@@ -120,9 +114,7 @@
 								bind:checked={$formData.includeDependencies}
 								disabled={$submitting}
 							/>
-							<Label for="include-deps" class="font-normal">
-								Include required dependencies
-							</Label>
+							<Label for="include-deps" class="font-normal">Include required dependencies</Label>
 						</div>
 					{/snippet}
 				</Form.Control>
@@ -136,12 +128,7 @@
 				</p>
 			{/if}
 
-			<Button
-				type="submit"
-				size="lg"
-				class="w-full"
-				disabled={!canSubmit || $submitting}
-			>
+			<Button type="submit" size="lg" class="w-full" disabled={!canSubmit || $submitting}>
 				{#if $submitting}
 					<Spinner class="mr-2 size-4" />
 					Preparing...

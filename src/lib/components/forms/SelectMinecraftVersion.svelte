@@ -71,9 +71,7 @@
 						<span class="flex items-center gap-2">
 							{version.label}
 							{#if version.versionType !== 'release'}
-								<span
-									class="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-								>
+								<span class="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
 									{version.versionType}
 								</span>
 							{/if}

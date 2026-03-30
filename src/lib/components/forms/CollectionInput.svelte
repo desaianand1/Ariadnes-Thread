@@ -87,11 +87,7 @@
 				<div class="ml-12 rounded-md border border-green-500/20 bg-green-500/5 p-3">
 					<div class="flex items-center gap-2">
 						{#if entry.collection.iconUrl}
-							<img
-								src={entry.collection.iconUrl}
-								alt=""
-								class="size-6 rounded"
-							/>
+							<img src={entry.collection.iconUrl} alt="" class="size-6 rounded" />
 						{/if}
 						<span class="font-medium">{entry.collection.name}</span>
 						<span class="text-sm text-muted-foreground">
@@ -99,7 +95,7 @@
 						</span>
 					</div>
 					{#if entry.collection.description}
-						<p class="mt-1 text-sm text-muted-foreground line-clamp-2">
+						<p class="mt-1 line-clamp-2 text-sm text-muted-foreground">
 							{entry.collection.description}
 						</p>
 					{/if}

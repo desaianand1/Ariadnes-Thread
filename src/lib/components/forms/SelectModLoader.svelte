@@ -2,11 +2,7 @@
 	import { onMount } from 'svelte';
 	import * as Select from '$lib/components/ui/select';
 	import { Spinner } from '$lib/components/ui/spinner';
-	import {
-		loaderState,
-		loadModLoaders,
-		getGroupedLoaders
-	} from '$lib/state/mod-loaders.svelte';
+	import { loaderState, loadModLoaders, getGroupedLoaders } from '$lib/state/mod-loaders.svelte';
 
 	interface Props {
 		value?: string;
@@ -20,9 +16,7 @@
 	let grouped = $derived(getGroupedLoaders());
 
 	// Find the selected loader for display
-	let selectedLoader = $derived(
-		loaderState.loaders.find((l) => l.slug === value)
-	);
+	let selectedLoader = $derived(loaderState.loaders.find((l) => l.slug === value));
 
 	onMount(() => {
 		loadModLoaders();

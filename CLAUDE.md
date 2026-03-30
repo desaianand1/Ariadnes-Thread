@@ -1,0 +1,4 @@
+- do not write tautological comments that explain code implementation. Comment about Why, Intent and details that will help future readers to decipher the complexity or decisions of why the code was created this way.
+- Never write purple prose in comments.
+- For Modrinth's API docs, go through 'docs/modrinth_openapi.yaml'
+- Ensure all unit tests follow arrange, act, assert and are atomic units that test behaviors, not implementation. Always ensure we test happy path and edge cases, not just trivial functionality or behaviors.

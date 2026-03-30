@@ -3,6 +3,9 @@
  * Based on Modrinth API v2/v3 documentation: https://docs.modrinth.com/api/
  */
 
+import type { SideClassification } from '$lib/services/types';
+import { classifySide } from '$lib/services/side-classification';
+
 /**
  * API Version types
  */
@@ -300,27 +303,17 @@ export interface ResolvedMod {
 /**
  * Categorization of mod for folder structure
  */
-export type ModCategory = 'client' | 'server' | 'both';
+export type ModCategory = SideClassification;
 
 /**
- * Get mod category based on client_side and server_side requirements
+ * Get mod category based on client_side and server_side requirements.
+ * Delegates to the shared classifySide function for consistency.
  */
 export function getModCategory(
 	clientSide: SideRequirement,
 	serverSide: SideRequirement
 ): ModCategory {
-	// Server-only: server required, client unsupported
-	if (serverSide === 'required' && clientSide === 'unsupported') {
-		return 'server';
-	}
-
-	// Client-only: client required, server unsupported
-	if (clientSide === 'required' && serverSide === 'unsupported') {
-		return 'client';
-	}
-
-	// Everything else goes to both (client folder for distribution)
-	return 'both';
+	return classifySide(clientSide, serverSide);
 }
 
 /**

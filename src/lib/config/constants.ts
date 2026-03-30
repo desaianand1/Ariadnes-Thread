@@ -99,6 +99,24 @@ export function getLoaderCategory(slug: string): LoaderCategory {
 }
 
 // =============================================================================
+// Cross-Loader Fallbacks & Dependency Resolution
+// =============================================================================
+
+/**
+ * When a project has no version for the selected loader, try these fallbacks
+ * in order. Quilt can load Fabric mods; NeoForge can sometimes load Forge mods.
+ */
+export const CROSS_LOADER_FALLBACKS: Record<string, string[]> = {
+	quilt: ['fabric'],
+	neoforge: ['forge']
+};
+
+/**
+ * BFS traversal stops after this many levels to prevent runaway resolution
+ */
+export const MAX_DEPENDENCY_DEPTH = 10;
+
+// =============================================================================
 // Cache Configuration
 // =============================================================================
 

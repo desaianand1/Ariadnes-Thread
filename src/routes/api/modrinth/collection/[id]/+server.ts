@@ -34,7 +34,7 @@ export const GET: RequestHandler = async ({ params, platform }) => {
 
 		// Fetch basic info for all projects in the collection
 		const projectIds = collection.projects;
-		let projects: ModrinthProject[] = [];
+		const projects: ModrinthProject[] = [];
 
 		if (projectIds.length > 0) {
 			// Batch fetch projects (Modrinth supports up to 100 per request)

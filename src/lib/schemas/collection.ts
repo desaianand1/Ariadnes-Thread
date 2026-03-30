@@ -70,3 +70,58 @@ export const downloadFormSchema = z.object({
 
 export type DownloadFormSchema = typeof downloadFormSchema;
 export type DownloadFormData = z.infer<typeof downloadFormSchema>;
+
+// =============================================================================
+// Review Page Query Parameters
+// =============================================================================
+
+/**
+ * Schema for /review query params that encode the full resolution context.
+ *
+ * - c: comma-separated collection IDs
+ * - v: Minecraft version string
+ * - l: loader slug
+ * - opts: compact flags string — d=include deps, f=cross-loader fallback, a=allow alpha/beta
+ * - x: comma-separated excluded project IDs (optional)
+ * - add: comma-separated manually-added project IDs (optional)
+ */
+export const reviewParamsSchema = z.object({
+	c: z.string().min(1, 'At least one collection ID is required'),
+	v: z.string().min(1, 'Minecraft version is required'),
+	l: z.string().min(1, 'Loader is required'),
+	opts: z
+		.string()
+		.default('')
+		.transform((val) => val.toLowerCase()),
+	x: z.string().optional().default(''),
+	add: z.string().optional().default('')
+});
+
+export type ReviewParams = z.infer<typeof reviewParamsSchema>;
+
+/**
+ * Parses validated review params into a ResolutionOptions object.
+ */
+export function parseReviewOptions(params: ReviewParams): {
+	collectionIds: string[];
+	gameVersion: string;
+	loader: string;
+	includeOptionalDeps: boolean;
+	enableCrossLoaderFallback: boolean;
+	allowAlphaBeta: boolean;
+	excludedProjectIds: Set<string>;
+	addedProjectIds: string[];
+} {
+	const flags = params.opts;
+
+	return {
+		collectionIds: params.c.split(',').filter(Boolean),
+		gameVersion: params.v,
+		loader: params.l,
+		includeOptionalDeps: flags.includes('d'),
+		enableCrossLoaderFallback: flags.includes('f'),
+		allowAlphaBeta: flags.includes('a'),
+		excludedProjectIds: new Set(params.x.split(',').filter(Boolean)),
+		addedProjectIds: params.add.split(',').filter(Boolean)
+	};
+}
