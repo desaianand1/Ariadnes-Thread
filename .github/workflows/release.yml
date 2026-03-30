@@ -7,28 +7,22 @@ on:
 env:
   NODE_VERSION: 24
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 concurrency:
-  group: 'pages'
+  group: 'deploy'
   cancel-in-progress: false
 
 jobs:
   build-and-deploy:
     name: Build and Deploy
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name }}
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
 
       - uses: actions/setup-node@v6
         with:
@@ -38,13 +32,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build
-        env:
-          BASE_PATH: '/${{ github.event.repository.name }}'
         run: pnpm run build
 
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy .svelte-kit/cloudflare --project-name=ariadnes-thread
+
       - name: Create build artifact
-        run: |
-          tar -czvf build-${{ github.event.release.tag_name }}.tar.gz build/
+        run: tar -czvf build-${{ github.event.release.tag_name }}.tar.gz .svelte-kit/cloudflare/
 
       - name: Upload to Release
         env:
@@ -53,18 +51,6 @@ jobs:
           gh release upload ${{ github.event.release.tag_name }} \
             build-${{ github.event.release.tag_name }}.tar.gz \
             --clobber
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: 'build'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
 
   release-summary:
     name: Release Summary
@@ -79,4 +65,4 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
           echo "- Build archive: build-${{ github.event.release.tag_name }}.tar.gz" >> $GITHUB_STEP_SUMMARY
-          echo "- GitHub Pages: Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "- Cloudflare Pages: Deployed" >> $GITHUB_STEP_SUMMARY
