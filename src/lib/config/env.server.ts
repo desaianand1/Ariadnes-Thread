@@ -18,7 +18,7 @@ export type RetryBackoffStrategy = 'exponential' | 'linear' | 'fixed';
  */
 const envSchema = z.object({
 	// Modrinth API Configuration
-	MODRINTH_API_URL: z.string().url().default('https://api.modrinth.com'),
+	MODRINTH_API_URL: z.url().default('https://api.modrinth.com'),
 	MODRINTH_USER_AGENT: z.string().min(1).default(`${siteConfig.shortName}/${APP_VERSION}`),
 
 	// Rate Limiting
