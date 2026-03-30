@@ -13,6 +13,9 @@ export type SideClassification = 'client' | 'server' | 'both';
 export interface ResolutionOptions {
 	gameVersion: string;
 	loader: string;
+	/** Master toggle: when false, skip dependency resolution entirely */
+	includeDependencies: boolean;
+	/** When true, also include optional dependencies */
 	includeOptionalDeps: boolean;
 	enableCrossLoaderFallback: boolean;
 	allowAlphaBeta: boolean;

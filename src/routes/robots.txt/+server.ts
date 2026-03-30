@@ -1,12 +1,12 @@
 import { getCanonicalUrl } from '$lib/config/site';
-import { env } from '$env/dynamic/public';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = () => {
-	const baseUrl = getCanonicalUrl(env);
+	const baseUrl = getCanonicalUrl();
 
 	const body = `User-agent: *
 Allow: /
+Disallow: /api/
 
 Sitemap: ${baseUrl}/sitemap.xml`;
 

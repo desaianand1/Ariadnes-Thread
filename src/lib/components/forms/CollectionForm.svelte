@@ -28,7 +28,6 @@
 	const form = superForm(data, {
 		validators: zod4Client(downloadFormSchema),
 		onSubmit: ({ formData, cancel }) => {
-			// Get valid collections
 			const validCollections = getValidCollectionIds();
 
 			if (validCollections.length === 0) {
@@ -36,8 +35,10 @@
 				return;
 			}
 
-			// Add collection IDs to form data
-			formData.set('collections', JSON.stringify(validCollections));
+			formData.delete('collections');
+			for (const id of validCollections) {
+				formData.append('collections', id);
+			}
 		}
 	});
 

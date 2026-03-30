@@ -199,9 +199,12 @@ async function batchFetchVersions(
 	);
 
 	const versions: ModrinthVersion[] = [];
-	for (const result of results) {
+	for (let i = 0; i < results.length; i++) {
+		const result = results[i];
 		if (result.status === 'fulfilled') {
 			versions.push(...result.value);
+		} else {
+			console.warn(`Failed to fetch version batch [${chunks[i].join(', ')}]: ${result.reason}`);
 		}
 	}
 	return versions;
@@ -224,9 +227,12 @@ async function batchFetchProjects(
 	);
 
 	const projects: ModrinthProject[] = [];
-	for (const result of results) {
+	for (let i = 0; i < results.length; i++) {
+		const result = results[i];
 		if (result.status === 'fulfilled') {
 			projects.push(...result.value);
+		} else {
+			console.warn(`Failed to fetch project batch [${chunks[i].join(', ')}]: ${result.reason}`);
 		}
 	}
 	return projects;

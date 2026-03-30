@@ -170,26 +170,16 @@ export const RETRY_DELAY_MS = 1000;
 // =============================================================================
 
 /**
- * Modrinth API base URL
- */
-export const MODRINTH_API_URL = 'https://api.modrinth.com';
-
-/**
- * Modrinth website base URL (for collection URLs)
- */
-export const MODRINTH_WEB_URL = 'https://modrinth.com';
-
-/**
  * Regex pattern to extract collection ID from Modrinth URL
  * Matches: https://modrinth.com/collection/{id} or modrinth.com/collection/{id}
  */
 export const COLLECTION_URL_PATTERN =
-	/(?:https?:\/\/)?(?:www\.)?modrinth\.com\/collection\/([a-zA-Z0-9]+)/;
+	/(?:https?:\/\/)?(?:www\.)?modrinth\.com\/collection\/([a-zA-Z0-9]{8})/;
 
 /**
- * Regex pattern to validate a collection ID (alphanumeric)
+ * Regex pattern to validate a collection ID (Modrinth base62, 8 characters)
  */
-export const COLLECTION_ID_PATTERN = /^[a-zA-Z0-9]+$/;
+export const COLLECTION_ID_PATTERN = /^[a-zA-Z0-9]{8}$/;
 
 // =============================================================================
 // UI Configuration
@@ -218,26 +208,17 @@ export const ANIMATION_DURATION = {
 // App Metadata
 // =============================================================================
 
-/**
- * Application name
- */
-export const APP_NAME = "Ariadne's Thread";
+declare const __APP_VERSION__: string;
 
 /**
- * Application description
+ * Application version — injected from package.json at build time via Vite's `define`
  */
-export const APP_DESCRIPTION =
-	'Download multiple Modrinth mod collections as organized ZIP bundles';
-
-/**
- * Application version (synced with package.json)
- */
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = __APP_VERSION__;
 
 /**
  * GitHub repository URL
  */
-export const GITHUB_URL = 'https://github.com/your-username/ariadnes-thread';
+export const GITHUB_URL = 'https://github.com/desaianand1/Ariadnes-Thread';
 
 /**
  * Modrinth attribution URL

@@ -185,8 +185,8 @@ A filter bar below the sticky summary bar:
 | `client_side` | `server_side` | Classification                | Included in       |
 | ------------- | ------------- | ----------------------------- | ----------------- |
 | required      | unsupported   | Client                        | Client ZIP only   |
-| required      | optional      | Client                        | Client ZIP only   |
-| optional      | required      | Server                        | Server ZIP only   |
+| required      | optional      | Both                          | Both ZIPs         |
+| optional      | required      | Both                          | Both ZIPs         |
 | unsupported   | required      | Server                        | Server ZIP only   |
 | required      | required      | Both                          | Both ZIPs         |
 | optional      | optional      | Both                          | Both ZIPs         |

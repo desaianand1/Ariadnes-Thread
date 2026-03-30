@@ -22,6 +22,10 @@ function normalize(side: SideRequirement): Exclude<SideRequirement, 'unknown'> {
  * | optional      | required      | both    |
  * | optional      | optional      | both    |
  * | optional      | unsupported   | client  |
+ *
+ * Intentionally more inclusive than the PRD's original spec for
+ * required+optional and optional+required: if either side supports
+ * the mod at all, we include it in both ZIPs.
  * | unsupported   | required      | server  |
  * | unsupported   | optional      | server  |
  * | unsupported   | unsupported   | both    |

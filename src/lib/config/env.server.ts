@@ -5,6 +5,8 @@
 
 import { z } from 'zod';
 import { env } from '$env/dynamic/private';
+import { siteConfig } from './site';
+import { APP_VERSION, MAX_RETRIES, RETRY_DELAY_MS, MAX_CONCURRENT_DOWNLOADS } from './constants';
 
 /**
  * Retry backoff strategy options
@@ -17,21 +19,32 @@ export type RetryBackoffStrategy = 'exponential' | 'linear' | 'fixed';
 const envSchema = z.object({
 	// Modrinth API Configuration
 	MODRINTH_API_URL: z.string().url().default('https://api.modrinth.com'),
-	MODRINTH_USER_AGENT: z.string().min(1).default('AriadnesThread/1.0.0'),
+	MODRINTH_USER_AGENT: z.string().min(1).default(`${siteConfig.shortName}/${APP_VERSION}`),
 
 	// Rate Limiting
 	MAX_REQUESTS_PER_MINUTE: z.coerce.number().int().positive().max(500).default(300),
 	RESET_INTERVAL_SECONDS: z.coerce.number().int().positive().max(300).default(60),
 
 	// Retry Configuration
-	MAX_RETRIES: z.coerce.number().int().positive().max(10).default(3),
-	RETRY_DELAY_MS: z.coerce.number().int().positive().max(10000).default(1000),
+	MAX_RETRIES: z.coerce.number().int().positive().max(10).default(MAX_RETRIES),
+	RETRY_DELAY_MS: z.coerce.number().int().positive().max(10000).default(RETRY_DELAY_MS),
 	RETRY_BACKOFF_STRATEGY: z
 		.enum(['exponential', 'linear', 'fixed'])
 		.default('exponential') as z.ZodType<RetryBackoffStrategy>,
 
 	// Download Configuration
-	MAX_CONCURRENT_DOWNLOADS: z.coerce.number().int().positive().max(10).default(5)
+	MAX_CONCURRENT_DOWNLOADS: z.coerce
+		.number()
+		.int()
+		.positive()
+		.max(10)
+		.default(MAX_CONCURRENT_DOWNLOADS),
+
+	// Network
+	FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+
+	// Optional services
+	RESEND_API_KEY: z.string().optional()
 });
 
 /**
@@ -47,9 +60,8 @@ function parseEnv(): EnvConfig {
 	const result = envSchema.safeParse(env);
 
 	if (!result.success) {
-		const formatted = result.error.format();
-		console.error('Environment validation failed:', formatted);
-		throw new Error(`Invalid environment configuration: ${JSON.stringify(formatted, null, 2)}`);
+		console.error('Environment validation failed:', result.error.format());
+		throw new Error('Invalid server configuration');
 	}
 
 	return result.data;
@@ -76,7 +88,6 @@ export function getEnvConfigFromPlatform(
 	platformEnv: Record<string, string | undefined> | undefined
 ): EnvConfig {
 	if (!platformEnv) {
-		// Fallback to SvelteKit's $env/dynamic/private
 		return getEnvConfig();
 	}
 
@@ -89,17 +100,3 @@ export function getEnvConfigFromPlatform(
 
 	return result.data;
 }
-
-/**
- * Default configuration values (for reference)
- */
-export const DEFAULT_CONFIG: Readonly<EnvConfig> = Object.freeze({
-	MODRINTH_API_URL: 'https://api.modrinth.com',
-	MODRINTH_USER_AGENT: 'AriadnesThread/1.0.0',
-	MAX_REQUESTS_PER_MINUTE: 300,
-	RESET_INTERVAL_SECONDS: 60,
-	MAX_RETRIES: 3,
-	RETRY_DELAY_MS: 1000,
-	RETRY_BACKOFF_STRATEGY: 'exponential',
-	MAX_CONCURRENT_DOWNLOADS: 5
-});

@@ -1,6 +1,7 @@
 export const siteConfig = {
 	name: "Ariadne's Thread",
-	description: 'Modrinth modpack and collections downloader',
+	shortName: 'Ariadne',
+	description: 'Download multiple Modrinth mod collections as organized ZIP bundles',
 	url: 'https://modrinth.download',
 	domain: 'modrinth.download',
 	supportEmail: 'support@modrinth.download',
@@ -16,11 +17,17 @@ export const siteConfig = {
 	] as string[],
 	locale: 'en_US',
 	themeColor: { light: '#ffffff', dark: '#262626' },
+	ogImage: '/og-image.png',
+	icons: {
+		favicon: '/favicon.svg',
+		appleTouchIcon: '/apple-touch-icon.png'
+	},
 	links: {
-		help: 'mailto:support@modrinth.download'
+		help: 'mailto:support@modrinth.download',
+		github: 'https://github.com/desaianand1/Ariadnes-Thread'
 	}
 } as const;
 
-export function getCanonicalUrl(env?: { PUBLIC_SITE_URL?: string }): string {
-	return env?.PUBLIC_SITE_URL || siteConfig.url;
+export function getCanonicalUrl(): string {
+	return siteConfig.url;
 }

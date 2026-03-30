@@ -61,6 +61,7 @@ function makeOptions(overrides: Partial<ResolutionOptions> = {}): ResolutionOpti
 	return {
 		gameVersion: '1.20.1',
 		loader: 'fabric',
+		includeDependencies: true,
 		includeOptionalDeps: true,
 		enableCrossLoaderFallback: false,
 		allowAlphaBeta: false,

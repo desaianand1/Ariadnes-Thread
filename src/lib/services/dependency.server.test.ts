@@ -83,6 +83,7 @@ function makeOptions(overrides: Partial<ResolutionOptions> = {}): ResolutionOpti
 	return {
 		gameVersion: '1.20.1',
 		loader: 'fabric',
+		includeDependencies: true,
 		includeOptionalDeps: true,
 		enableCrossLoaderFallback: false,
 		allowAlphaBeta: false,
@@ -291,6 +292,64 @@ describe('resolveDependencies', () => {
 			})
 		);
 		expect(result.resolved).toHaveLength(0);
+	});
+
+	it('emits depth-exceeded warnings when chain exceeds MAX_DEPENDENCY_DEPTH', async () => {
+		const resolved = [makeResolvedProject({ projectId: 'main', versionId: 'vmain' })];
+
+		// Build a chain: main → dep-1 → dep-2 → ... → dep-12
+		// MAX_DEPENDENCY_DEPTH is 10, so depths 1-10 resolve, depth 11+ warns
+		const chainLength = 12;
+		const versions: ModrinthVersion[] = [];
+		const projects: ModrinthProject[] = [];
+
+		for (let i = 0; i <= chainLength; i++) {
+			const projectId = i === 0 ? 'main' : `dep-${i}`;
+			const versionId = i === 0 ? 'vmain' : `vdep-${i}`;
+			const nextProjectId = i < chainLength ? `dep-${i + 1}` : undefined;
+
+			versions.push(
+				makeVersion({
+					id: versionId,
+					project_id: projectId,
+					dependencies: nextProjectId
+						? [{ project_id: nextProjectId, dependency_type: 'required' }]
+						: []
+				})
+			);
+
+			if (i > 0) {
+				projects.push(makeProject({ id: projectId, title: `Dep ${i}` }));
+			}
+		}
+
+		vi.spyOn(client, 'requestVersion').mockImplementation(async (endpoint, _v, opts) => {
+			const pathParams = opts?.pathParams ?? [];
+			const queryParams = opts?.queryParams ?? {};
+
+			if (endpoint === 'versions' && queryParams.ids) {
+				const ids = JSON.parse(queryParams.ids);
+				return versions.filter((v) => ids.includes(v.id));
+			}
+			if (endpoint === 'projects') {
+				const ids = JSON.parse(queryParams.ids);
+				return projects.filter((p) => ids.includes(p.id));
+			}
+			// resolveVersion for unpinned deps
+			if (endpoint === 'project') {
+				const projId = pathParams[0];
+				const v = versions.find((ver) => ver.project_id === projId);
+				return v ? [v] : [];
+			}
+			return [];
+		});
+
+		const result = await resolveDependencies(client, resolved, makeOptions());
+
+		const depthWarnings = result.warnings.filter((w) => w.type === 'depth-exceeded');
+		expect(depthWarnings.length).toBeGreaterThan(0);
+		// Deps at depth 1-10 should be resolved, those beyond should not
+		expect(result.resolved.length).toBeLessThanOrEqual(10);
 	});
 
 	it('resolves pinned dependencies by version_id', async () => {

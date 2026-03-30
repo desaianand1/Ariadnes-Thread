@@ -27,8 +27,17 @@ export const GET: RequestHandler = async ({ platform }) => {
 				(loader) =>
 					!EXCLUDED_LOADERS.includes(loader.name.toLowerCase() as (typeof EXCLUDED_LOADERS)[number])
 			)
-			// Only include loaders that support mods
-			.filter((loader) => loader.supported_project_types.includes('mod'))
+			// Include loaders that support any project type found in collections
+			.filter((loader) => {
+				const types = loader.supported_project_types;
+				return (
+					types.includes('mod') ||
+					types.includes('resourcepack') ||
+					types.includes('shader') ||
+					types.includes('datapack') ||
+					types.includes('plugin')
+				);
+			})
 			// Sanitize SVG icons to prevent XSS
 			.map((loader) => ({
 				...loader,
