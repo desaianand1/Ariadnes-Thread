@@ -1,57 +1,59 @@
-import globals from 'globals'
-import js from '@eslint/js'
-import tseslint from 'typescript-eslint'
-import eslintPluginSvelte from 'eslint-plugin-svelte'
-import prettierConfig from 'eslint-config-prettier'
+import prettier from 'eslint-config-prettier';
+import { fileURLToPath } from 'node:url';
+import { includeIgnoreFile } from '@eslint/compat';
+import js from '@eslint/js';
+import svelte from 'eslint-plugin-svelte';
+import { defineConfig } from 'eslint/config';
+import globals from 'globals';
+import ts from 'typescript-eslint';
+import svelteConfig from './svelte.config.js';
 
-export default tseslint.config(
-  {
-    // Global configuration
-    files: ['**/*.{js,ts,svelte}'],
-    ignores: ['node_modules/**', 'dist/**'],
-    languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.es2021
-      },
-      parserOptions: {
-        ecmaVersion: 'latest',
-        sourceType: 'module'
-      }
-    },
-    plugins: {
-      svelte: eslintPluginSvelte
-    },
-    // Base configuration for all files
-    rules: {
-      ...js.configs.recommended.rules,
-      ...prettierConfig.rules
-    }
-  },
-  // TypeScript files configuration
-  {
-    files: ['**/*.ts'],
-    extends: [
-      ...tseslint.configs.recommendedTypeChecked,
-      ...tseslint.configs.strictTypeChecked
-    ],
-    languageOptions: {
-      parser: tseslint.parser,
-      parserOptions: {
-        project: './tsconfig.json'
-      }
-    }
-  },
-  // Svelte files configuration
-  {
-    files: ['**/*.svelte'],
-    extends: [eslintPluginSvelte.configs.recommended],
-    languageOptions: {
-      parser: eslintPluginSvelte.parser
-    },
-    rules: {
-      'svelte/valid-compile': 'error',
-      'svelte/no-implicit-any': 'error'
-    }
-  }
-)
+const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
+
+export default defineConfig(
+	includeIgnoreFile(gitignorePath),
+	{
+		ignores: ['docs/archive/**']
+	},
+	js.configs.recommended,
+	...ts.configs.recommended,
+	...svelte.configs.recommended,
+	prettier,
+	...svelte.configs.prettier,
+	{
+		languageOptions: {
+			globals: { ...globals.browser, ...globals.node }
+		},
+		rules: {
+			// typescript-eslint strongly recommend that you do not use the no-undef lint rule on TypeScript projects.
+			// see: https://typescript-eslint.io/troubleshooting/faqs/eslint/#i-get-errors-from-the-no-undef-rule-about-global-variables-not-being-defined-even-though-there-are-no-typescript-errors
+			'no-undef': 'off'
+		}
+	},
+	{
+		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
+		languageOptions: {
+			parserOptions: {
+				projectService: true,
+				extraFileExtensions: ['.svelte'],
+				parser: ts.parser,
+				svelteConfig
+			}
+		}
+	},
+	// File-specific rule overrides
+	{
+		// Mod loader icons are trusted SVG content from the official Modrinth API
+		files: ['src/lib/components/forms/SelectModLoader.svelte'],
+		rules: {
+			'svelte/no-at-html-tags': 'off'
+		}
+	},
+	{
+		// Generic UI button component supports external links (not just SvelteKit routes)
+		files: ['src/lib/components/ui/button/button.svelte'],
+		rules: {
+			'svelte/no-navigation-without-resolve': 'off'
+		}
+	}
+);

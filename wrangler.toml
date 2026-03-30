@@ -1,0 +1,31 @@
+name = "ariadnes-thread"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Pages-specific settings
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+# Environment variables (defaults - override in Cloudflare dashboard for production)
+[vars]
+MODRINTH_API_URL = "https://api.modrinth.com"
+MODRINTH_USER_AGENT = "AriadnesThread/1.0.0 (https://ariadnes-thread.pages.dev)"
+MAX_REQUESTS_PER_MINUTE = "300"
+RESET_INTERVAL_SECONDS = "60"
+MAX_RETRIES = "3"
+RETRY_DELAY_MS = "1000"
+RETRY_BACKOFF_STRATEGY = "exponential"
+MAX_CONCURRENT_DOWNLOADS = "5"
+
+# Development environment
+[env.development]
+name = "ariadnes-thread-dev"
+
+[env.development.vars]
+MODRINTH_USER_AGENT = "AriadnesThread/1.0.0-dev (Development)"
+
+# Preview environment (for pull request previews)
+[env.preview]
+name = "ariadnes-thread-preview"
+
+[env.preview.vars]
+MODRINTH_USER_AGENT = "AriadnesThread/1.0.0-preview (Preview)"

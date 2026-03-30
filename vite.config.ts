@@ -1,26 +1,26 @@
-import { defineConfig } from 'vite'
-import { svelte } from '@sveltejs/vite-plugin-svelte'
-import path from 'path'
+import { readFileSync } from 'node:fs';
+import devtoolsJson from 'vite-plugin-devtools-json';
+import tailwindcss from '@tailwindcss/vite';
+import { defineConfig } from 'vitest/config';
+import { sveltekit } from '@sveltejs/kit/vite';
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 export default defineConfig({
-  plugins: [svelte()],
-  base: './',
-  resolve: {
-    alias: {
-      '$lib': path.resolve(__dirname, './src/lib'),
-      '$components': path.resolve(__dirname, './src/lib/components'),
-      '$utils': path.resolve(__dirname, './src/lib/utils'),
-      '$styles': path.resolve(__dirname, './src/styles'),
-      '$assets': path.resolve(__dirname, './src/assets')
-    }
-  },
-  build: {
-    target: 'esnext',
-    minify: 'esbuild',
-    sourcemap: true
-  },
-  server: {
-    port: 5173,
-    strictPort: true
-  }
-})
+	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
+	define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+	test: {
+		expect: { requireAssertions: true },
+		projects: [
+			{
+				extends: './vite.config.ts',
+				test: {
+					name: 'server',
+					environment: 'node',
+					include: ['src/**/*.{test,spec}.{js,ts}'],
+					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
+				}
+			}
+		]
+	}
+});
