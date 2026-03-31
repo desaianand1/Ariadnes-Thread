@@ -2,6 +2,7 @@
     import { goto } from '$app/navigation';
     import { resolve } from '$app/paths';
     import { navigating } from '$app/stores';
+    import { SvelteURLSearchParams } from 'svelte/reactivity';
     import { superForm, type SuperValidated, type Infer } from 'sveltekit-superforms';
     import { zod4Client } from 'sveltekit-superforms/adapters';
     import { downloadFormSchema, type DownloadFormSchema } from '$lib/schemas/collection';
@@ -22,6 +23,7 @@
         hasValidCollection
     } from '$lib/state/collections.svelte';
     import { useMinDuration } from '$lib/utils/min-duration.svelte';
+    import { MIN_FORM_SUBMIT_TIME_MS } from '$lib/config/constants';
 
     interface Props {
         data: SuperValidated<Infer<DownloadFormSchema>>;
@@ -29,6 +31,9 @@
 
     let { data }: Props = $props();
 
+    // superForm only reads the initial snapshot — re-initialization isn't needed since
+    // the form owns its own state after mount.
+    // svelte-ignore state_referenced_locally
     const form = superForm(data, {
         validators: zod4Client(downloadFormSchema)
     });
@@ -38,6 +43,9 @@
     const isNavigatingHeld = useMinDuration(() => !!$navigating);
     let isNavigating = $derived(isNavigatingHeld());
 
+    let honeypot = $state('');
+    const formLoadedAt = Date.now();
+
     let canSubmit = $derived(
         $formData.modLoader && $formData.minecraftVersion && hasValidCollection() && !isValidating()
     );
@@ -46,6 +54,10 @@
 
     function handleSubmit(e: SubmitEvent) {
         e.preventDefault();
+
+        // Silent anti-bot checks — no error messages to avoid revealing the mechanism
+        if (honeypot) return;
+        if (Date.now() - formLoadedAt < MIN_FORM_SUBMIT_TIME_MS) return;
 
         const collectionIds = getValidCollectionIds();
         if (collectionIds.length === 0) return;
@@ -76,6 +88,10 @@
         </Card.Header>
 
         <Card.Content class="space-y-6">
+            <div class="absolute -left-[9999px]" aria-hidden="true">
+                <input name="website" tabindex={-1} autocomplete="off" bind:value={honeypot} />
+            </div>
+
             <!-- Configuration Row -->
             <div class="flex flex-wrap gap-4">
                 <Form.Field {form} name="minecraftVersion">

@@ -44,7 +44,10 @@ const envSchema = z.object({
     FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
     // Optional services
-    RESEND_API_KEY: z.string().optional()
+    RESEND_API_KEY: z.string().optional(),
+
+    // Cloudflare Turnstile — server-side token verification
+    TURNSTILE_SECRET_KEY: z.string().optional()
 });
 
 /**

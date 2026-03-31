@@ -4,6 +4,7 @@ import { createClientFromPlatform } from '$lib/api/client.server';
 import { reviewParamsSchema, parseReviewOptions } from '$lib/schemas/collection';
 import { resolveCollection } from '$lib/services/resolution.server';
 import { decimalToHex } from '$lib/utils/colors';
+import { MAX_TOTAL_PROJECTS } from '$lib/config/constants';
 import type { ModrinthCollection, ModrinthProject } from '$lib/api/types';
 import type {
     CollectionGroup,
@@ -68,6 +69,23 @@ export const load: PageServerLoad = async ({ url, platform }) => {
         setTimeout(() => reject(new Error('Request timed out')), TIMEOUT_MS)
     );
 
+    // Pre-flight project count check — fetch collections first, then validate total
+    const prefetchResults = await Promise.allSettled(
+        reviewOptions.collectionIds.map((id) => fetchCollection(client, id))
+    );
+
+    const totalProjects = prefetchResults.reduce((sum, r) => {
+        if (r.status === 'fulfilled') return sum + r.value.projects.length;
+        return sum;
+    }, 0);
+
+    if (totalProjects > MAX_TOTAL_PROJECTS) {
+        error(
+            400,
+            `These collections contain ${totalProjects} projects, which exceeds the maximum of ${MAX_TOTAL_PROJECTS}. Try using fewer or smaller collections.`
+        );
+    }
+
     let collectionResults: PromiseSettledResult<{
         collection: ModrinthCollection;
         result: Awaited<ReturnType<typeof resolveCollection>>;
@@ -78,8 +96,13 @@ export const load: PageServerLoad = async ({ url, platform }) => {
     try {
         collectionResults = await Promise.race([
             Promise.allSettled(
-                reviewOptions.collectionIds.map(async (id) => {
-                    const { collection, projects } = await fetchCollection(client, id);
+                reviewOptions.collectionIds.map(async (id, idx) => {
+                    // Reuse prefetched data to avoid duplicate API calls
+                    const prefetched = prefetchResults[idx];
+                    const { collection, projects } =
+                        prefetched.status === 'fulfilled'
+                            ? prefetched.value
+                            : await fetchCollection(client, id);
 
                     // Filter out modpacks
                     const modpacks = projects.filter((p) => p.project_type === 'modpack');
@@ -118,16 +141,12 @@ export const load: PageServerLoad = async ({ url, platform }) => {
     const successfulResults = collectionResults.filter(
         (
             r
-        ): r is PromiseFulfilledResult<
-            Awaited<
-                ReturnType<typeof resolveCollection> & {
-                    collection: ModrinthCollection;
-                    result: Awaited<ReturnType<typeof resolveCollection>>;
-                    modpackWarnings: ResolutionWarning[];
-                    totalProjectCount: number;
-                }
-            >
-        > => r.status === 'fulfilled'
+        ): r is PromiseFulfilledResult<{
+            collection: ModrinthCollection;
+            result: Awaited<ReturnType<typeof resolveCollection>>;
+            modpackWarnings: ResolutionWarning[];
+            totalProjectCount: number;
+        }> => r.status === 'fulfilled'
     );
 
     if (successfulResults.length === 0) {

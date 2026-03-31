@@ -151,9 +151,9 @@ export const STORAGE_KEYS = {
 export const MAX_COLLECTIONS = 7;
 
 /**
- * Default maximum concurrent downloads
+ * Default maximum concurrent downloads (PRD spec: default 4, max 8)
  */
-export const MAX_CONCURRENT_DOWNLOADS = 5;
+export const MAX_CONCURRENT_DOWNLOADS = 4;
 
 /**
  * Maximum retries per download
@@ -164,6 +164,11 @@ export const MAX_RETRIES = 3;
  * Base delay for retry logic in milliseconds
  */
 export const RETRY_DELAY_MS = 1000;
+
+/**
+ * Per-file fetch timeout in milliseconds
+ */
+export const DOWNLOAD_TIMEOUT_MS = 60_000;
 
 // =============================================================================
 // API Configuration
@@ -219,6 +224,80 @@ export const APP_VERSION = __APP_VERSION__;
  * GitHub repository URL
  */
 export const GITHUB_URL = 'https://github.com/desaianand1/Ariadnes-Thread';
+
+// =============================================================================
+// Security & Rate Limiting
+// =============================================================================
+
+/** Per-IP rate limit configurations */
+export const RATE_LIMITS = {
+    /** Modrinth API proxy routes */
+    API: { maxRequests: 60, windowMs: 60_000 },
+    /** Review page loads (each triggers many server-side API calls) */
+    REVIEW: { maxRequests: 20, windowMs: 60_000 },
+    /** Email sending (future Phase 5 endpoint) */
+    EMAIL: { maxRequests: 5, windowMs: 3_600_000 }
+} as const;
+
+/** Per-recipient email limits */
+export const EMAIL_RECIPIENT_LIMITS = {
+    MAX_PER_RECIPIENT: 3,
+    WINDOW_MS: 86_400_000 // 24 hours
+} as const;
+
+/** Rate limiter internal housekeeping */
+export const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60_000;
+
+/** Maximum total projects across all collections on /review (prevents collection-bombing) */
+export const MAX_TOTAL_PROJECTS = 300;
+
+/** Minimum form submission time in ms (anti-bot timing check) */
+export const MIN_FORM_SUBMIT_TIME_MS = 3_000;
+
+/** Known bot User-Agent patterns (case-insensitive match) */
+export const BOT_UA_PATTERNS = [
+    'curl',
+    'wget',
+    'httpie',
+    'python-requests',
+    'python-urllib',
+    'aiohttp',
+    'go-http-client',
+    'node-fetch',
+    'axios',
+    'undici',
+    'scrapy',
+    'crawler',
+    'spider'
+] as const;
+
+/** Search engine crawlers to allow through bot detection */
+export const CRAWLER_ALLOWLIST = [
+    'googlebot',
+    'bingbot',
+    'yandexbot',
+    'duckduckbot',
+    'slurp',
+    'facebookexternalhit',
+    'twitterbot',
+    'linkedinbot'
+] as const;
+
+/**
+ * Bot detection scoring weights.
+ * Multiple signals are combined — a single weak signal (like missing Sec-Fetch-Site
+ * in Safari < 16.4) won't block real users, but multiple missing signals indicate a bot.
+ */
+export const BOT_SCORE_WEIGHTS = {
+    MISSING_ACCEPT: 3,
+    MISSING_ACCEPT_LANGUAGE: 2,
+    MISSING_SEC_FETCH: 1,
+    EMPTY_USER_AGENT: 3,
+    KNOWN_BOT_UA: 3
+} as const;
+
+/** Score threshold at which a request is classified as bot. Must be >= 3. */
+export const BOT_SCORE_THRESHOLD = 3;
 
 /**
  * Modrinth attribution URL
