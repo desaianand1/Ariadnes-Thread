@@ -297,6 +297,11 @@
         bind:open={shareOpen}
         pageUrl={$page.url.toString()}
         {collectionNames}
+        context={{
+            gameVersion: data.context.gameVersion,
+            loader: data.context.loader,
+            modCount: trueTotalCount
+        }}
         emailEnabled={data.emailEnabled}
         turnstileSiteKey={data.turnstileSiteKey}
     />
