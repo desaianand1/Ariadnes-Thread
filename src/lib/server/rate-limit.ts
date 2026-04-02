@@ -18,7 +18,11 @@ interface WindowEntry {
     resetAt: number;
 }
 
+// Known limitation: in-memory rate limiting resets on deploy and is per-isolate
+// on edge runtimes (e.g. Cloudflare Workers). For production scale, migrate to
+// Cloudflare KV or Durable Objects for shared, durable counters.
 const windows = new Map<string, WindowEntry>();
+const recipientWindows = new Map<string, WindowEntry>();
 let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
 function ensureCleanup(): void {
@@ -30,7 +34,12 @@ function ensureCleanup(): void {
                 windows.delete(key);
             }
         }
-        if (windows.size === 0 && cleanupTimer) {
+        for (const [key, entry] of recipientWindows) {
+            if (now >= entry.resetAt) {
+                recipientWindows.delete(key);
+            }
+        }
+        if (windows.size === 0 && recipientWindows.size === 0 && cleanupTimer) {
             clearInterval(cleanupTimer);
             cleanupTimer = null;
         }
@@ -68,6 +77,39 @@ export function checkRateLimit(
     };
 }
 
+export function checkRecipientRateLimit(
+    email: string,
+    config: { MAX_PER_RECIPIENT: number; WINDOW_MS: number }
+): RateLimitResult {
+    ensureCleanup();
+    const key = `recipient:${email.toLowerCase().trim()}`;
+    const now = Date.now();
+    const entry = recipientWindows.get(key);
+
+    if (!entry || now >= entry.resetAt) {
+        const resetAt = now + config.WINDOW_MS;
+        recipientWindows.set(key, { count: 1, resetAt });
+        return { allowed: true, remaining: config.MAX_PER_RECIPIENT - 1, resetAt, retryAfterMs: 0 };
+    }
+
+    entry.count++;
+    if (entry.count > config.MAX_PER_RECIPIENT) {
+        return {
+            allowed: false,
+            remaining: 0,
+            resetAt: entry.resetAt,
+            retryAfterMs: entry.resetAt - now
+        };
+    }
+
+    return {
+        allowed: true,
+        remaining: config.MAX_PER_RECIPIENT - entry.count,
+        resetAt: entry.resetAt,
+        retryAfterMs: 0
+    };
+}
+
 export function getRateLimitInfo(
     ip: string,
     routeKey: string
@@ -100,6 +142,7 @@ export function getRouteKey(pathname: string): keyof typeof RATE_LIMITS | null {
 /** Exposed for testing — clears all rate limit state */
 export function _resetForTesting(): void {
     windows.clear();
+    recipientWindows.clear();
     if (cleanupTimer) {
         clearInterval(cleanupTimer);
         cleanupTimer = null;

@@ -1,14 +1,18 @@
 import type { Handle } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import { isLikelyBot } from '$lib/server/bot-detect';
 import { checkRateLimit, getClientIp, getRouteKey, getRateLimitInfo } from '$lib/server/rate-limit';
 import { RATE_LIMITS } from '$lib/config/constants';
 
+// Known limitation: No explicit CSRF token on /api/share/email — SvelteKit's
+// built-in origin check + honeypot + timing + rate limiting provides reasonable
+// defense. Add a CSRF cookie pattern if abuse is observed.
 export const handle: Handle = async ({ event, resolve }) => {
     const pathname = event.url.pathname;
     const ip = getClientIp(event);
 
     // Bot detection — before any expensive work
-    if (pathname.startsWith('/api/') || pathname === '/review') {
+    if (pathname.startsWith('/api/') || pathname.startsWith('/review')) {
         if (isLikelyBot(event.request)) {
             return new Response('Forbidden', { status: 403 });
         }
@@ -52,7 +56,9 @@ export const handle: Handle = async ({ event, resolve }) => {
         'Content-Security-Policy',
         [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline'",
+            // Known limitation: unsafe-inline needed for SvelteKit hydration.
+            // Could use nonce-based CSP with adapter config for stronger policy.
+            `script-src 'self' 'unsafe-inline'${dev && pathname.startsWith('/email-preview') ? " 'wasm-unsafe-eval'" : ''}`,
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' https://cdn.modrinth.com https://cdn-raw.modrinth.com https://www.bisecthosting.com data:",
             "font-src 'self'",

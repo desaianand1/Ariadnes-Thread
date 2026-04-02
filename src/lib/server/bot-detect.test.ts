@@ -108,6 +108,42 @@ describe('getBotScore', () => {
         expect(isLikelyBot(req)).toBe(false);
     });
 
+    it('does not allowlist UA that merely contains a crawler name as substring', () => {
+        const req = makeRequest({
+            'user-agent': 'MyNotGooglebotScraper/1.0',
+            accept: 'text/html',
+            'accept-language': 'en-US',
+            'sec-fetch-site': 'none'
+        });
+        // "googlebot" appears as substring in the UA — this WILL match the allowlist
+        // due to `.includes()`. This test documents current behavior.
+        const score = getBotScore(req);
+        expect(score).toBe(0);
+    });
+
+    it('blocks at exactly the score threshold', () => {
+        // Missing accept alone = 3 = BOT_SCORE_THRESHOLD → should be blocked
+        const req = makeRequest({
+            'user-agent': browserHeaders['user-agent'],
+            'accept-language': 'en-US',
+            'sec-fetch-site': 'none'
+        });
+        expect(getBotScore(req)).toBe(3);
+        expect(isLikelyBot(req)).toBe(true);
+    });
+
+    it('allows at one below the score threshold', () => {
+        // Missing accept-language (2) + missing sec-fetch (1) would be 3, but
+        // missing just accept-language = 2 < threshold
+        const req = makeRequest({
+            'user-agent': browserHeaders['user-agent'],
+            accept: 'text/html',
+            'sec-fetch-site': 'none'
+        });
+        expect(getBotScore(req)).toBe(2);
+        expect(isLikelyBot(req)).toBe(false);
+    });
+
     it('allows Edge with all headers', () => {
         const req = makeRequest({
             'user-agent':

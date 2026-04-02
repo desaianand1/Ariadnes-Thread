@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { checkRateLimit, getRouteKey, getClientIp, _resetForTesting } from './rate-limit';
+import {
+    checkRateLimit,
+    checkRecipientRateLimit,
+    getRouteKey,
+    getClientIp,
+    _resetForTesting
+} from './rate-limit';
 import type { RequestEvent } from '@sveltejs/kit';
 
 beforeEach(() => {
@@ -75,6 +81,30 @@ describe('checkRateLimit', () => {
         expect(allowedReview.allowed).toBe(true);
     });
 
+    it('resets window at exactly windowMs boundary', () => {
+        vi.useFakeTimers();
+        checkRateLimit('1.2.3.4', 'API', config);
+        checkRateLimit('1.2.3.4', 'API', config);
+        checkRateLimit('1.2.3.4', 'API', config);
+
+        vi.advanceTimersByTime(10_000);
+
+        const result = checkRateLimit('1.2.3.4', 'API', config);
+        expect(result.allowed).toBe(true);
+        expect(result.remaining).toBe(2);
+        vi.useRealTimers();
+    });
+
+    it('blocks on second request when maxRequests is 1', () => {
+        const strictConfig = { maxRequests: 1, windowMs: 10_000 };
+        const r1 = checkRateLimit('1.2.3.4', 'STRICT', strictConfig);
+        const r2 = checkRateLimit('1.2.3.4', 'STRICT', strictConfig);
+
+        expect(r1.allowed).toBe(true);
+        expect(r1.remaining).toBe(0);
+        expect(r2.allowed).toBe(false);
+    });
+
     it('returns correct retryAfterMs when blocked', () => {
         vi.useFakeTimers({ now: 1000 });
 
@@ -141,5 +171,65 @@ describe('getClientIp', () => {
     it('falls back to getClientAddress', () => {
         const event = mockEvent({}, '192.168.1.1');
         expect(getClientIp(event)).toBe('192.168.1.1');
+    });
+});
+
+describe('checkRecipientRateLimit', () => {
+    const config = { MAX_PER_RECIPIENT: 3, WINDOW_MS: 86_400_000 };
+
+    it('allows emails within the per-recipient limit', () => {
+        const r1 = checkRecipientRateLimit('user@example.com', config);
+        const r2 = checkRecipientRateLimit('user@example.com', config);
+        const r3 = checkRecipientRateLimit('user@example.com', config);
+
+        expect(r1.allowed).toBe(true);
+        expect(r1.remaining).toBe(2);
+        expect(r2.allowed).toBe(true);
+        expect(r2.remaining).toBe(1);
+        expect(r3.allowed).toBe(true);
+        expect(r3.remaining).toBe(0);
+    });
+
+    it('blocks emails exceeding the per-recipient limit', () => {
+        checkRecipientRateLimit('user@example.com', config);
+        checkRecipientRateLimit('user@example.com', config);
+        checkRecipientRateLimit('user@example.com', config);
+        const r4 = checkRecipientRateLimit('user@example.com', config);
+
+        expect(r4.allowed).toBe(false);
+        expect(r4.retryAfterMs).toBeGreaterThan(0);
+    });
+
+    it('tracks different recipients independently', () => {
+        checkRecipientRateLimit('alice@example.com', config);
+        checkRecipientRateLimit('alice@example.com', config);
+        checkRecipientRateLimit('alice@example.com', config);
+
+        const blockedAlice = checkRecipientRateLimit('alice@example.com', config);
+        const allowedBob = checkRecipientRateLimit('bob@example.com', config);
+
+        expect(blockedAlice.allowed).toBe(false);
+        expect(allowedBob.allowed).toBe(true);
+    });
+
+    it('normalizes email to lowercase', () => {
+        checkRecipientRateLimit('User@Example.COM', config);
+        const r2 = checkRecipientRateLimit('user@example.com', config);
+
+        expect(r2.remaining).toBe(1);
+    });
+
+    it('resets counter after window expires', () => {
+        vi.useFakeTimers();
+        checkRecipientRateLimit('user@example.com', config);
+        checkRecipientRateLimit('user@example.com', config);
+        checkRecipientRateLimit('user@example.com', config);
+
+        vi.advanceTimersByTime(86_400_001);
+
+        const result = checkRecipientRateLimit('user@example.com', config);
+        expect(result.allowed).toBe(true);
+        expect(result.remaining).toBe(2);
+        vi.useRealTimers();
     });
 });
