@@ -67,9 +67,10 @@ export const load: PageServerLoad = async ({ url, platform }) => {
     const client = createClientFromPlatform(platform);
 
     const TIMEOUT_MS = 25_000;
-    const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out')), TIMEOUT_MS)
-    );
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Request timed out')), TIMEOUT_MS);
+    });
 
     // Pre-flight project count check — fetch collections first, then validate total
     const prefetchResults = await Promise.allSettled(
@@ -137,6 +138,8 @@ export const load: PageServerLoad = async ({ url, platform }) => {
             error(504, 'The request took too long. Try with fewer collections or try again later.');
         }
         throw e;
+    } finally {
+        clearTimeout(timeoutId!);
     }
 
     // Check if all collections failed
