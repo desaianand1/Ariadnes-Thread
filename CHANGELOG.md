@@ -1,3 +1,9 @@
+## [1.18.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.18.2...v1.18.3) (2026-04-02)
+
+### Bug Fixes
+
+- **ci:** switch from Cloudflare Pages to Workers deploy config ([4b7a078](https://github.com/desaianand1/Ariadnes-Thread/commit/4b7a0782b175d0504c100908291b7c15342a99fe))
+
 ## [1.18.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.18.1...v1.18.2) (2026-04-02)
 
 ### Bug Fixes
