@@ -121,7 +121,7 @@
             <Button
                 variant="ghost"
                 size="sm"
-                class="size-7 shrink-0 p-0"
+                class="size-9 shrink-0 p-0 sm:size-7"
                 onclick={() => onExclude(project.projectId)}
             >
                 <RotateCcwIcon class="size-3.5" />
@@ -134,7 +134,7 @@
                         <Button
                             variant="ghost"
                             size="sm"
-                            class="size-7 shrink-0 p-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+                            class="size-9 shrink-0 p-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive sm:size-7"
                             {...props}
                         >
                             <EyeOffIcon class="size-3.5" />

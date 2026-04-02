@@ -127,8 +127,8 @@
                 {/if}
             </div>
 
-            <!-- Context badges -->
-            <div class="flex items-center gap-2">
+            <!-- Context badges (hidden on mobile — already shown in ResolutionHero) -->
+            <div class="hidden items-center gap-2 sm:flex">
                 <Badge variant="outline">{context.gameVersion}</Badge>
                 <LoaderBadge loaderSlug={context.loader} size="sm" />
             </div>

@@ -12,6 +12,7 @@
     import { cn } from '$lib/utils';
     import { slide } from 'svelte/transition';
     import { safeTransition } from '$lib/utils/motion';
+    import { browser } from '$app/environment';
     import SearchIcon from '@lucide/svelte/icons/search';
     import PackageIcon from '@lucide/svelte/icons/package';
     import ImageIcon from '@lucide/svelte/icons/image';
@@ -56,6 +57,12 @@
     let sideFilter = $state<'all' | SideClassification>('all');
     let showIssuesOnly = $state(false);
     let depsOpen = $state(true);
+
+    $effect(() => {
+        if (!browser) return;
+        const mq = window.matchMedia('(max-width: 639px)');
+        depsOpen = !mq.matches;
+    });
 
     let inputValue = $state('');
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
