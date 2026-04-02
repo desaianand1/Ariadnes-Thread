@@ -48,6 +48,7 @@
     }: Props = $props();
 
     let copiedHash = $state(false);
+    let activeTab = $state('overview');
 
     let projectUrl = $derived(
         project ? `https://modrinth.com/${project.projectType}/${project.projectSlug}` : '#'
@@ -72,6 +73,7 @@
     $effect(() => {
         if (project) {
             copiedHash = false;
+            activeTab = 'overview';
         }
     });
 </script>
@@ -151,7 +153,7 @@
                 {/if}
 
                 <!-- Tab-based content -->
-                <Tabs.Root value="overview" class="mt-4">
+                <Tabs.Root bind:value={activeTab} class="mt-4">
                     <Tabs.List class="w-full">
                         <Tabs.Trigger value="overview" class="flex-1">Overview</Tabs.Trigger>
                         {#if hasChangelog}
