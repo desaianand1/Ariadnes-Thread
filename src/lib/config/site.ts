@@ -20,7 +20,12 @@ export const siteConfig = {
     ogImage: '/og-image.png',
     icons: {
         favicon: '/favicon.svg',
-        appleTouchIcon: '/apple-touch-icon.png'
+        faviconIco: '/favicon.ico',
+        favicon32: '/favicon-32x32.png',
+        favicon16: '/favicon-16x16.png',
+        appleTouchIcon: '/apple-touch-icon.png',
+        icon192: '/icon-192.png',
+        icon512: '/icon-512.png'
     },
     links: {
         help: 'mailto:support@modrinth.download',

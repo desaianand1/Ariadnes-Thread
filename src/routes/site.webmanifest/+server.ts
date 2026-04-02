@@ -5,6 +5,7 @@ export const GET: RequestHandler = () => {
     const manifest = {
         name: siteConfig.name,
         short_name: siteConfig.shortName,
+        description: siteConfig.description,
         start_url: '/',
         display: 'standalone',
         background_color: '#ffffff',
@@ -16,12 +17,12 @@ export const GET: RequestHandler = () => {
                 type: 'image/svg+xml'
             },
             {
-                src: '/icon-192.png',
+                src: siteConfig.icons.icon192,
                 sizes: '192x192',
                 type: 'image/png'
             },
             {
-                src: '/icon-512.png',
+                src: siteConfig.icons.icon512,
                 sizes: '512x512',
                 type: 'image/png'
             },
