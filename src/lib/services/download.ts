@@ -4,13 +4,19 @@
  * streaming progress, exponential retry, and abort support.
  */
 
-import { MAX_CONCURRENT_DOWNLOADS, MAX_RETRIES, RETRY_DELAY_MS } from '$lib/config/constants';
-import { verifySha1 } from './integrity';
+import {
+    MAX_CONCURRENT_DOWNLOADS,
+    MAX_RETRIES,
+    RETRY_DELAY_MS,
+    DOWNLOAD_TIMEOUT_MS
+} from '$lib/config/constants';
+import { verifySha1, verifySha512 } from './integrity';
 
 export interface DownloadFile {
     fileUrl: string;
     fileSize: number;
     sha1: string;
+    sha512?: string;
 }
 
 export interface DownloadCallbacks {
@@ -24,16 +30,29 @@ export interface DownloadOptions {
     concurrency?: number;
     maxRetries?: number;
     retryDelayMs?: number;
+    timeoutMs?: number;
     signal: AbortSignal;
+}
+
+const ALLOWED_CDN_HOSTS = ['cdn.modrinth.com', 'cdn-raw.modrinth.com'];
+
+function assertModrinthCdnUrl(url: string): void {
+    const parsed = new URL(url);
+    if (!ALLOWED_CDN_HOSTS.includes(parsed.hostname)) {
+        throw new Error(`Download URL not from Modrinth CDN: ${parsed.hostname}`);
+    }
 }
 
 async function fetchWithProgress(
     url: string,
     expectedSize: number,
     signal: AbortSignal,
-    onProgress: (bytesDownloaded: number) => void
+    onProgress: (bytesDownloaded: number) => void,
+    timeoutMs: number = DOWNLOAD_TIMEOUT_MS
 ): Promise<Uint8Array> {
-    const response = await fetch(url, { signal });
+    assertModrinthCdnUrl(url);
+    const combinedSignal = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
+    const response = await fetch(url, { signal: combinedSignal });
 
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -47,7 +66,6 @@ async function fetchWithProgress(
         return new Uint8Array(buffer);
     }
 
-    const totalSize = Number(response.headers.get('Content-Length')) || expectedSize;
     const chunks: Uint8Array[] = [];
     let bytesReceived = 0;
 
@@ -60,7 +78,7 @@ async function fetchWithProgress(
     }
 
     // Concatenate chunks into a single buffer
-    const result = new Uint8Array(totalSize > 0 ? bytesReceived : bytesReceived);
+    const result = new Uint8Array(bytesReceived);
     let offset = 0;
     for (const chunk of chunks) {
         result.set(chunk, offset);
@@ -75,7 +93,8 @@ async function downloadWithRetry(
     maxRetries: number,
     retryDelayMs: number,
     signal: AbortSignal,
-    callbacks: DownloadCallbacks
+    callbacks: DownloadCallbacks,
+    timeoutMs: number = DOWNLOAD_TIMEOUT_MS
 ): Promise<{ url: string; data: Uint8Array }> {
     let lastError: Error | null = null;
 
@@ -87,13 +106,24 @@ async function downloadWithRetry(
         try {
             callbacks.onFileStart(file.fileUrl);
 
-            const data = await fetchWithProgress(file.fileUrl, file.fileSize, signal, (bytes) =>
-                callbacks.onFileProgress(file.fileUrl, bytes)
+            const data = await fetchWithProgress(
+                file.fileUrl,
+                file.fileSize,
+                signal,
+                (bytes) => callbacks.onFileProgress(file.fileUrl, bytes),
+                timeoutMs
             );
 
             const valid = await verifySha1(data, file.sha1);
             if (!valid) {
                 throw new Error('SHA-1 hash mismatch — file may be corrupted');
+            }
+
+            if (file.sha512) {
+                const sha512Valid = await verifySha512(data, file.sha512);
+                if (!sha512Valid) {
+                    throw new Error('SHA-512 hash mismatch — file may be corrupted');
+                }
             }
 
             callbacks.onFileComplete(file.fileUrl, data);
@@ -107,7 +137,17 @@ async function downloadWithRetry(
 
             if (attempt < maxRetries) {
                 const delay = retryDelayMs * Math.pow(2, attempt);
-                await new Promise((resolve) => setTimeout(resolve, delay));
+                await new Promise<void>((resolve, reject) => {
+                    const timer = setTimeout(resolve, delay);
+                    signal.addEventListener(
+                        'abort',
+                        () => {
+                            clearTimeout(timer);
+                            reject(new DOMException('Download cancelled', 'AbortError'));
+                        },
+                        { once: true }
+                    );
+                });
             }
         }
     }
@@ -129,6 +169,7 @@ export async function downloadFiles(
         concurrency = MAX_CONCURRENT_DOWNLOADS,
         maxRetries = MAX_RETRIES,
         retryDelayMs = RETRY_DELAY_MS,
+        timeoutMs = DOWNLOAD_TIMEOUT_MS,
         signal
     } = options;
 
@@ -172,7 +213,8 @@ export async function downloadFiles(
                 maxRetries,
                 retryDelayMs,
                 signal,
-                callbacks
+                callbacks,
+                timeoutMs
             );
             results.set(url, data);
         } catch (error) {
