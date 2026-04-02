@@ -54,7 +54,7 @@ const envSchema = z.object({
     RESEND_API_KEY: z.string().optional(),
 
     // Cloudflare Turnstile — server-side token verification
-    TURNSTILE_SECRET_KEY: z.string().optional()
+    TURNSTILE_SECRET_KEY: z.string().min(1)
 });
 
 /**

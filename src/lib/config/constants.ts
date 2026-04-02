@@ -264,6 +264,9 @@ export const MAX_TOTAL_PROJECTS = 300;
 /** Minimum form submission time in ms (anti-bot timing check) */
 export const MIN_FORM_SUBMIT_TIME_MS = 3_000;
 
+/** Cloudflare Turnstile server-side verification endpoint */
+export const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+
 /** Known bot User-Agent patterns (case-insensitive match) */
 export const BOT_UA_PATTERNS = [
     'curl',
