@@ -1,112 +1,171 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import * as Select from '$lib/components/ui/select';
+    import { browser } from '$app/environment';
+    import * as Popover from '$lib/components/ui/popover';
+    import * as Command from '$lib/components/ui/command';
+    import * as Drawer from '$lib/components/ui/drawer';
+    import { Button } from '$lib/components/ui/button';
     import { Spinner } from '$lib/components/ui/spinner';
     import { loaderState, loadModLoaders, getGroupedLoaders } from '$lib/state/mod-loaders.svelte';
     import { cn } from '$lib/utils';
+    import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 
     interface Props {
         value?: string;
         onValueChange?: (value: string) => void;
         disabled?: boolean;
         id?: string;
+        error?: boolean;
     }
 
-    let { value = $bindable(), onValueChange, disabled = false, id }: Props = $props();
+    let {
+        value = $bindable(),
+        onValueChange,
+        disabled = false,
+        id,
+        error = false
+    }: Props = $props();
 
     let grouped = $derived(getGroupedLoaders());
-
-    // Find the selected loader for display
     let selectedLoader = $derived(loaderState.loaders.find((l) => l.slug === value));
+    let open = $state(false);
+    let isDesktop = $state(true);
 
     onMount(() => {
         loadModLoaders();
+        isDesktop = window.innerWidth >= 768;
     });
 
-    function handleValueChange(newValue: string | undefined) {
-        if (newValue) {
-            value = newValue;
-            onValueChange?.(newValue);
+    function onResize() {
+        if (browser) {
+            isDesktop = window.innerWidth >= 768;
         }
+    }
+
+    function handleSelect(selectedSlug: string) {
+        value = selectedSlug;
+        onValueChange?.(selectedSlug);
+        open = false;
     }
 </script>
 
-<Select.Root type="single" {value} onValueChange={handleValueChange} {disabled}>
-    <Select.Trigger {id} class="w-full min-w-45">
-        {#if loaderState.isLoading}
-            <span class="flex items-center gap-2">
-                <Spinner class="size-4" />
-                <span class="text-muted-foreground">Loading...</span>
-            </span>
-        {:else if selectedLoader}
-            <span class="flex items-center gap-2">
-                <span class={cn(selectedLoader.colorClass)} aria-hidden="true">
-                    {@html selectedLoader.icon}
-                </span>
-                {selectedLoader.name}
-            </span>
-        {:else}
-            <span class="text-muted-foreground">Select loader</span>
-        {/if}
-    </Select.Trigger>
+<svelte:window onresize={onResize} />
 
-    <Select.Content class="max-h-75">
-        {#if loaderState.error}
-            <div class="px-2 py-4 text-center text-sm text-destructive">
-                {loaderState.error}
-            </div>
-        {:else}
+{#snippet loaderItem(loader: (typeof loaderState.loaders)[0])}
+    <Command.Item value={loader.slug} onSelect={() => handleSelect(loader.slug)}>
+        <span
+            class={cn(
+                'flex items-center gap-2 [&_svg]:fill-current [&_svg]:!text-inherit',
+                loader.colorClass
+            )}
+        >
+            <span aria-hidden="true">{@html loader.icon}</span>
+            {loader.name}
+        </span>
+    </Command.Item>
+{/snippet}
+
+{#snippet loaderList()}
+    <Command.Root>
+        <Command.List class="max-h-60">
+            <Command.Empty>No loader found.</Command.Empty>
+
             {#if grouped.popular.length > 0}
-                <Select.Group>
-                    <Select.GroupHeading>Popular</Select.GroupHeading>
+                <Command.Group heading="Popular">
                     {#each grouped.popular as loader (loader.slug)}
-                        <Select.Item value={loader.slug}>
-                            <span class="flex items-center gap-2">
-                                <span class={cn(loader.colorClass)} aria-hidden="true">
-                                    {@html loader.icon}
-                                </span>
-                                {loader.name}
-                            </span>
-                        </Select.Item>
+                        {@render loaderItem(loader)}
                     {/each}
-                </Select.Group>
-
-                <Select.Separator />
+                </Command.Group>
+                <Command.Separator />
             {/if}
 
             {#if grouped.other.length > 0}
-                <Select.Group>
-                    <Select.GroupHeading>Other</Select.GroupHeading>
+                <Command.Group heading="Other">
                     {#each grouped.other as loader (loader.slug)}
-                        <Select.Item value={loader.slug}>
-                            <span class="flex items-center gap-2">
-                                <span class={cn(loader.colorClass)} aria-hidden="true">
-                                    {@html loader.icon}
-                                </span>
-                                {loader.name}
-                            </span>
-                        </Select.Item>
+                        {@render loaderItem(loader)}
                     {/each}
-                </Select.Group>
+                </Command.Group>
             {/if}
 
             {#if grouped.plugins.length > 0}
-                <Select.Separator />
-
-                <Select.Group>
-                    <Select.GroupHeading>Server Plugins</Select.GroupHeading>
+                <Command.Separator />
+                <Command.Group heading="Server Plugins">
                     {#each grouped.plugins as loader (loader.slug)}
-                        <Select.Item value={loader.slug}>
-                            <span class="flex items-center gap-2">
-                                <span class={cn(loader.colorClass)} aria-hidden="true">
-                                    {@html loader.icon}
-                                </span>
-                                {loader.name}
-                            </span>
-                        </Select.Item>
+                        {@render loaderItem(loader)}
                     {/each}
-                </Select.Group>
+                </Command.Group>
             {/if}
-        {/if}
-    </Select.Content>
-</Select.Root>
+        </Command.List>
+    </Command.Root>
+{/snippet}
+
+{#snippet triggerContent()}
+    {#if loaderState.isLoading}
+        <span class="flex items-center gap-2">
+            <Spinner class="size-4" />
+            <span class="text-muted-foreground">Loading...</span>
+        </span>
+    {:else if selectedLoader}
+        <span
+            class={cn(
+                'flex items-center gap-2 [&_svg]:fill-current [&_svg]:text-inherit!',
+                selectedLoader.colorClass
+            )}
+        >
+            <span aria-hidden="true">{@html selectedLoader.icon}</span>
+            {selectedLoader.name}
+        </span>
+    {:else}
+        <span class="text-muted-foreground">Select Mod Loader</span>
+    {/if}
+    <ChevronsUpDownIcon class="ml-auto size-4 shrink-0 opacity-50" />
+{/snippet}
+
+{#if isDesktop}
+    <Popover.Root bind:open>
+        <Popover.Trigger class="w-full min-w-50 justify-between">
+            {#snippet child({ props })}
+                <Button
+                    {id}
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    class={cn('w-full min-w-50 justify-between', error && 'border-destructive')}
+                    {disabled}
+                    {...props}
+                >
+                    {@render triggerContent()}
+                </Button>
+            {/snippet}
+        </Popover.Trigger>
+        <Popover.Content class="w-(--bits-popover-anchor-width) p-0" align="start">
+            {@render loaderList()}
+        </Popover.Content>
+    </Popover.Root>
+{:else}
+    <Drawer.Root bind:open>
+        <Drawer.Trigger class="w-full min-w-50 justify-between">
+            {#snippet child({ props })}
+                <Button
+                    {id}
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    class={cn('w-full min-w-50 justify-between', error && 'border-destructive')}
+                    {disabled}
+                    {...props}
+                >
+                    {@render triggerContent()}
+                </Button>
+            {/snippet}
+        </Drawer.Trigger>
+        <Drawer.Content>
+            <Drawer.Header>
+                <Drawer.Title>Select Mod Loader</Drawer.Title>
+            </Drawer.Header>
+            <div class="p-4 pt-0">
+                {@render loaderList()}
+            </div>
+        </Drawer.Content>
+    </Drawer.Root>
+{/if}

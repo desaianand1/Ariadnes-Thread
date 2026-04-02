@@ -7,12 +7,9 @@
     import { zod4Client } from 'sveltekit-superforms/adapters';
     import { downloadFormSchema, type DownloadFormSchema } from '$lib/schemas/collection';
     import * as Form from '$lib/components/ui/form';
-    import * as Card from '$lib/components/ui/card';
-    import { Switch } from '$lib/components/ui/switch';
-    import { Label } from '$lib/components/ui/label';
     import { Spinner } from '$lib/components/ui/spinner';
+    import { Label } from '$lib/components/ui/label';
     import { Button } from '$lib/components/ui/button';
-    import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
     import SelectMinecraftVersion from './SelectMinecraftVersion.svelte';
     import SelectModLoader from './SelectModLoader.svelte';
     import CollectionInput from './CollectionInput.svelte';
@@ -22,8 +19,13 @@
         isValidating,
         hasValidCollection
     } from '$lib/state/collections.svelte';
+    import AdvancedSettings from './AdvancedSettings.svelte';
     import { useMinDuration } from '$lib/utils/min-duration.svelte';
-    import { MIN_FORM_SUBMIT_TIME_MS } from '$lib/config/constants';
+    import {
+        MIN_FORM_SUBMIT_TIME_MS,
+        MAX_CONCURRENT_DOWNLOADS,
+        MAX_RETRIES
+    } from '$lib/config/constants';
 
     interface Props {
         data: SuperValidated<Infer<DownloadFormSchema>>;
@@ -44,6 +46,7 @@
     let isNavigating = $derived(isNavigatingHeld());
 
     let honeypot = $state('');
+    let attempted = $state(false);
     const formLoadedAt = Date.now();
 
     let canSubmit = $derived(
@@ -52,10 +55,14 @@
 
     let totalProjects = $derived(getValidCollections().reduce((sum, c) => sum + c.projectCount, 0));
 
+    // Client-only download preferences (sessionStorage)
+    let concurrentDownloads = $state(MAX_CONCURRENT_DOWNLOADS);
+    let retryCount = $state(MAX_RETRIES);
+
     function handleSubmit(e: SubmitEvent) {
         e.preventDefault();
+        attempted = true;
 
-        // Silent anti-bot checks — no error messages to avoid revealing the mechanism
         if (honeypot) return;
         if (Date.now() - formLoadedAt < MIN_FORM_SUBMIT_TIME_MS) return;
 
@@ -67,114 +74,101 @@
         params.set('v', $formData.minecraftVersion);
         params.set('l', $formData.modLoader);
 
-        // Build opts: d=deps, f=cross-loader fallback (both on by default)
-        const opts: string[] = ['f'];
-        if ($formData.includeDependencies) {
-            opts.push('d');
-        }
+        const opts: string[] = [];
+        if ($formData.includeDependencies) opts.push('d');
+        if ($formData.includeOptionalDeps) opts.push('o');
+        if ($formData.allowAlphaBeta) opts.push('a');
+        if ($formData.enableCrossLoaderFallback) opts.push('f');
         params.set('opts', opts.join(','));
+
+        if (concurrentDownloads !== MAX_CONCURRENT_DOWNLOADS) {
+            params.set('cd', String(concurrentDownloads));
+        }
+        if (retryCount !== MAX_RETRIES) {
+            params.set('rc', String(retryCount));
+        }
 
         goto(resolve(`/review?${params.toString()}`));
     }
 </script>
 
-<form onsubmit={handleSubmit}>
-    <Card.Root>
-        <Card.Header>
-            <Card.Title>Download Modrinth Collections</Card.Title>
-            <Card.Description>
-                Enter collection URLs or IDs to download all mods as a single ZIP file.
-            </Card.Description>
-        </Card.Header>
+<form onsubmit={handleSubmit} class="space-y-6">
+    <div class="absolute -left-2499.75" aria-hidden="true">
+        <input name="website" tabindex={-1} autocomplete="off" bind:value={honeypot} />
+    </div>
 
-        <Card.Content class="space-y-6">
-            <div class="absolute -left-[9999px]" aria-hidden="true">
-                <input name="website" tabindex={-1} autocomplete="off" bind:value={honeypot} />
-            </div>
+    <!-- Collection Inputs (primary action) -->
+    <div class="space-y-2">
+        <Label>Collections</Label>
+        <p class="text-xs text-muted-foreground">
+            e.g., modrinth.com/collection/xxxxx or 8-character ID
+        </p>
+        <CollectionInput disabled={isNavigating} />
+    </div>
 
-            <!-- Configuration Row -->
-            <div class="flex flex-wrap gap-4">
-                <Form.Field {form} name="minecraftVersion">
-                    <Form.Control>
-                        {#snippet children({ props })}
-                            <div class="space-y-2">
-                                <Form.Label>Minecraft Version</Form.Label>
-                                <SelectMinecraftVersion
-                                    {...props}
-                                    bind:value={$formData.minecraftVersion}
-                                    disabled={isNavigating}
-                                />
-                            </div>
-                        {/snippet}
-                    </Form.Control>
-                    <Form.Description>Select the game version you're playing</Form.Description>
-                    <Form.FieldErrors />
-                </Form.Field>
+    <!-- Configuration Row -->
+    <div class="flex flex-wrap gap-4">
+        <Form.Field {form} name="minecraftVersion">
+            <Form.Control>
+                {#snippet children({ props })}
+                    <div class="space-y-2">
+                        <Form.Label>Minecraft Version</Form.Label>
+                        <SelectMinecraftVersion
+                            {...props}
+                            bind:value={$formData.minecraftVersion}
+                            disabled={isNavigating}
+                            error={attempted && !$formData.minecraftVersion}
+                        />
+                    </div>
+                {/snippet}
+            </Form.Control>
+            <Form.FieldErrors />
+        </Form.Field>
 
-                <Form.Field {form} name="modLoader">
-                    <Form.Control>
-                        {#snippet children({ props })}
-                            <div class="space-y-2">
-                                <Form.Label>Mod Loader</Form.Label>
-                                <SelectModLoader
-                                    {...props}
-                                    bind:value={$formData.modLoader}
-                                    disabled={isNavigating}
-                                />
-                            </div>
-                        {/snippet}
-                    </Form.Control>
-                    <Form.Description>Choose your mod loader platform</Form.Description>
-                    <Form.FieldErrors />
-                </Form.Field>
-            </div>
+        <Form.Field {form} name="modLoader">
+            <Form.Control>
+                {#snippet children({ props })}
+                    <div class="space-y-2">
+                        <Form.Label>Mod Loader</Form.Label>
+                        <SelectModLoader
+                            {...props}
+                            bind:value={$formData.modLoader}
+                            disabled={isNavigating}
+                            error={attempted && !$formData.modLoader}
+                        />
+                    </div>
+                {/snippet}
+            </Form.Control>
+            <Form.FieldErrors />
+        </Form.Field>
+    </div>
 
-            <!-- Collection Inputs -->
-            <div class="space-y-2">
-                <Label>Collection URLs or IDs</Label>
-                <p class="text-[0.8rem] text-muted-foreground">
-                    Paste Modrinth collection URLs or 8-character IDs
-                </p>
-                <CollectionInput disabled={isNavigating} />
-            </div>
+    <!-- Advanced Settings -->
+    <AdvancedSettings
+        bind:includeDependencies={$formData.includeDependencies}
+        bind:includeOptionalDeps={$formData.includeOptionalDeps}
+        bind:allowAlphaBeta={$formData.allowAlphaBeta}
+        bind:enableCrossLoaderFallback={$formData.enableCrossLoaderFallback}
+        bind:concurrentDownloads
+        bind:retryCount
+        disabled={isNavigating}
+    />
 
-            <!-- Options -->
-            <Form.Field {form} name="includeDependencies">
-                <Form.Control>
-                    {#snippet children({ props })}
-                        <div class="flex items-center gap-2">
-                            <Switch
-                                {...props}
-                                id="include-deps"
-                                bind:checked={$formData.includeDependencies}
-                                disabled={isNavigating}
-                            />
-                            <Label for="include-deps" class="font-normal"
-                                >Include required dependencies</Label
-                            >
-                        </div>
-                    {/snippet}
-                </Form.Control>
-                <Form.Description>Automatically resolves required library mods</Form.Description>
-            </Form.Field>
-        </Card.Content>
+    <!-- Submit -->
+    <div class="space-y-3">
+        {#if hasValidCollection()}
+            <p class="text-sm text-muted-foreground" aria-live="polite">
+                {getValidCollections().length} collection(s) with {totalProjects} total mods
+            </p>
+        {/if}
 
-        <Card.Footer class="flex-col gap-3">
-            {#if hasValidCollection()}
-                <p class="w-full text-sm text-muted-foreground">
-                    {getValidCollections().length} collection(s) with {totalProjects} total mods
-                </p>
+        <Button type="submit" size="lg" class="w-full" disabled={!canSubmit || isNavigating}>
+            {#if isNavigating}
+                <Spinner class="mr-2 size-4" />
+                Loading...
+            {:else}
+                Review & Download
             {/if}
-
-            <Button type="submit" size="lg" class="w-full" disabled={!canSubmit || isNavigating}>
-                {#if isNavigating}
-                    <Spinner class="mr-2 size-4" />
-                    Loading...
-                {:else}
-                    Next
-                    <ArrowRightIcon class="ml-2 size-4" />
-                {/if}
-            </Button>
-        </Card.Footer>
-    </Card.Root>
+        </Button>
+    </div>
 </form>

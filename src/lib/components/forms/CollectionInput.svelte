@@ -4,6 +4,7 @@
     import { Spinner } from '$lib/components/ui/spinner';
     import { cn } from '$lib/utils';
     import { slide, fade } from 'svelte/transition';
+    import { safeTransition } from '$lib/utils/motion';
     import PlusIcon from '@lucide/svelte/icons/plus';
     import XIcon from '@lucide/svelte/icons/x';
     import CheckIcon from '@lucide/svelte/icons/check';
@@ -12,7 +13,8 @@
         collectionsState,
         addCollectionEntry,
         removeCollectionEntry,
-        updateCollectionInput
+        updateCollectionInput,
+        hasValidCollection
     } from '$lib/state/collections.svelte';
 
     interface Props {
@@ -24,25 +26,12 @@
 
 <div class="space-y-3">
     {#each collectionsState.entries as entry, index (index)}
-        <div class="space-y-2">
+        <div class="space-y-2" transition:slide={safeTransition({ duration: 200 })}>
             <div class="flex items-center gap-2">
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    class="shrink-0"
-                    disabled={disabled ||
-                        collectionsState.entries.length >= collectionsState.maxCollections}
-                    onclick={() => addCollectionEntry()}
-                    aria-label="Add collection"
-                >
-                    <PlusIcon class="size-4" />
-                </Button>
-
                 <div class="relative flex-1">
                     <Input
                         type="text"
-                        placeholder="modrinth.com/collection/xxxxx or collection ID"
+                        placeholder="Paste a Modrinth collection URL or ID"
                         class={cn(
                             'pr-10',
                             entry.status === 'valid' &&
@@ -57,22 +46,22 @@
 
                     <div class="absolute inset-y-0 right-0 flex items-center pr-3">
                         {#if entry.status === 'validating'}
-                            <span in:fade={{ duration: 150 }}>
+                            <span in:fade={safeTransition({ duration: 150 })}>
                                 <Spinner class="size-4" />
                             </span>
                         {:else if entry.status === 'valid'}
-                            <span in:fade={{ duration: 150 }}>
+                            <span in:fade={safeTransition({ duration: 150 })}>
                                 <CheckIcon class="size-4 text-green-500" />
                             </span>
                         {:else if entry.status === 'invalid'}
-                            <span in:fade={{ duration: 150 }}>
+                            <span in:fade={safeTransition({ duration: 150 })}>
                                 <AlertCircleIcon class="size-4 text-destructive" />
                             </span>
                         {/if}
                     </div>
                 </div>
 
-                {#if collectionsState.entries.length > 1}
+                {#if index > 0}
                     <Button
                         type="button"
                         variant="ghost"
@@ -90,15 +79,18 @@
             </div>
 
             {#if entry.status === 'invalid' && entry.error}
-                <p class="ml-12 text-sm text-destructive" transition:slide={{ duration: 200 }}>
+                <p
+                    class="text-sm text-destructive"
+                    transition:slide={safeTransition({ duration: 200 })}
+                >
                     {entry.error}
                 </p>
             {/if}
 
             {#if entry.status === 'valid' && entry.collection}
                 <div
-                    class="ml-12 rounded-md border border-green-500/20 bg-green-500/5 p-3"
-                    transition:slide={{ duration: 200 }}
+                    class="rounded-md border border-green-500/20 bg-green-500/5 p-3"
+                    transition:slide={safeTransition({ duration: 200 })}
                 >
                     <div class="flex items-center gap-2">
                         {#if entry.collection.iconUrl}
@@ -119,7 +111,29 @@
         </div>
     {/each}
 
-    <p class="ml-12 text-sm text-muted-foreground">
-        Press + to add multiple collections (max {collectionsState.maxCollections})
-    </p>
+    {#if collectionsState.entries.length < collectionsState.maxCollections}
+        {#if hasValidCollection()}
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="gap-1.5"
+                disabled={disabled ||
+                    collectionsState.entries.length >= collectionsState.maxCollections}
+                onclick={() => addCollectionEntry()}
+            >
+                <PlusIcon class="size-4" />
+                Add another collection
+            </Button>
+            {#if collectionsState.entries.length >= 2}
+                <p class="text-xs text-muted-foreground">
+                    Add up to {collectionsState.maxCollections} collections
+                </p>
+            {/if}
+        {/if}
+    {:else}
+        <p class="text-xs text-muted-foreground">
+            Maximum of {collectionsState.maxCollections} collections reached
+        </p>
+    {/if}
 </div>
