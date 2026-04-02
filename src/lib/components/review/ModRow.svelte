@@ -64,7 +64,12 @@
     role="button"
     tabindex="0"
     onclick={handleRowClick}
-    onkeydown={(e) => e.key === 'Enter' && handleRowClick(e as unknown as MouseEvent)}
+    onkeydown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect?.(project);
+        }
+    }}
 >
     <!-- Status dot -->
     <StatusIndicator {status} message={statusMessage} />

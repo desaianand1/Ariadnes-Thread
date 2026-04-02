@@ -80,6 +80,7 @@
                     variant="ghost"
                     size="sm"
                     class="h-auto gap-1.5 px-1.5 py-0.5"
+                    aria-label="Scroll to {stats.resolvedCount} compatible mods"
                     onclick={onClickCompatible}
                 >
                     <span class="size-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
@@ -91,6 +92,7 @@
                         variant="ghost"
                         size="sm"
                         class="h-auto gap-1.5 px-1.5 py-0.5"
+                        aria-label="Scroll to {stats.warningCount} warnings"
                         onclick={onClickWarnings}
                     >
                         <span class="size-2 rounded-full bg-yellow-500" aria-hidden="true"></span>
@@ -103,6 +105,7 @@
                         variant="ghost"
                         size="sm"
                         class="h-auto gap-1.5 px-1.5 py-0.5"
+                        aria-label="Scroll to {stats.conflictCount} conflicts"
                         onclick={onClickConflicts}
                     >
                         <span class="size-2 rounded-full bg-red-500" aria-hidden="true"></span>
@@ -115,6 +118,7 @@
                         variant="ghost"
                         size="sm"
                         class="h-auto gap-1.5 px-1.5 py-0.5"
+                        aria-label="Scroll to {stats.unresolvedCount} missing dependencies"
                         onclick={onClickMissing}
                     >
                         <span class="size-2 rounded-full bg-orange-500" aria-hidden="true"></span>
