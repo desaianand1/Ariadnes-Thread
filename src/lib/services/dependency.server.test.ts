@@ -9,7 +9,10 @@ function makeResolvedProject(overrides: Partial<ResolvedProject> = {}): Resolved
         projectId: 'proj1',
         projectSlug: 'test-mod',
         projectTitle: 'Test Mod',
+        projectDescription: '',
         projectType: 'mod',
+        loaders: ['fabric'],
+        dependencyCount: 0,
         versionId: 'v1',
         versionNumber: '1.0.0',
         versionType: 'release',
@@ -350,6 +353,156 @@ describe('resolveDependencies', () => {
         expect(depthWarnings.length).toBeGreaterThan(0);
         // Deps at depth 1-10 should be resolved, those beyond should not
         expect(result.resolved.length).toBeLessThanOrEqual(10);
+    });
+
+    it('resolves optional deps when includeOptionalDeps is true', async () => {
+        const resolved = [makeResolvedProject({ projectId: 'main', versionId: 'vmain' })];
+
+        const parentVersion = makeVersion({
+            id: 'vmain',
+            project_id: 'main',
+            dependencies: [{ project_id: 'opt1', dependency_type: 'optional' }]
+        });
+
+        const optProject = makeProject({ id: 'opt1', title: 'Optional Mod' });
+        const optVersion = makeVersion({
+            id: 'vopt1',
+            project_id: 'opt1',
+            dependencies: []
+        });
+
+        vi.spyOn(client, 'requestVersion').mockImplementation(async (endpoint, _v, opts) => {
+            const pathParams = opts?.pathParams ?? [];
+            const queryParams = opts?.queryParams ?? {};
+
+            if (endpoint === 'versions' && queryParams.ids) {
+                const ids = JSON.parse(queryParams.ids);
+                const result: ModrinthVersion[] = [];
+                if (ids.includes('vmain')) result.push(parentVersion);
+                if (ids.includes('vopt1')) result.push(optVersion);
+                return result;
+            }
+            if (endpoint === 'projects') return [optProject];
+            if (endpoint === 'project' && pathParams[0] === 'opt1') return [optVersion];
+            return [];
+        });
+
+        const result = await resolveDependencies(
+            client,
+            resolved,
+            makeOptions({ includeOptionalDeps: true })
+        );
+        expect(result.resolved).toHaveLength(1);
+        expect(result.resolved[0].projectId).toBe('opt1');
+    });
+
+    it('handles three-node cycle: A → B → C → A', async () => {
+        const resolved = [makeResolvedProject({ projectId: 'A', versionId: 'vA' })];
+
+        const vA = makeVersion({
+            id: 'vA',
+            project_id: 'A',
+            dependencies: [{ project_id: 'B', dependency_type: 'required' }]
+        });
+        const vB = makeVersion({
+            id: 'vB',
+            project_id: 'B',
+            dependencies: [{ project_id: 'C', dependency_type: 'required' }]
+        });
+        const vC = makeVersion({
+            id: 'vC',
+            project_id: 'C',
+            dependencies: [{ project_id: 'A', dependency_type: 'required' }]
+        });
+
+        const projB = makeProject({ id: 'B', slug: 'mod-b', title: 'Mod B' });
+        const projC = makeProject({ id: 'C', slug: 'mod-c', title: 'Mod C' });
+
+        vi.spyOn(client, 'requestVersion').mockImplementation(async (endpoint, _v, opts) => {
+            const pathParams = opts?.pathParams ?? [];
+            const queryParams = opts?.queryParams ?? {};
+
+            if (endpoint === 'versions' && queryParams.ids) {
+                const ids = JSON.parse(queryParams.ids);
+                const all = [vA, vB, vC];
+                return all.filter((v) => ids.includes(v.id));
+            }
+            if (endpoint === 'projects') {
+                const ids = JSON.parse(queryParams.ids);
+                return [projB, projC].filter((p) => ids.includes(p.id));
+            }
+            if (endpoint === 'project' && pathParams[0] === 'B') return [vB];
+            if (endpoint === 'project' && pathParams[0] === 'C') return [vC];
+            return [];
+        });
+
+        const result = await resolveDependencies(client, resolved, makeOptions());
+        // B and C resolve; A is already visited so the cycle is broken
+        expect(result.resolved).toHaveLength(2);
+        const resolvedIds = result.resolved.map((r) => r.projectId).sort();
+        expect(resolvedIds).toEqual(['B', 'C']);
+    });
+
+    it('deduplicates multiple deps pointing to same project at same depth', async () => {
+        // Both mod-a and mod-b depend on the same dep
+        const resolved = [
+            makeResolvedProject({ projectId: 'mod-a', versionId: 'va' }),
+            makeResolvedProject({ projectId: 'mod-b', versionId: 'vb' })
+        ];
+
+        const va = makeVersion({
+            id: 'va',
+            project_id: 'mod-a',
+            dependencies: [{ project_id: 'shared-dep', dependency_type: 'required' }]
+        });
+        const vb = makeVersion({
+            id: 'vb',
+            project_id: 'mod-b',
+            dependencies: [{ project_id: 'shared-dep', dependency_type: 'required' }]
+        });
+        const depProject = makeProject({ id: 'shared-dep', title: 'Shared Dep' });
+        const depVersion = makeVersion({
+            id: 'vdep',
+            project_id: 'shared-dep',
+            dependencies: []
+        });
+
+        vi.spyOn(client, 'requestVersion').mockImplementation(async (endpoint, _v, opts) => {
+            const pathParams = opts?.pathParams ?? [];
+            const queryParams = opts?.queryParams ?? {};
+
+            if (endpoint === 'versions' && queryParams.ids) {
+                const ids = JSON.parse(queryParams.ids);
+                return [va, vb, depVersion].filter((v) => ids.includes(v.id));
+            }
+            if (endpoint === 'projects') return [depProject];
+            if (endpoint === 'project' && pathParams[0] === 'shared-dep') return [depVersion];
+            return [];
+        });
+
+        const result = await resolveDependencies(client, resolved, makeOptions());
+        // shared-dep should only appear once despite being required by both mods
+        expect(result.resolved).toHaveLength(1);
+        expect(result.resolved[0].projectId).toBe('shared-dep');
+    });
+
+    it('does not create conflict for incompatible dep NOT in resolved set', async () => {
+        const resolved = [makeResolvedProject({ projectId: 'main', versionId: 'vmain' })];
+
+        const parentVersion = makeVersion({
+            id: 'vmain',
+            project_id: 'main',
+            dependencies: [{ project_id: 'absent-mod', dependency_type: 'incompatible' }]
+        });
+
+        vi.spyOn(client, 'requestVersion').mockImplementation(async (endpoint, _v, opts) => {
+            const queryParams = opts?.queryParams ?? {};
+            if (endpoint === 'versions' && queryParams.ids) return [parentVersion];
+            return [];
+        });
+
+        const result = await resolveDependencies(client, resolved, makeOptions());
+        expect(result.conflicts).toHaveLength(0);
     });
 
     it('resolves pinned dependencies by version_id', async () => {

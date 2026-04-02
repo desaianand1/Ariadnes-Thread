@@ -271,6 +271,9 @@ function processPinnedDeps(
             });
             unresolvedDeps.push({
                 projectId: node.projectId,
+                projectTitle: project?.title,
+                projectDescription: project?.description,
+                projectIconUrl: project?.icon_url,
                 requiredBy: node.requiredBy,
                 reason: 'Pinned version or project not found'
             });
@@ -281,6 +284,9 @@ function processPinnedDeps(
         if (!file) {
             unresolvedDeps.push({
                 projectId: node.projectId,
+                projectTitle: project.title,
+                projectDescription: project.description,
+                projectIconUrl: project.icon_url,
                 requiredBy: node.requiredBy,
                 reason: 'Version has no downloadable files'
             });
@@ -320,7 +326,20 @@ function processPinnedDeps(
             dependencyOf: node.requiredBy,
             dependencyType: node.dependencyType,
             dependencyDepth: node.depth,
-            usedFallbackLoader: false
+            usedFallbackLoader: false,
+            color: project.color,
+            categories: project.categories,
+            downloadCount: project.downloads,
+            licenseName: project.license?.name,
+            licenseUrl: project.license?.url,
+            lastUpdated: version.date_published,
+            changelog: version.changelog ?? undefined,
+            gallery: project.gallery?.map((g) => ({
+                url: g.url,
+                featured: g.featured,
+                title: g.title,
+                description: g.description
+            }))
         });
     }
 
@@ -372,6 +391,9 @@ async function resolveUnpinnedDeps(
             });
             unresolvedDeps.push({
                 projectId: node.projectId,
+                projectTitle: project?.title,
+                projectDescription: project?.description,
+                projectIconUrl: project?.icon_url,
                 requiredBy: node.requiredBy,
                 reason: `No compatible version for ${options.loader} on ${options.gameVersion}`
             });

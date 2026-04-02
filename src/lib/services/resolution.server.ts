@@ -129,6 +129,7 @@ export async function resolveVersion(
         serverSide: project.server_side,
         usedFallbackLoader,
         resolvedLoader,
+        color: project.color,
         categories: project.categories,
         downloadCount: project.downloads,
         licenseName: project.license?.name,

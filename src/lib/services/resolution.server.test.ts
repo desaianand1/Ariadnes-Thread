@@ -281,6 +281,77 @@ describe('resolveVersion', () => {
         const result = await resolveVersion(client, project, makeOptions());
         expect(result!.resolved.side).toBe('server');
     });
+
+    it('returns null when version has empty files array', async () => {
+        const version = makeVersion({ files: [] });
+        vi.spyOn(client, 'requestVersion').mockResolvedValueOnce([version]);
+
+        const result = await resolveVersion(client, makeProject(), makeOptions());
+        expect(result).toBeNull();
+    });
+
+    it('ranks alpha below beta when both are present', async () => {
+        const alpha = makeVersion({
+            id: 'valpha',
+            version_type: 'alpha',
+            date_published: '2024-06-01T00:00:00Z'
+        });
+        const beta = makeVersion({
+            id: 'vbeta',
+            version_type: 'beta',
+            date_published: '2024-01-01T00:00:00Z'
+        });
+
+        vi.spyOn(client, 'requestVersion').mockResolvedValueOnce([alpha, beta]);
+
+        const result = await resolveVersion(
+            client,
+            makeProject(),
+            makeOptions({ allowAlphaBeta: true })
+        );
+        expect(result!.resolved.versionId).toBe('vbeta');
+    });
+
+    it('still prefers release by type rank even when alpha is newer with allowAlphaBeta', async () => {
+        const alpha = makeVersion({
+            id: 'valpha',
+            version_type: 'alpha',
+            featured: true,
+            date_published: '2025-01-01T00:00:00Z'
+        });
+        const release = makeVersion({
+            id: 'vrel',
+            version_type: 'release',
+            featured: false,
+            date_published: '2024-01-01T00:00:00Z'
+        });
+
+        vi.spyOn(client, 'requestVersion').mockResolvedValueOnce([alpha, release]);
+
+        const result = await resolveVersion(
+            client,
+            makeProject(),
+            makeOptions({ allowAlphaBeta: true })
+        );
+        expect(result!.resolved.versionId).toBe('vrel');
+    });
+
+    it('omits loader filter for shaders and datapacks', async () => {
+        const version = makeVersion({ loaders: [] });
+
+        for (const projectType of ['shader', 'datapack'] as const) {
+            const spy = vi.spyOn(client, 'requestVersion').mockResolvedValueOnce([version]);
+
+            const project = makeProject({ project_type: projectType });
+            await resolveVersion(client, project, makeOptions());
+
+            const call = spy.mock.calls[0];
+            const queryParams = (call[2] as { queryParams: Record<string, string> }).queryParams;
+            expect(queryParams.loaders).toBeUndefined();
+
+            spy.mockRestore();
+        }
+    });
 });
 
 describe('resolveCollection', () => {
@@ -346,5 +417,65 @@ describe('resolveCollection', () => {
         expect(result.resolved).toHaveLength(0);
         expect(result.unresolved).toHaveLength(1);
         expect(result.warnings.some((w) => w.type === 'no-compatible-version')).toBe(true);
+    });
+
+    it('still resolves other projects when one throws', async () => {
+        const p1 = makeProject({ id: 'p1', slug: 'mod-a', title: 'Mod A' });
+        const p2 = makeProject({ id: 'p2', slug: 'mod-b', title: 'Mod B' });
+
+        const v2 = makeVersion({ id: 'v2', project_id: 'p2' });
+
+        vi.spyOn(client, 'requestVersion').mockImplementation(async (endpoint, _version, opts) => {
+            const pathParams = opts?.pathParams ?? [];
+            if (endpoint === 'project' && pathParams[0] === 'p1') throw new Error('API timeout');
+            if (endpoint === 'project' && pathParams[0] === 'p2') return [v2];
+            if (endpoint === 'versions') return [];
+            return [];
+        });
+
+        const result = await resolveCollection(client, [p1, p2], makeOptions());
+        expect(result.resolved).toHaveLength(1);
+        expect(result.resolved[0].projectId).toBe('p2');
+        expect(result.unresolved).toHaveLength(1);
+        expect(result.unresolved[0].projectId).toBe('p1');
+    });
+
+    it('returns zeroed stats for empty projects array', async () => {
+        const result = await resolveCollection(client, [], makeOptions());
+        expect(result.resolved).toHaveLength(0);
+        expect(result.dependencies).toHaveLength(0);
+        expect(result.stats.totalProjects).toBe(0);
+        expect(result.stats.resolvedCount).toBe(0);
+        expect(result.stats.totalDownloadSize).toBe(0);
+    });
+
+    it('skips dependency resolution when includeDependencies is false', async () => {
+        const p1 = makeProject({ id: 'p1' });
+        const v1 = makeVersion({
+            id: 'v1',
+            project_id: 'p1',
+            dependencies: [{ project_id: 'dep1', dependency_type: 'required' }]
+        });
+
+        const spy = vi
+            .spyOn(client, 'requestVersion')
+            .mockImplementation(async (endpoint, _version, opts) => {
+                const pathParams = opts?.pathParams ?? [];
+                if (endpoint === 'project' && pathParams[0] === 'p1') return [v1];
+                if (endpoint === 'versions') return [];
+                return [];
+            });
+
+        const result = await resolveCollection(
+            client,
+            [p1],
+            makeOptions({ includeDependencies: false })
+        );
+        expect(result.resolved).toHaveLength(1);
+        expect(result.dependencies).toHaveLength(0);
+
+        // Should never batch-fetch versions for dependency resolution
+        const versionsBatchCalls = spy.mock.calls.filter((c) => c[0] === 'versions');
+        expect(versionsBatchCalls).toHaveLength(0);
     });
 });

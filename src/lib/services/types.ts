@@ -57,6 +57,7 @@ export interface ResolvedProject {
     resolvedLoader?: string;
 
     // Tier 2
+    color?: number;
     categories?: string[];
     downloadCount?: number;
     licenseName?: string;
@@ -130,6 +131,9 @@ export interface ResolutionWarning {
 
 export interface UnresolvedDependency {
     projectId: string;
+    projectTitle?: string;
+    projectDescription?: string;
+    projectIconUrl?: string;
     requiredBy: string;
     reason: string;
 }
