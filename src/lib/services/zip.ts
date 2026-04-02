@@ -27,6 +27,9 @@ export function buildZip(entries: ZipEntry[]): Blob {
     const tree: Record<string, Uint8Array> = {};
 
     for (const entry of entries) {
+        if (entry.path.includes('..') || entry.path.startsWith('/') || entry.path.includes('\\')) {
+            throw new Error(`Invalid ZIP entry path: ${entry.path}`);
+        }
         tree[entry.path] = entry.data;
     }
 
@@ -48,7 +51,12 @@ export function buildSideZips(
 
     for (const file of files) {
         const data = downloadedData.get(file.fileUrl);
-        if (!data) continue;
+        if (!data) {
+            console.warn(
+                `[zip] No downloaded data for "${file.fileName}" (${file.fileUrl}), skipping`
+            );
+            continue;
+        }
 
         const entry: ZipEntry = {
             path: `${file.folder}/${file.fileName}`,

@@ -37,6 +37,46 @@ describe('buildZip', () => {
         const blob = buildZip([]);
         expect(blob.size).toBeGreaterThan(0); // valid empty ZIP has a header
     });
+
+    it('rejects paths with directory traversal', () => {
+        expect(() => buildZip([{ path: '../../etc/passwd', data: SAMPLE_DATA }])).toThrow(
+            'Invalid ZIP entry path'
+        );
+    });
+
+    it('rejects paths with embedded traversal', () => {
+        expect(() => buildZip([{ path: 'mods/../../../evil.jar', data: SAMPLE_DATA }])).toThrow(
+            'Invalid ZIP entry path'
+        );
+    });
+
+    it('rejects absolute paths', () => {
+        expect(() => buildZip([{ path: '/etc/passwd', data: SAMPLE_DATA }])).toThrow(
+            'Invalid ZIP entry path'
+        );
+    });
+
+    it('rejects backslash path traversal', () => {
+        expect(() => buildZip([{ path: 'mods\\..\\..\\evil.jar', data: SAMPLE_DATA }])).toThrow(
+            'Invalid ZIP entry path'
+        );
+    });
+
+    it('rejects backslash paths even without traversal', () => {
+        expect(() => buildZip([{ path: 'mods\\file.jar', data: SAMPLE_DATA }])).toThrow(
+            'Invalid ZIP entry path'
+        );
+    });
+
+    it('preserves duplicate file names in different folders', async () => {
+        const blob = buildZip([
+            { path: 'mods/api.jar', data: SAMPLE_DATA },
+            { path: 'resourcepacks/api.jar', data: SAMPLE_DATA }
+        ]);
+
+        const paths = await extractPaths(blob);
+        expect(paths).toEqual(['mods/api.jar', 'resourcepacks/api.jar']);
+    });
 });
 
 describe('buildSideZips', () => {
@@ -105,5 +145,24 @@ describe('buildSideZips', () => {
         const { client, server } = buildSideZips(files, emptyData);
         expect(client).toBeNull();
         expect(server).toBeNull();
+    });
+
+    it('produces identical ZIPs when all files are "both" side', async () => {
+        const bothFiles: ZipFileInfo[] = [
+            { fileName: 'a.jar', fileUrl: 'https://cdn/a', folder: 'mods', side: 'both' },
+            { fileName: 'b.jar', fileUrl: 'https://cdn/b', folder: 'mods', side: 'both' }
+        ];
+        const bothData = new Map<string, Uint8Array>([
+            ['https://cdn/a', SAMPLE_DATA],
+            ['https://cdn/b', SAMPLE_DATA]
+        ]);
+
+        const { client, server } = buildSideZips(bothFiles, bothData);
+        expect(client).not.toBeNull();
+        expect(server).not.toBeNull();
+
+        const clientPaths = await extractPaths(client!);
+        const serverPaths = await extractPaths(server!);
+        expect(clientPaths).toEqual(serverPaths);
     });
 });
