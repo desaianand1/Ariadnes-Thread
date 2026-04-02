@@ -9,9 +9,12 @@
 **Download your Modrinth collections as ready-to-play ZIPs.**
 
 [![Live Site](https://img.shields.io/badge/modrinth.download-live-1bd96a?style=for-the-badge&logo=modrinth&logoColor=white)](https://modrinth.download)
-[![License](https://img.shields.io/github/license/desaianand1/Ariadnes-Thread?style=for-the-badge)](LICENSE)
+[![License: FSL-1.1-ALv2](https://img.shields.io/badge/license-FSL--1.1--ALv2-blue?style=for-the-badge)](LICENSE.md)
 [![Built with SvelteKit](https://img.shields.io/badge/SvelteKit-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)](https://svelte.dev)
 [![Deployed on Cloudflare](https://img.shields.io/badge/Cloudflare%20Pages-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/ananddesai)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ananddesai)
 
 </div>
 
@@ -63,6 +66,19 @@ pnpm dev
 | `pnpm dev`     | Start dev server         |
 | `pnpm build`   | Production build         |
 | `pnpm preview` | Preview production build |
+
+---
+
+## Support
+
+If you find Ariadne's Thread useful, consider supporting its development:
+
+- [Ko-fi](https://ko-fi.com/ananddesai)
+- [Buy Me a Coffee](https://buymeacoffee.com/ananddesai)
+
+## License
+
+This project is source-available under the [Functional Source License (FSL-1.1-ALv2)](LICENSE.md). You can read, audit, and learn from the code. After two years, each release converts to the Apache 2.0 license.
 
 ---
 
