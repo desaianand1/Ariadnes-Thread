@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
+    capitalize,
     formatBytes,
     formatNumber,
     formatRelativeTime,
@@ -7,6 +8,24 @@ import {
     formatEta,
     getLoaderDisplayName
 } from './format';
+
+describe('capitalize', () => {
+    it('returns empty string unchanged', () => {
+        expect(capitalize('')).toBe('');
+    });
+
+    it('capitalizes a single character', () => {
+        expect(capitalize('a')).toBe('A');
+    });
+
+    it('returns already capitalized string unchanged', () => {
+        expect(capitalize('Hello')).toBe('Hello');
+    });
+
+    it('capitalizes a normal word', () => {
+        expect(capitalize('client')).toBe('Client');
+    });
+});
 
 describe('formatBytes', () => {
     it('formats zero bytes', () => {
@@ -29,6 +48,10 @@ describe('formatBytes', () => {
     it('handles negative values', () => {
         expect(formatBytes(-1)).toBe('0 B');
     });
+
+    it('formats gigabytes', () => {
+        expect(formatBytes(1073741824)).toBe('1 GB');
+    });
 });
 
 describe('formatNumber', () => {
@@ -50,6 +73,10 @@ describe('formatNumber', () => {
 
     it('formats billions with B suffix', () => {
         expect(formatNumber(1_000_000_000)).toBe('1B');
+    });
+
+    it('handles negative numbers gracefully', () => {
+        expect(formatNumber(-500)).toBe('-500');
     });
 });
 
@@ -126,6 +153,12 @@ describe('formatEta', () => {
         expect(formatEta(Infinity)).toBe('∞');
         expect(formatEta(NaN)).toBe('∞');
     });
+
+    it('formats very large finite numbers', () => {
+        // 999999 seconds ≈ 11.5 days
+        const result = formatEta(999999);
+        expect(result).toMatch(/^\d+d \d+h$/);
+    });
 });
 
 describe('formatRelativeTime', () => {
@@ -155,5 +188,11 @@ describe('formatRelativeTime', () => {
     it('returns years ago for dates over a year old', () => {
         const twoYearsAgo = new Date(Date.now() - 730 * 86_400_000);
         expect(formatRelativeTime(twoYearsAgo.toISOString())).toBe('2y ago');
+    });
+
+    it('handles future dates without crashing', () => {
+        const tomorrow = new Date(Date.now() + 86_400_000);
+        const result = formatRelativeTime(tomorrow.toISOString());
+        expect(typeof result).toBe('string');
     });
 });

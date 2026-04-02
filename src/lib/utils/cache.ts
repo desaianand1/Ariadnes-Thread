@@ -3,9 +3,12 @@
  * Safe for SSR - checks for browser environment before accessing localStorage
  */
 
+import { CACHE_VERSION } from '$lib/config/constants';
+
 interface CachedData<T> {
     data: T;
     timestamp: number;
+    cacheVersion?: number;
 }
 
 /**
@@ -22,8 +25,13 @@ export function getCachedData<T>(key: string, maxAge: number): T | null {
         if (!cached) return null;
 
         const parsed: CachedData<T> = JSON.parse(cached);
-        const age = Date.now() - parsed.timestamp;
 
+        if (parsed.cacheVersion !== CACHE_VERSION) {
+            localStorage.removeItem(key);
+            return null;
+        }
+
+        const age = Date.now() - parsed.timestamp;
         if (age > maxAge) {
             localStorage.removeItem(key);
             return null;
@@ -52,7 +60,8 @@ export function setCachedData<T>(key: string, data: T): void {
     try {
         const cached: CachedData<T> = {
             data,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            cacheVersion: CACHE_VERSION
         };
         localStorage.setItem(key, JSON.stringify(cached));
     } catch (error) {

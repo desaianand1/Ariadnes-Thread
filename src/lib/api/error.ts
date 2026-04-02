@@ -152,7 +152,7 @@ export function getErrorMessage(error: unknown): string {
         return error.message;
     }
     if (error instanceof Error) {
-        return error.message;
+        console.error('Unexpected error:', error.message);
     }
     return 'An unexpected error occurred.';
 }

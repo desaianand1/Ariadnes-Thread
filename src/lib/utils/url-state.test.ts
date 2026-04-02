@@ -42,4 +42,22 @@ describe('buildReviewUrl', () => {
         const result = buildReviewUrl(url('/review?x=existing&c=abc'), {});
         expect(result).toContain('x=existing');
     });
+
+    it('URL-encodes IDs with special characters', () => {
+        const result = buildReviewUrl(url('/review?c=abc'), {
+            x: new Set(['id with spaces', 'id&special=chars'])
+        });
+        const parsed = new URL(result, 'http://localhost');
+        const xValue = parsed.searchParams.get('x')!;
+        expect(xValue).toContain('id with spaces');
+        expect(xValue).toContain('id&special=chars');
+    });
+
+    it('removes x param entirely when set is empty', () => {
+        const result = buildReviewUrl(url('/review?c=abc&x=old1,old2'), {
+            x: new Set()
+        });
+        const parsed = new URL(result, 'http://localhost');
+        expect(parsed.searchParams.has('x')).toBe(false);
+    });
 });

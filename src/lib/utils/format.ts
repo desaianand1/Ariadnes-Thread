@@ -43,8 +43,13 @@ const LOADER_DISPLAY_NAMES: Record<string, string> = {
     datapack: 'Datapack'
 };
 
+export function capitalize(str: string): string {
+    if (!str) return str;
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 export function getLoaderDisplayName(slug: string): string {
-    return LOADER_DISPLAY_NAMES[slug] ?? slug.charAt(0).toUpperCase() + slug.slice(1);
+    return LOADER_DISPLAY_NAMES[slug] ?? capitalize(slug);
 }
 
 export function formatNumber(n: number): string {
