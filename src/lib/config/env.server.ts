@@ -6,7 +6,14 @@
 import { z } from 'zod';
 import { env } from '$env/dynamic/private';
 import { siteConfig } from './site';
-import { APP_VERSION, MAX_RETRIES, RETRY_DELAY_MS, MAX_CONCURRENT_DOWNLOADS } from './constants';
+import {
+    APP_VERSION,
+    MAX_RETRIES,
+    RETRY_DELAY_MS,
+    MAX_CONCURRENT_DOWNLOADS,
+    MAX_CONCURRENT_DOWNLOADS_LIMIT,
+    MAX_RETRY_COUNT_LIMIT
+} from './constants';
 
 /**
  * Retry backoff strategy options
@@ -26,8 +33,8 @@ const envSchema = z.object({
     RESET_INTERVAL_SECONDS: z.coerce.number().int().positive().max(300).default(60),
 
     // Retry Configuration
-    MAX_RETRIES: z.coerce.number().int().positive().max(10).default(MAX_RETRIES),
-    RETRY_DELAY_MS: z.coerce.number().int().positive().max(10000).default(RETRY_DELAY_MS),
+    MAX_RETRIES: z.coerce.number().int().positive().max(MAX_RETRY_COUNT_LIMIT).default(MAX_RETRIES),
+    RETRY_DELAY_MS: z.coerce.number().int().positive().max(10_000).default(RETRY_DELAY_MS),
     RETRY_BACKOFF_STRATEGY: z
         .enum(['exponential', 'linear', 'fixed'])
         .default('exponential') as z.ZodType<RetryBackoffStrategy>,
@@ -37,7 +44,7 @@ const envSchema = z.object({
         .number()
         .int()
         .positive()
-        .max(10)
+        .max(MAX_CONCURRENT_DOWNLOADS_LIMIT)
         .default(MAX_CONCURRENT_DOWNLOADS),
 
     // Network

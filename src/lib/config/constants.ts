@@ -124,13 +124,15 @@ export const MAX_DEPENDENCY_DEPTH = 10;
  * Cache TTL values in milliseconds
  */
 export const CACHE_TTL = {
-    /** Cache versions for 2 hours */
-    VERSIONS: 2 * 60 * 60 * 1000,
-    /** Cache loaders for 2 hours */
-    LOADERS: 2 * 60 * 60 * 1000,
-    /** Cache collections for 30 minutes */
+    VERSIONS: 7 * 24 * 60 * 60 * 1000,
+    LOADERS: 7 * 24 * 60 * 60 * 1000,
     COLLECTIONS: 30 * 60 * 1000
 } as const;
+
+/**
+ * Bump when the cached data shape changes to auto-invalidate stale entries.
+ */
+export const CACHE_VERSION = 1;
 
 /**
  * LocalStorage keys for caching
@@ -155,10 +157,18 @@ export const MAX_COLLECTIONS = 7;
  */
 export const MAX_CONCURRENT_DOWNLOADS = 4;
 
+/** Bounds for the concurrent downloads stepper */
+export const MIN_CONCURRENT_DOWNLOADS = 1;
+export const MAX_CONCURRENT_DOWNLOADS_LIMIT = 8;
+
 /**
  * Maximum retries per download
  */
 export const MAX_RETRIES = 3;
+
+/** Bounds for the retry count stepper */
+export const MIN_RETRY_COUNT = 0;
+export const MAX_RETRY_COUNT_LIMIT = 10;
 
 /**
  * Base delay for retry logic in milliseconds
