@@ -1,6 +1,7 @@
 <script lang="ts">
     import './layout.css';
     import { ModeWatcher } from 'mode-watcher';
+    import * as Tooltip from '$lib/components/ui/tooltip';
     import Header from '$lib/components/layout/Header.svelte';
     import Footer from '$lib/components/layout/Footer.svelte';
     import LoadingBar from '$lib/components/layout/LoadingBar.svelte';
@@ -10,11 +11,13 @@
 
 <ModeWatcher />
 
-<div class="flex min-h-screen flex-col">
-    <LoadingBar />
-    <Header />
-    <main class="flex-1">
-        {@render children()}
-    </main>
-    <Footer />
-</div>
+<Tooltip.Provider>
+    <div class="flex min-h-screen flex-col">
+        <LoadingBar />
+        <Header />
+        <main class="flex-1">
+            {@render children()}
+        </main>
+        <Footer />
+    </div>
+</Tooltip.Provider>
