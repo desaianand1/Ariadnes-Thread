@@ -45,15 +45,23 @@
         activeTab = $bindable('action')
     }: Props = $props();
 
+    let activeConflictCount = $derived(
+        conflicts.filter((c) => !excludedIds.has(c.projectA.id) && !excludedIds.has(c.projectB.id))
+            .length
+    );
+    let actionItemCount = $derived(activeConflictCount + missingDeps.length);
     let hasActionItems = $derived(conflicts.length > 0 || missingDeps.length > 0);
 
-    // Default to action tab when action items exist
+    // Set initial tab based on content — only runs once
+    let initialTabSet = false;
     $effect(() => {
+        if (initialTabSet) return;
         if (hasActionItems) {
             activeTab = 'action';
         } else if (autoResolvedItems.length > 0) {
             activeTab = 'auto';
         }
+        initialTabSet = true;
     });
 
     const TYPE_ICONS = {
@@ -80,7 +88,7 @@
                 {/if}
                 {#if hasActionItems}
                     <Tabs.Trigger value="action" class="text-xs">
-                        Needs Attention ({conflicts.length + missingDeps.length})
+                        Needs Attention ({actionItemCount > 0 ? actionItemCount : 'All resolved'})
                     </Tabs.Trigger>
                 {/if}
             </Tabs.List>
