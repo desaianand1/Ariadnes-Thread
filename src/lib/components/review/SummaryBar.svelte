@@ -5,43 +5,39 @@
     import { Button } from '$lib/components/ui/button';
     import { Progress } from '$lib/components/ui/progress';
     import * as Tooltip from '$lib/components/ui/tooltip';
-    import * as ToggleGroup from '$lib/components/ui/toggle-group';
-    import { formatBytes, formatSpeed, formatEta, getLoaderDisplayName } from '$lib/utils/format';
-    import { getBadgeClassesByModLoader } from '$lib/utils/colors';
-    import { cn } from '$lib/utils';
+    import { formatBytes, formatSpeed, formatEta } from '$lib/utils/format';
     import ShareIcon from '@lucide/svelte/icons/share-2';
-    import LayoutListIcon from '@lucide/svelte/icons/layout-list';
-    import Rows3Icon from '@lucide/svelte/icons/rows-3';
     import XIcon from '@lucide/svelte/icons/x';
-    import MonitorIcon from '@lucide/svelte/icons/monitor';
-    import ServerIcon from '@lucide/svelte/icons/server';
+    import LoaderBadge from './LoaderBadge.svelte';
 
     interface Props {
         stats: ResolutionStats;
         context: { gameVersion: string; loader: string };
-        viewMode?: 'detailed' | 'compact';
         downloadPhase?: DownloadPhase;
         downloadProgress?: number;
         downloadSpeed?: number;
         downloadEta?: number;
-        onStartDownload?: (side: 'client' | 'server') => void;
         onCancelDownload?: () => void;
-        hasClientMods?: boolean;
-        hasServerMods?: boolean;
+        onShare?: () => void;
+        onClickCompatible?: () => void;
+        onClickWarnings?: () => void;
+        onClickConflicts?: () => void;
+        onClickMissing?: () => void;
     }
 
     let {
         stats,
         context,
-        viewMode = $bindable('detailed'),
         downloadPhase = 'idle',
         downloadProgress = 0,
         downloadSpeed = 0,
         downloadEta = 0,
-        onStartDownload,
         onCancelDownload,
-        hasClientMods = true,
-        hasServerMods = true
+        onShare,
+        onClickCompatible,
+        onClickWarnings,
+        onClickConflicts,
+        onClickMissing
     }: Props = $props();
 
     let isActiveDownload = $derived(
@@ -51,15 +47,19 @@
     );
 </script>
 
-<!-- Desktop: sticky top, Mobile: sticky bottom -->
-<div
-    class="sticky bottom-0 z-40 border-t bg-background/80 backdrop-blur-sm md:top-0 md:bottom-auto md:border-t-0 md:border-b"
->
+<div class="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-sm">
     <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
         {#if isActiveDownload}
-            <!-- Download progress mode -->
+            <!-- Download progress mode — emerald themed -->
             <div class="flex flex-1 items-center gap-4">
-                <Progress value={downloadProgress} class="h-2 flex-1" />
+                <div
+                    class="flex-1 **:data-[slot=progress-indicator]:bg-emerald-500 dark:**:data-[slot=progress-indicator]:bg-emerald-400"
+                >
+                    <Progress
+                        value={downloadProgress}
+                        class="h-2 bg-emerald-100 dark:bg-emerald-950"
+                    />
+                </div>
                 <span class="shrink-0 text-sm tabular-nums">
                     {downloadProgress}%
                 </span>
@@ -74,42 +74,59 @@
                 Cancel
             </Button>
         {:else}
-            <!-- Normal review mode -->
-            <!-- Stats -->
-            <div class="flex flex-wrap items-center gap-3 text-sm">
-                <span class="flex items-center gap-1.5">
-                    <span class="size-2 rounded-full bg-green-500"></span>
+            <!-- Normal review mode — clickable stats -->
+            <div class="flex flex-wrap items-center gap-1 text-sm">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    class="h-auto gap-1.5 px-1.5 py-0.5"
+                    onclick={onClickCompatible}
+                >
+                    <span class="size-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
                     {stats.resolvedCount} compatible
-                </span>
+                </Button>
 
                 {#if stats.warningCount > 0}
-                    <span class="flex items-center gap-1.5">
-                        <span class="size-2 rounded-full bg-yellow-500"></span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="h-auto gap-1.5 px-1.5 py-0.5"
+                        onclick={onClickWarnings}
+                    >
+                        <span class="size-2 rounded-full bg-yellow-500" aria-hidden="true"></span>
                         {stats.warningCount} warnings
-                    </span>
+                    </Button>
                 {/if}
 
                 {#if stats.conflictCount > 0}
-                    <span class="flex items-center gap-1.5">
-                        <span class="size-2 rounded-full bg-red-500"></span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="h-auto gap-1.5 px-1.5 py-0.5"
+                        onclick={onClickConflicts}
+                    >
+                        <span class="size-2 rounded-full bg-red-500" aria-hidden="true"></span>
                         {stats.conflictCount} conflicts
-                    </span>
+                    </Button>
                 {/if}
 
                 {#if stats.unresolvedCount > 0}
-                    <span class="flex items-center gap-1.5">
-                        <span class="size-2 rounded-full bg-orange-500"></span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="h-auto gap-1.5 px-1.5 py-0.5"
+                        onclick={onClickMissing}
+                    >
+                        <span class="size-2 rounded-full bg-orange-500" aria-hidden="true"></span>
                         {stats.unresolvedCount} missing
-                    </span>
+                    </Button>
                 {/if}
             </div>
 
             <!-- Context badges -->
             <div class="flex items-center gap-2">
                 <Badge variant="outline">{context.gameVersion}</Badge>
-                <Badge variant="secondary" class={cn(getBadgeClassesByModLoader(context.loader))}>
-                    {getLoaderDisplayName(context.loader)}
-                </Badge>
+                <LoaderBadge loaderSlug={context.loader} size="sm" />
             </div>
 
             <!-- Actions -->
@@ -118,49 +135,16 @@
                     >{formatBytes(stats.totalDownloadSize)}</span
                 >
 
-                <!-- View mode toggle -->
-                <ToggleGroup.Root type="single" bind:value={viewMode} variant="outline" size="sm">
-                    <Tooltip.Root>
-                        <Tooltip.Trigger>
-                            <ToggleGroup.Item value="detailed" aria-label="Detailed view">
-                                <LayoutListIcon class="size-3.5" />
-                            </ToggleGroup.Item>
-                        </Tooltip.Trigger>
-                        <Tooltip.Content>Detailed view</Tooltip.Content>
-                    </Tooltip.Root>
-                    <Tooltip.Root>
-                        <Tooltip.Trigger>
-                            <ToggleGroup.Item value="compact" aria-label="Compact view">
-                                <Rows3Icon class="size-3.5" />
-                            </ToggleGroup.Item>
-                        </Tooltip.Trigger>
-                        <Tooltip.Content>Compact view</Tooltip.Content>
-                    </Tooltip.Root>
-                </ToggleGroup.Root>
-
-                <!-- Download buttons -->
-                {#if hasClientMods}
-                    <Button size="sm" onclick={() => onStartDownload?.('client')}>
-                        <MonitorIcon class="mr-1.5 size-3.5" />
-                        <span class="hidden sm:inline">Download</span> Client ZIP
-                    </Button>
-                {/if}
-
-                {#if hasServerMods}
-                    <Button size="sm" variant="outline" onclick={() => onStartDownload?.('server')}>
-                        <ServerIcon class="mr-1.5 size-3.5" />
-                        <span class="hidden sm:inline">Download</span> Server ZIP
-                    </Button>
-                {/if}
-
                 <Tooltip.Root>
                     <Tooltip.Trigger>
-                        <Button size="sm" variant="outline" disabled>
-                            <ShareIcon class="mr-1.5 size-3.5" />
-                            Share
-                        </Button>
+                        {#snippet child({ props })}
+                            <Button variant="outline" size="sm" onclick={onShare} {...props}>
+                                <ShareIcon class="size-3.5" />
+                                <span class="sr-only">Share</span>
+                            </Button>
+                        {/snippet}
                     </Tooltip.Trigger>
-                    <Tooltip.Content>Coming in Phase 5</Tooltip.Content>
+                    <Tooltip.Content>Share</Tooltip.Content>
                 </Tooltip.Root>
             </div>
         {/if}

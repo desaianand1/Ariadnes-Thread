@@ -57,7 +57,7 @@
                 Verifying
             </Badge>
         {:else if file.status === 'complete'}
-            <CheckIcon class="size-4 text-green-500" />
+            <CheckIcon class="size-4 text-emerald-500" />
         {:else if file.status === 'error'}
             <Tooltip.Root>
                 <Tooltip.Trigger>
