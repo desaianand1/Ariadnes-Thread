@@ -2,6 +2,7 @@
     import { MODRINTH_ATTRIBUTION_URL } from '$lib/config/constants';
     import CollectionForm from '$lib/components/forms/CollectionForm.svelte';
     import MetaTags from '$lib/components/MetaTags.svelte';
+    import StructuredData from '$lib/components/StructuredData.svelte';
     import { Badge } from '$lib/components/ui/badge';
     import { SiModrinth } from '@icons-pack/svelte-simple-icons';
     import GradientText from '$lib/components/effects/GradientText.svelte';
@@ -19,6 +20,7 @@
 </script>
 
 <MetaTags />
+<StructuredData />
 
 <!-- Animated dot grid background -->
 {#if browser && !prefersReducedMotion}
