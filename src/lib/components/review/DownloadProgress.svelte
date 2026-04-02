@@ -9,6 +9,8 @@
     import * as Tabs from '$lib/components/ui/tabs';
     import { formatBytes, formatSpeed, formatEta } from '$lib/utils/format';
     import { LAUNCHER_GUIDES } from '$lib/config/install-guides';
+    import CopyablePath from './CopyablePath.svelte';
+    import { detectOS } from '$lib/utils/platform';
     import AlertCircleIcon from '@lucide/svelte/icons/circle-alert';
     import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
     import DownloadIcon from '@lucide/svelte/icons/download';
@@ -52,6 +54,7 @@
         }
     });
 
+    let userOS = $derived(detectOS());
     let sideLabel = $derived(state.targetSide === 'client' ? 'Mods' : 'Server Mods');
     let otherSide = $derived<'client' | 'server'>(
         state.targetSide === 'client' ? 'server' : 'client'
@@ -146,9 +149,18 @@
 
                 {#each LAUNCHER_GUIDES as guide (guide.id)}
                     <Tabs.Content value={guide.id} class="pt-3">
-                        <ol class="list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
+                        <ol class="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
                             {#each guide.steps as step, i (i)}
-                                <li>{step}</li>
+                                <li>
+                                    {#if step.type === 'path'}
+                                        {step.prefix}
+                                        <div class="mt-1">
+                                            <CopyablePath value={step.paths[userOS]} />
+                                        </div>
+                                    {:else}
+                                        {step.text}
+                                    {/if}
+                                </li>
                             {/each}
                         </ol>
                     </Tabs.Content>
