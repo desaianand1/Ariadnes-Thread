@@ -2,6 +2,8 @@
     import { cn, type WithElementRef } from '$lib/utils.js';
     import type { HTMLAttributes } from 'svelte/elements';
     import type { Snippet } from 'svelte';
+    import { slide } from 'svelte/transition';
+    import { safeTransition } from '$lib/utils/motion';
 
     let {
         ref = $bindable(null),
@@ -34,25 +36,27 @@
 </script>
 
 {#if hasContent}
-    <div
-        bind:this={ref}
-        role="alert"
-        data-slot="field-error"
-        class={cn('text-sm font-normal text-destructive', className)}
-        {...restProps}
-    >
-        {#if children}
-            {@render children()}
-        {:else if singleErrorMessage}
-            {singleErrorMessage}
-        {:else if isMultipleErrors}
-            <ul class="ms-4 flex list-disc flex-col gap-1">
-                {#each errors ?? [] as error, index (index)}
-                    {#if error?.message}
-                        <li>{error.message}</li>
-                    {/if}
-                {/each}
-            </ul>
-        {/if}
+    <div transition:slide={safeTransition({ duration: 120 })}>
+        <div
+            bind:this={ref}
+            role="alert"
+            data-slot="field-error"
+            class={cn('text-sm font-normal text-destructive', className)}
+            {...restProps}
+        >
+            {#if children}
+                {@render children()}
+            {:else if singleErrorMessage}
+                {singleErrorMessage}
+            {:else if isMultipleErrors}
+                <ul class="ms-4 flex list-disc flex-col gap-1">
+                    {#each errors ?? [] as error, index (index)}
+                        {#if error?.message}
+                            <li>{error.message}</li>
+                        {/if}
+                    {/each}
+                </ul>
+            {/if}
+        </div>
     </div>
 {/if}

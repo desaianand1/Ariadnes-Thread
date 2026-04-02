@@ -1,6 +1,8 @@
 <script lang="ts">
     import * as FormPrimitive from 'formsnap';
     import { cn, type WithoutChild } from '$lib/utils.js';
+    import { slide } from 'svelte/transition';
+    import { safeTransition } from '$lib/utils/motion';
 
     let {
         ref = $bindable(null),
@@ -23,7 +25,9 @@
             {@render childrenProp({ errors, errorProps })}
         {:else}
             {#each errors as error (error)}
-                <div {...errorProps} class={cn(errorClasses)}>{error}</div>
+                <div transition:slide={safeTransition({ duration: 120 })}>
+                    <div {...errorProps} class={cn(errorClasses)}>{error}</div>
+                </div>
             {/each}
         {/if}
     {/snippet}
