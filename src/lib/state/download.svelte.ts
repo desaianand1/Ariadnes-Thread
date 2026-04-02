@@ -3,7 +3,15 @@
  * Orchestrates file downloading, hash verification, and ZIP generation.
  */
 
-import { MAX_CONCURRENT_DOWNLOADS, MAX_RETRIES, RETRY_DELAY_MS } from '$lib/config/constants';
+import {
+    MAX_CONCURRENT_DOWNLOADS,
+    MIN_CONCURRENT_DOWNLOADS,
+    MAX_CONCURRENT_DOWNLOADS_LIMIT,
+    MAX_RETRIES,
+    MIN_RETRY_COUNT,
+    MAX_RETRY_COUNT_LIMIT,
+    RETRY_DELAY_MS
+} from '$lib/config/constants';
 import { downloadFiles, type DownloadCallbacks } from '$lib/services/download';
 import { buildSideZips, type ZipFileInfo } from '$lib/services/zip';
 import type { ResolvedProject, SideClassification } from '$lib/services/types';
@@ -23,6 +31,7 @@ export interface FileProgress {
     fileUrl: string;
     fileSize: number;
     sha1: string;
+    sha512?: string;
     folder: string;
     side: SideClassification;
     iconUrl?: string;
@@ -44,6 +53,8 @@ export interface DownloadState {
     zipSize: number;
     errorMessage: string | null;
     abortController: AbortController | null;
+    concurrentDownloads?: number;
+    retryCount?: number;
 }
 
 // =============================================================================
@@ -102,7 +113,11 @@ export function getDownloadState(): DownloadState {
 /**
  * Filter projects by the target side and populate file progress entries.
  */
-export function initDownload(projects: ResolvedProject[], side: 'client' | 'server'): void {
+export function initDownload(
+    projects: ResolvedProject[],
+    side: 'client' | 'server',
+    settings?: { concurrentDownloads?: number; retryCount?: number }
+): void {
     const filtered = projects.filter((p) => p.side === side || p.side === 'both');
 
     // Deduplicate by fileUrl
@@ -122,6 +137,7 @@ export function initDownload(projects: ResolvedProject[], side: 'client' | 'serv
         fileUrl: p.fileUrl,
         fileSize: p.fileSize,
         sha1: p.fileHashes.sha1,
+        sha512: p.fileHashes.sha512,
         folder: p.folder,
         side: p.side,
         iconUrl: p.iconUrl,
@@ -136,6 +152,8 @@ export function initDownload(projects: ResolvedProject[], side: 'client' | 'serv
     state.zipBlob = null;
     state.zipSize = 0;
     state.errorMessage = null;
+    state.concurrentDownloads = settings?.concurrentDownloads;
+    state.retryCount = settings?.retryCount;
     state.abortController = new AbortController();
     speedSamples = [];
 }
@@ -164,7 +182,7 @@ export async function startDownload(): Promise<void> {
             state.overallBytesDownloaded += delta;
             updateSpeed();
         },
-        onFileComplete(fileUrl: string) {
+        onFileComplete(fileUrl: string, _data: Uint8Array) {
             const file = filesByUrl.get(fileUrl);
             if (file) file.status = 'complete';
         },
@@ -177,18 +195,31 @@ export async function startDownload(): Promise<void> {
         }
     };
 
+    const concurrency = Math.max(
+        MIN_CONCURRENT_DOWNLOADS,
+        Math.min(
+            MAX_CONCURRENT_DOWNLOADS_LIMIT,
+            state.concurrentDownloads ?? MAX_CONCURRENT_DOWNLOADS
+        )
+    );
+    const maxRetries = Math.max(
+        MIN_RETRY_COUNT,
+        Math.min(MAX_RETRY_COUNT_LIMIT, state.retryCount ?? MAX_RETRIES)
+    );
+
     try {
         const downloadInput = state.files.map((f) => ({
             fileUrl: f.fileUrl,
             fileSize: f.fileSize,
-            sha1: f.sha1
+            sha1: f.sha1,
+            sha512: f.sha512
         }));
 
         const data = await downloadFiles(
             downloadInput,
             {
-                concurrency: MAX_CONCURRENT_DOWNLOADS,
-                maxRetries: MAX_RETRIES,
+                concurrency,
+                maxRetries,
                 retryDelayMs: RETRY_DELAY_MS,
                 signal: state.abortController.signal
             },
@@ -196,6 +227,9 @@ export async function startDownload(): Promise<void> {
         );
 
         if (state.abortController.signal.aborted) return;
+
+        state.phase = 'verifying';
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         // Build ZIP
         state.phase = 'zipping';
