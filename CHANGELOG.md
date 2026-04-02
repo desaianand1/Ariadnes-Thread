@@ -1,3 +1,9 @@
+## [1.18.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.18.0...v1.18.1) (2026-04-02)
+
+### Bug Fixes
+
+- **api:** restore error message return in getErrorMessage fallback ([7c1de19](https://github.com/desaianand1/Ariadnes-Thread/commit/7c1de19c4f30a430969928f1de59bee9ea3f5660))
+
 # 1.0.0 (2026-03-30)
 
 ### Features
