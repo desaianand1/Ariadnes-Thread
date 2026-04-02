@@ -1,15 +1,29 @@
 <script lang="ts">
     import type { PageData } from './$types';
     import type { ResolvedProject } from '$lib/services/types';
+    import {
+        computeAutoResolution,
+        getUserActionableConflicts,
+        getMissingDeps,
+        getResolutionState,
+        computeSideStats,
+        buildCollectionNameMap,
+        buildIconMap,
+        getCollectionProjectIds,
+        buildWarningsMap,
+        getConflictProjectIds
+    } from '$lib/services/review-resolution';
     import MetaTags from '$lib/components/MetaTags.svelte';
     import SummaryBar from '$lib/components/review/SummaryBar.svelte';
-    import FilterBar from '$lib/components/review/FilterBar.svelte';
-    import CollectionSection from '$lib/components/review/CollectionSection.svelte';
-    import DependenciesSection from '$lib/components/review/DependenciesSection.svelte';
-    import ConflictPanel from '$lib/components/review/ConflictPanel.svelte';
+    import SharePanel from '$lib/components/review/SharePanel.svelte';
+    import ResolutionHero from '$lib/components/review/ResolutionHero.svelte';
+    import ResolutionDetails from '$lib/components/review/ResolutionDetails.svelte';
+    import ModListSection from '$lib/components/review/ModListSection.svelte';
+    import ModDetailSheet from '$lib/components/review/ModDetailSheet.svelte';
+    import DownloadBar from '$lib/components/review/DownloadBar.svelte';
     import DownloadProgress from '$lib/components/review/DownloadProgress.svelte';
+    import DownloadConfirmation from '$lib/components/review/DownloadConfirmation.svelte';
     import { Button } from '$lib/components/ui/button';
-    import * as Empty from '$lib/components/ui/empty';
     import { getLoaderDisplayName } from '$lib/utils/format';
     import { buildReviewUrl } from '$lib/utils/url-state';
     import {
@@ -19,24 +33,29 @@
         cancelDownload,
         resetDownload
     } from '$lib/state/download.svelte';
-    import { fade } from 'svelte/transition';
     import { replaceState } from '$app/navigation';
     import { page } from '$app/stores';
     import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
-    import PackageXIcon from '@lucide/svelte/icons/package-x';
-    import SearchXIcon from '@lucide/svelte/icons/search-x';
     import { SvelteSet } from 'svelte/reactivity';
-    import { resolve } from '$app/paths';
 
     let { data }: { data: PageData } = $props();
 
-    let searchQuery = $state('');
-    let sideFilter = $state<'all' | 'client' | 'server' | 'both'>('all');
-    let statusFilter = $state<'all' | 'compatible' | 'warnings' | 'conflicts'>('all');
-    let viewMode = $state<'detailed' | 'compact'>('detailed');
-    let excludedIds = $state(new Set<string>(data.context.excludedProjectIds ?? []));
+    // --- UI-only state ---
+    let selectedProject = $state<ResolvedProject | null>(null);
+    let sheetOpen = $state(false);
+    let shareOpen = $state(false);
+    let heroRef = $state<HTMLElement | undefined>(undefined);
+    let heroVisible = $state(true);
+    let downloadOverride = $state(false);
+    let resolutionDetailsRef = $state<HTMLElement | undefined>(undefined);
+    let resolutionDetailsTab = $state<string>('action');
+    let modListRef = $state<HTMLElement | undefined>(undefined);
+    let downloadConfirmOpen = $state(false);
+    let pendingDownloadSide = $state<'client' | 'server'>('client');
 
-    // Download state
+    let excludedIds = new SvelteSet<string>(data.context.excludedProjectIds ?? []);
+
+    // --- Download state ---
     let dlState = $derived(getDownloadState());
     let isDownloading = $derived(dlState.phase !== 'idle');
     let downloadProgress = $derived(
@@ -45,122 +64,76 @@
             : 0
     );
 
-    let warningsByProject = $derived(
-        data.warnings.reduce((map, w) => {
-            const existing = map.get(w.projectId);
-            if (existing) {
-                existing.push(w);
-            } else {
-                map.set(w.projectId, [w]);
-            }
-            return map;
-        }, new Map<string, typeof data.warnings>())
+    // --- Derived from service functions ---
+    let warningsByProject = $derived(buildWarningsMap(data.warnings));
+    let conflictProjectIds = $derived(getConflictProjectIds(data.conflicts));
+    let collectionProjectIds = $derived(getCollectionProjectIds(data.collections));
+    let iconMap = $derived(buildIconMap(data.collections, data.dependencies));
+
+    let autoResolution = $derived(
+        computeAutoResolution(
+            [...data.collections.flatMap((g) => g.resolved), ...data.dependencies],
+            data.conflicts,
+            collectionProjectIds,
+            data.projectTitleMap
+        )
     );
 
-    let conflictProjectIds = $derived(
-        new Set(data.conflicts.flatMap((c) => [c.projectId, c.conflictsWith]))
+    let effectiveExcludedIds = $derived(
+        new SvelteSet([...excludedIds, ...autoResolution.autoExcludedIds])
     );
 
-    function matchesFilters(project: ResolvedProject): boolean {
-        if (excludedIds.has(project.projectId)) {
-            return false;
-        }
-
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            if (!project.projectTitle.toLowerCase().includes(query)) {
-                return false;
-            }
-        }
-
-        if (sideFilter !== 'all' && project.side !== sideFilter) {
-            return false;
-        }
-
-        if (statusFilter !== 'all') {
-            const hasWarning = warningsByProject.has(project.projectId);
-            const hasConflict = conflictProjectIds.has(project.projectId);
-
-            switch (statusFilter) {
-                case 'compatible':
-                    if (hasWarning || hasConflict) return false;
-                    break;
-                case 'warnings':
-                    if (!hasWarning) return false;
-                    break;
-                case 'conflicts':
-                    if (!hasConflict) return false;
-                    break;
-            }
-        }
-
-        return true;
-    }
-
-    function toggleExclude(projectId: string) {
-        const next = new SvelteSet(excludedIds);
-        if (next.has(projectId)) {
-            next.delete(projectId);
-        } else {
-            next.add(projectId);
-        }
-        excludedIds = next;
-        syncUrlExclusions();
-    }
-
-    function onExclude(projectId: string) {
-        const next = new SvelteSet(excludedIds);
-        next.add(projectId);
-        excludedIds = next;
-        syncUrlExclusions();
-    }
-
-    function onRestore(projectId: string) {
-        const next = new SvelteSet(excludedIds);
-        next.delete(projectId);
-        excludedIds = next;
-        syncUrlExclusions();
-    }
-
-    function syncUrlExclusions() {
-        const currentUrl = new URL($page.url);
-        const newUrl = buildReviewUrl(currentUrl, { x: excludedIds });
-        replaceState(resolve(newUrl), {});
-    }
-
-    let filteredCollections = $derived(
-        data.collections
-            .map((group) => ({
-                ...group,
-                resolved: group.resolved.filter(matchesFilters)
-            }))
-            .filter((group) => group.resolved.length > 0)
+    let userConflicts = $derived(
+        getUserActionableConflicts(
+            data.conflicts,
+            collectionProjectIds,
+            data.projectTitleMap,
+            iconMap
+        )
     );
+    let userMissingDeps = $derived(getMissingDeps(data.unresolved, data.projectTitleMap));
 
-    let filteredDependencies = $derived(data.dependencies.filter(matchesFilters));
-
-    let allVisibleProjects = $derived([
-        ...filteredCollections.flatMap((g) => g.resolved),
-        ...filteredDependencies
+    let allProjects = $derived([
+        ...data.collections.flatMap((g) => g.resolved),
+        ...data.dependencies
     ]);
+    let allVisibleProjects = $derived(
+        allProjects.filter((p) => !effectiveExcludedIds.has(p.projectId))
+    );
 
-    let collectionNames = $derived(data.collections.map((g) => g.name).join(', '));
-    let totalModCount = $derived(
+    let visibleUserProjects = $derived(allVisibleProjects.filter((p) => !p.dependencyOf));
+    let visibleDeps = $derived(allVisibleProjects.filter((p) => !!p.dependencyOf));
+
+    let resolutionState = $derived(
+        downloadOverride
+            ? ('allClear' as const)
+            : getResolutionState(
+                  allVisibleProjects.length,
+                  userConflicts.filter(
+                      (c) => !excludedIds.has(c.projectA.id) && !excludedIds.has(c.projectB.id)
+                  ).length,
+                  userMissingDeps.length
+              )
+    );
+
+    let sideStats = $derived(computeSideStats(allVisibleProjects));
+    let collectionNameMap = $derived(buildCollectionNameMap(data.collections));
+
+    let resolvedModCount = $derived(
         data.collections.reduce((sum, g) => sum + g.resolved.length, 0) + data.dependencies.length
     );
+    let trueTotalCount = $derived(resolvedModCount + data.unresolved.length);
 
+    let collectionNames = $derived(data.collections.map((g) => g.name).join(', '));
     let pageTitle = $derived(
-        `Review: ${collectionNames} — ${totalModCount} mods for MC ${data.context.gameVersion} ${getLoaderDisplayName(data.context.loader)}`
+        `Review: ${collectionNames} — ${trueTotalCount} mods for MC ${data.context.gameVersion} ${getLoaderDisplayName(data.context.loader)}`
     );
 
-    /** Recomputed stats reflecting exclusions */
-    let effectiveStats = $derived.by(() => {
-        return {
-            ...data.stats,
-            resolvedCount: allVisibleProjects.length,
-            totalDownloadSize: allVisibleProjects.reduce((sum, r) => sum + r.fileSize, 0)
-        };
-    });
+    let effectiveStats = $derived.by(() => ({
+        ...data.stats,
+        resolvedCount: allVisibleProjects.length,
+        totalDownloadSize: allVisibleProjects.reduce((sum, r) => sum + r.fileSize, 0)
+    }));
 
     let hasClientMods = $derived(
         allVisibleProjects.some((p) => p.side === 'client' || p.side === 'both')
@@ -169,16 +142,74 @@
         allVisibleProjects.some((p) => p.side === 'server' || p.side === 'both')
     );
 
-    let hasNoResolvedMods = $derived(totalModCount === 0);
-    let isFilterEmpty = $derived(
-        !hasNoResolvedMods && filteredCollections.length === 0 && filteredDependencies.length === 0
+    // Active (unresolved) user conflicts — excluding ones where user already chose
+    let activeConflictCount = $derived(
+        userConflicts.filter(
+            (c) => !excludedIds.has(c.projectA.id) && !excludedIds.has(c.projectB.id)
+        ).length
     );
 
-    let hasExclusions = $derived(excludedIds.size > 0);
+    let showDownloadBar = $derived(!heroVisible && dlState.phase === 'idle');
 
-    // Download handlers
+    // --- Intersection observer for hero ---
+    $effect(() => {
+        if (!heroRef) return;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                heroVisible = entry.isIntersecting;
+            },
+            { threshold: 0.1 }
+        );
+        observer.observe(heroRef);
+        return () => observer.disconnect();
+    });
+
+    // --- Exclusion management ---
+    function toggleExclude(projectId: string) {
+        if (excludedIds.has(projectId)) {
+            excludedIds.delete(projectId);
+        } else {
+            excludedIds.add(projectId);
+        }
+        syncUrlExclusions();
+    }
+
+    function onExclude(projectId: string) {
+        excludedIds.add(projectId);
+        syncUrlExclusions();
+    }
+
+    function onRestore(projectId: string) {
+        excludedIds.delete(projectId);
+        syncUrlExclusions();
+    }
+
+    function syncUrlExclusions() {
+        const currentUrl = new URL($page.url);
+        const newUrl = buildReviewUrl(currentUrl, { x: excludedIds });
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- URL state sync for exclusions, not a navigation
+        replaceState(newUrl as Parameters<typeof replaceState>[0], {});
+    }
+
+    // --- Scroll helpers ---
+    function scrollToResolutionDetails(tab?: string) {
+        if (tab) resolutionDetailsTab = tab;
+        resolutionDetailsRef?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function scrollToModList() {
+        modListRef?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // --- Download handlers ---
     function handleStartDownload(side: 'client' | 'server') {
-        initDownload(allVisibleProjects, side);
+        pendingDownloadSide = side;
+        downloadConfirmOpen = true;
+    }
+
+    function handleConfirmDownload() {
+        downloadConfirmOpen = false;
+        initDownload(allVisibleProjects, pendingDownloadSide, data.downloadSettings);
         startDownload();
     }
 
@@ -198,8 +229,29 @@
         URL.revokeObjectURL(url);
     }
 
+    function handleRetryDownload() {
+        const side = dlState.targetSide;
+        if (!side) return;
+        initDownload(allVisibleProjects, side, data.downloadSettings);
+        startDownload();
+    }
+
+    function handleDownloadOtherSide(side: 'client' | 'server') {
+        initDownload(allVisibleProjects, side, data.downloadSettings);
+        startDownload();
+    }
+
     function handleBackToReview() {
         resetDownload();
+    }
+
+    function handleDownloadAnyway() {
+        downloadOverride = true;
+    }
+
+    function handleSelectProject(project: ResolvedProject) {
+        selectedProject = project;
+        sheetOpen = true;
     }
 
     // Prevent accidental navigation during download
@@ -216,7 +268,7 @@
 
 <MetaTags
     title={pageTitle}
-    description="Review and download {totalModCount} mods from {collectionNames} for Minecraft {data
+    description="Review and download {trueTotalCount} mods from {collectionNames} for Minecraft {data
         .context.gameVersion} on {data.context.loader}"
     path="/review"
 />
@@ -225,147 +277,136 @@
     <SummaryBar
         stats={effectiveStats}
         context={data.context}
-        bind:viewMode
         downloadPhase={dlState.phase}
         {downloadProgress}
         downloadSpeed={dlState.speedBytesPerSec}
         downloadEta={dlState.eta}
-        onStartDownload={handleStartDownload}
         onCancelDownload={handleCancelDownload}
-        {hasClientMods}
-        {hasServerMods}
+        onShare={() => (shareOpen = true)}
+        onClickCompatible={() => scrollToModList()}
+        onClickWarnings={() => scrollToResolutionDetails('auto')}
+        onClickConflicts={() => scrollToResolutionDetails('action')}
+        onClickMissing={() => scrollToResolutionDetails('action')}
+    />
+
+    <SharePanel
+        bind:open={shareOpen}
+        pageUrl={$page.url.toString()}
+        {collectionNames}
+        emailEnabled={data.emailEnabled}
     />
 
     {#if isDownloading}
-        <!-- Download progress view replaces the review content -->
         <div class="mx-auto max-w-7xl space-y-4 px-4 py-4">
             <DownloadProgress
                 state={dlState}
                 onCancel={handleCancelDownload}
                 onSave={handleSaveZip}
                 onBackToReview={handleBackToReview}
+                onRetry={handleRetryDownload}
+                onDownloadOtherSide={dlState.targetSide === 'client' && hasServerMods
+                    ? handleDownloadOtherSide
+                    : dlState.targetSide === 'server' && hasClientMods
+                      ? handleDownloadOtherSide
+                      : undefined}
             />
         </div>
     {:else}
-        <!-- Normal review view -->
-        <FilterBar bind:searchQuery bind:sideFilter bind:statusFilter />
-
-        <div class="mx-auto max-w-7xl space-y-4 px-4 py-4">
+        <div class="mx-auto max-w-7xl space-y-6 px-4 py-6">
             <!-- Back link -->
             <Button variant="ghost" size="sm" href="/">
                 <ArrowLeftIcon class="mr-1.5 size-3.5" />
-                Back to form
+                Back to Collections
             </Button>
 
-            <!-- Conflict panel -->
-            {#if data.conflicts.length > 0}
-                <ConflictPanel
-                    conflicts={data.conflicts}
-                    projectTitleMap={data.projectTitleMap}
-                    {excludedIds}
-                    {onExclude}
-                    {onRestore}
+            <!-- Resolution Hero -->
+            <div bind:this={heroRef}>
+                <ResolutionHero
+                    {resolutionState}
+                    totalResolved={allVisibleProjects.length}
+                    totalProjects={trueTotalCount}
+                    gameVersion={data.context.gameVersion}
+                    loader={data.context.loader}
+                    {sideStats}
+                    {hasClientMods}
+                    {hasServerMods}
+                    {collectionNames}
+                    onStartDownload={handleStartDownload}
+                    onShare={() => (shareOpen = true)}
                 />
-            {/if}
+            </div>
 
-            <!-- Exclusion summary -->
-            {#if hasExclusions}
-                <div
-                    class="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground"
-                >
-                    <span>{excludedIds.size} mod{excludedIds.size !== 1 ? 's' : ''} excluded</span>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        class="h-6 text-xs"
-                        onclick={() => {
-                            excludedIds = new Set();
-                            syncUrlExclusions();
-                        }}
-                    >
-                        Restore all
-                    </Button>
+            <!-- Resolution details (consolidated auto-resolved + action required) -->
+            {#if autoResolution.items.length > 0 || activeConflictCount > 0 || userMissingDeps.length > 0}
+                <div bind:this={resolutionDetailsRef}>
+                    <ResolutionDetails
+                        autoResolvedItems={autoResolution.items}
+                        conflicts={userConflicts}
+                        missingDeps={userMissingDeps}
+                        unresolvedRaw={data.unresolved}
+                        excludedIds={effectiveExcludedIds}
+                        {onExclude}
+                        {onRestore}
+                        onDownloadAnyway={handleDownloadAnyway}
+                        excludedCount={effectiveExcludedIds.size}
+                        bind:activeTab={resolutionDetailsTab}
+                    />
                 </div>
             {/if}
 
-            <!-- Collection sections -->
-            {#each filteredCollections as group (group.id)}
-                <CollectionSection
-                    {group}
-                    {warningsByProject}
-                    {conflictProjectIds}
-                    loader={data.context.loader}
-                    {viewMode}
-                    onExclude={toggleExclude}
-                    {excludedIds}
-                />
-            {/each}
-
-            <!-- Dependencies section -->
-            {#if filteredDependencies.length > 0}
-                <DependenciesSection
-                    dependencies={filteredDependencies}
+            <!-- Mod list -->
+            <div bind:this={modListRef}>
+                <ModListSection
+                    projects={visibleUserProjects}
+                    dependencies={visibleDeps}
                     projectTitleMap={data.projectTitleMap}
                     {warningsByProject}
                     {conflictProjectIds}
                     loader={data.context.loader}
-                    {viewMode}
+                    excludedIds={effectiveExcludedIds}
                     onExclude={toggleExclude}
-                    {excludedIds}
+                    collectionNames={collectionNameMap}
+                    showCollectionNames={data.collections.length > 1}
+                    onSelectProject={handleSelectProject}
                 />
-            {/if}
-
-            <!-- No mods resolved at all -->
-            {#if hasNoResolvedMods}
-                <div transition:fade={{ duration: 150 }}>
-                    <Empty.Root>
-                        <Empty.Header>
-                            <Empty.Media>
-                                <PackageXIcon class="size-12 text-muted-foreground" />
-                            </Empty.Media>
-                            <Empty.Title>No compatible mods found</Empty.Title>
-                            <Empty.Description>
-                                None of the mods in these collections have versions compatible with
-                                Minecraft {data.context.gameVersion} on {getLoaderDisplayName(
-                                    data.context.loader
-                                )}.
-                            </Empty.Description>
-                        </Empty.Header>
-                        <Empty.Content>
-                            <Button variant="outline" href="/">
-                                <ArrowLeftIcon class="mr-1.5 size-3.5" />
-                                Try different settings
-                            </Button>
-                        </Empty.Content>
-                    </Empty.Root>
-                </div>
-            {/if}
-
-            <!-- Filter empty state -->
-            {#if isFilterEmpty}
-                <div transition:fade={{ duration: 150 }}>
-                    <Empty.Root>
-                        <Empty.Header>
-                            <Empty.Media>
-                                <SearchXIcon class="size-12 text-muted-foreground" />
-                            </Empty.Media>
-                            <Empty.Title>No mods match your filters</Empty.Title>
-                        </Empty.Header>
-                        <Empty.Content>
-                            <Button
-                                variant="outline"
-                                onclick={() => {
-                                    searchQuery = '';
-                                    sideFilter = 'all';
-                                    statusFilter = 'all';
-                                }}
-                            >
-                                Clear filters
-                            </Button>
-                        </Empty.Content>
-                    </Empty.Root>
-                </div>
-            {/if}
+            </div>
         </div>
+
+        <!-- Detail sheet -->
+        <ModDetailSheet
+            bind:open={sheetOpen}
+            project={selectedProject}
+            warnings={selectedProject
+                ? (warningsByProject.get(selectedProject.projectId) ?? [])
+                : []}
+            isExcluded={selectedProject
+                ? effectiveExcludedIds.has(selectedProject.projectId)
+                : false}
+            loader={data.context.loader}
+            onExclude={toggleExclude}
+            onClose={() => {
+                sheetOpen = false;
+                selectedProject = null;
+            }}
+        />
+
+        <!-- Sticky download bar -->
+        <DownloadBar
+            visible={showDownloadBar}
+            {sideStats}
+            {hasClientMods}
+            {hasServerMods}
+            hasUnresolvedIssues={resolutionState === 'hasIssues'}
+            onStartDownload={handleStartDownload}
+        />
+
+        <!-- Download confirmation -->
+        <DownloadConfirmation
+            bind:open={downloadConfirmOpen}
+            side={pendingDownloadSide}
+            projects={allVisibleProjects}
+            onConfirm={handleConfirmDownload}
+            onClose={() => (downloadConfirmOpen = false)}
+        />
     {/if}
 </div>

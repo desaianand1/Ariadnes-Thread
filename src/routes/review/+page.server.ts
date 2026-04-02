@@ -5,6 +5,7 @@ import { reviewParamsSchema, parseReviewOptions } from '$lib/schemas/collection'
 import { resolveCollection } from '$lib/services/resolution.server';
 import { decimalToHex } from '$lib/utils/colors';
 import { MAX_TOTAL_PROJECTS } from '$lib/config/constants';
+import { getEnvConfig } from '$lib/config/env.server';
 import type { ModrinthCollection, ModrinthProject } from '$lib/api/types';
 import type {
     CollectionGroup,
@@ -242,6 +243,11 @@ export const load: PageServerLoad = async ({ url, platform }) => {
     for (const dep of allDependencies) {
         projectTitleMap[dep.projectId] = dep.projectTitle;
     }
+    for (const u of allUnresolved) {
+        if (u.projectTitle && !projectTitleMap[u.projectId]) {
+            projectTitleMap[u.projectId] = u.projectTitle;
+        }
+    }
 
     // Aggregate stats
     const allResolved = collections.flatMap((g) => g.resolved);
@@ -257,6 +263,8 @@ export const load: PageServerLoad = async ({ url, platform }) => {
             allDependencies.reduce((sum, r) => sum + r.fileSize, 0)
     };
 
+    const envConfig = getEnvConfig();
+
     return {
         collections,
         dependencies: allDependencies,
@@ -270,6 +278,11 @@ export const load: PageServerLoad = async ({ url, platform }) => {
             loader: reviewOptions.loader,
             collectionIds: reviewOptions.collectionIds,
             excludedProjectIds: Array.from(reviewOptions.excludedProjectIds)
-        }
+        },
+        downloadSettings: {
+            concurrentDownloads: reviewOptions.concurrentDownloads,
+            retryCount: reviewOptions.retryCount
+        },
+        emailEnabled: !!envConfig.RESEND_API_KEY
     };
 };
