@@ -17,7 +17,7 @@ GitHub (push/PR)
                               Release workflow
                                      │
                                      ▼
-                          Cloudflare Pages (wrangler)
+                          Cloudflare Workers (wrangler)
                                      │
                                      ▼
                            modrinth.download
@@ -27,7 +27,7 @@ GitHub (push/PR)
 
 | Service              | Purpose                                  |
 | -------------------- | ---------------------------------------- |
-| Cloudflare Pages     | Hosting (edge SSR + static assets)       |
+| Cloudflare Workers   | Hosting (edge SSR + static assets)       |
 | Cloudflare DNS       | DNS management, SSL termination          |
 | Cloudflare Turnstile | Bot protection for email form (required) |
 | Resend               | Transactional email sending (optional)   |
@@ -43,13 +43,15 @@ GitHub (push/PR)
 
 ---
 
-## 1. Cloudflare Pages Setup
+## 1. Cloudflare Workers Setup
 
-### Create the Pages project
+### Create the Workers project
 
-The Pages project is **auto-created** on the first deployment. When `release.yml` runs `wrangler pages deploy --project-name=ariadnes-thread`, wrangler creates the project as a direct-upload Pages project if it doesn't already exist.
+The Workers project is defined by `wrangler.toml` and **auto-created** on the first deployment. When `release.yml` runs `wrangler deploy`, wrangler creates the worker if it doesn't already exist.
 
 No manual project creation is needed — just ensure `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are set as GitHub secrets before the first release.
+
+> **Note:** Variables and secrets cannot be set on a worker that has only static assets. You must deploy the full worker (with its script) at least once before the dashboard will allow setting environment variables. Run a manual deploy first if needed (see [Manual deployment](#manual-deployment-escape-hatch)).
 
 ### Custom domain
 
@@ -89,13 +91,13 @@ The app also sets HSTS headers server-side via `hooks.server.ts` as defense-in-d
 
 After full setup, your DNS zone should contain:
 
-| Type      | Name                    | Content                      | Proxy                           |
-| --------- | ----------------------- | ---------------------------- | ------------------------------- |
-| CNAME     | `modrinth.download`     | `ariadnes-thread.pages.dev`  | Proxied (auto-created by Pages) |
-| CNAME     | `www`                   | `modrinth.download`          | Proxied                         |
-| MX        | `modrinth.download`     | _(Cloudflare Email Routing)_ | —                               |
-| TXT       | `modrinth.download`     | `v=spf1 include:...`         | —                               |
-| TXT/CNAME | _(Resend DKIM records)_ | _(see Resend section)_       | —                               |
+| Type      | Name                    | Content                       | Proxy                             |
+| --------- | ----------------------- | ----------------------------- | --------------------------------- |
+| CNAME     | `modrinth.download`     | `ariadnes-thread.workers.dev` | Proxied (auto-created by Workers) |
+| CNAME     | `www`                   | `modrinth.download`           | Proxied                           |
+| MX        | `modrinth.download`     | _(Cloudflare Email Routing)_  | —                                 |
+| TXT       | `modrinth.download`     | `v=spf1 include:...`          | —                                 |
+| TXT/CNAME | _(Resend DKIM records)_ | _(see Resend section)_        | —                                 |
 
 ---
 
@@ -140,9 +142,15 @@ Required. Protects the email sharing form from automated abuse. The email form w
 2. Domain: `modrinth.download`
 3. Widget type: **Managed**
 4. Copy the **Site Key** (public, embedded in client widget) and **Secret Key** (private, server-side verification)
-5. Set them in Cloudflare production environment variables:
+5. Set them in Cloudflare production environment variables (dashboard or CLI):
     - `TURNSTILE_SECRET_KEY` → **Encrypt** (secret, server-side verification)
     - `PUBLIC_TURNSTILE_SITE_KEY` → **Plain text** (public, client-side widget)
+
+    Via CLI (useful before the first deploy when the dashboard blocks variable creation):
+
+    ```bash
+    wrangler secret put TURNSTILE_SECRET_KEY
+    ```
 
 For local development, Cloudflare test keys are pre-configured in `.env.development` (always pass).
 
@@ -155,13 +163,13 @@ For local development, Cloudflare test keys are pre-configured in `.env.developm
 | Workflow      | Trigger                  | Jobs                                                              |
 | ------------- | ------------------------ | ----------------------------------------------------------------- |
 | `ci.yml`      | Push to main, PRs        | validate-commits, lint, type-check, test, build, semantic-release |
-| `release.yml` | GitHub release published | build, deploy to Cloudflare Pages, upload build artifact          |
+| `release.yml` | GitHub release published | build, deploy to Cloudflare Workers, upload build artifact        |
 
 ### Pipeline flow
 
 1. **Push/PR to main** → `ci.yml` runs all checks
 2. **On main push** → semantic-release analyzes commits and may create a GitHub Release
-3. **Release published** → `release.yml` builds and deploys via `wrangler pages deploy`
+3. **Release published** → `release.yml` builds and deploys via `wrangler deploy`
 
 ### Required GitHub secrets
 
@@ -177,7 +185,7 @@ Go to repo → **Settings → Secrets and variables → Actions → New reposito
 
 1. Cloudflare Dashboard → **My Profile → API Tokens → Create Token**
 2. Use the **"Edit Cloudflare Workers"** template, or create custom:
-    - Permission: `Account → Cloudflare Pages → Edit`
+    - Permission: `Account → Cloudflare Workers Scripts → Edit`
     - Account Resources: your account
 3. Copy the token
 
@@ -278,8 +286,8 @@ The app sets security headers in `src/hooks.server.ts`. No Cloudflare configurat
 
 ### First-time setup
 
-- [ ] Cloudflare Pages project exists (auto-created on first deploy)
-- [ ] Custom domain `modrinth.download` added to Pages project
+- [ ] Cloudflare Workers project exists (auto-created on first deploy)
+- [ ] Custom domain `modrinth.download` added to Workers project
 - [ ] SSL/TLS set to Full (strict), Always HTTPS enabled
 - [ ] Cloudflare API token created and added to GitHub secrets
 - [ ] Cloudflare Account ID added to GitHub secrets
@@ -295,14 +303,14 @@ Releases are automated — push conventional commits to `main`:
 
 1. CI validates the push (lint, types, tests, build)
 2. semantic-release creates a GitHub Release if warranted
-3. `release.yml` deploys to Cloudflare Pages
+3. `release.yml` deploys to Cloudflare Workers
 4. Verify at `https://modrinth.download`
 
 ### Manual deployment (escape hatch)
 
 ```bash
 pnpm run build
-wrangler pages deploy .svelte-kit/cloudflare --project-name=ariadnes-thread
+wrangler deploy
 ```
 
 ---
@@ -317,9 +325,9 @@ wrangler pages deploy .svelte-kit/cloudflare --project-name=ariadnes-thread
 
 ### Deployment fails
 
-- Verify `CLOUDFLARE_API_TOKEN` has `Cloudflare Pages: Edit` permission
+- Verify `CLOUDFLARE_API_TOKEN` has `Cloudflare Workers Scripts: Edit` permission
 - Verify `CLOUDFLARE_ACCOUNT_ID` is correct (dashboard sidebar, not zone ID)
-- Check wrangler version compatibility (`wranglerVersion: '4'` in workflow)
+- Check wrangler version compatibility (wrangler-action@v3 in workflow)
 
 ### semantic-release doesn't create a release
 
@@ -343,6 +351,7 @@ wrangler pages deploy .svelte-kit/cloudflare --project-name=ariadnes-thread
 
 ### Environment variables not applying
 
-- Cloudflare Pages env vars are separate for Production and Preview — set both if needed
+- Cloudflare Workers env vars require the worker script to be deployed first — a static-assets-only worker cannot have variables set via the dashboard
+- If variables/secrets are grayed out, run a manual deploy (`pnpm run build && wrangler deploy`) to initialize the worker script
 - Variables set in `wrangler.toml` under `[env.preview.vars]` only apply to preview deployments
 - Secrets cannot be set in `wrangler.toml` — use the dashboard or `wrangler secret put`
