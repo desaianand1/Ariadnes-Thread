@@ -19,7 +19,7 @@
     },
     "devDependencies": {
         "@better-svelte-email/preview": "2.0.0-beta.2",
-        "@cloudflare/workers-types": "^4.20251128.0",
+        "@cloudflare/workers-types": "^4.20260402.1",
         "@commitlint/cli": "^20.5.0",
         "@commitlint/config-conventional": "^20.5.0",
         "@eslint/compat": "^2.0.3",
@@ -63,7 +63,8 @@
         "vaul-svelte": "1.0.0-next.7",
         "vite": "^8.0.3",
         "vite-plugin-devtools-json": "^1.0.0",
-        "vitest": "^4.1.2"
+        "vitest": "^4.1.2",
+        "wrangler": "^4.79.0"
     },
     "lint-staged": {
         "*.{js,ts,svelte}": [

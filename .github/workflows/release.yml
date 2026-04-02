@@ -34,13 +34,12 @@ jobs:
             - name: Build
               run: pnpm run build
 
-            - name: Deploy to Cloudflare Pages
+            - name: Deploy to Cloudflare Workers
               uses: cloudflare/wrangler-action@v3
               with:
                   apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
                   accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  wranglerVersion: '4'
-                  command: deploy
+                  command: deploy --env=""
 
             - name: Create build artifact
               run: tar -czvf build-${{ github.event.release.tag_name }}.tar.gz .svelte-kit/cloudflare/
@@ -66,4 +65,4 @@ jobs:
                   echo "" >> $GITHUB_STEP_SUMMARY
                   echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
                   echo "- Build archive: build-${{ github.event.release.tag_name }}.tar.gz" >> $GITHUB_STEP_SUMMARY
-                  echo "- Cloudflare Pages: Deployed" >> $GITHUB_STEP_SUMMARY
+                  echo "- Cloudflare Workers: Deployed" >> $GITHUB_STEP_SUMMARY
