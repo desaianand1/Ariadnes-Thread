@@ -23,10 +23,12 @@
         totalSize: number;
     }
 
+    let sideProjects = $derived(projects.filter((p) => p.side === side || p.side === 'both'));
+
     let folderTree = $derived.by(() => {
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local computation, not reactive state
         const folders = new Map<string, FolderEntry>();
-        for (const p of projects) {
+        for (const p of sideProjects) {
             const folder = `/${p.folder}`;
             const existing = folders.get(folder);
             if (existing) {
@@ -91,6 +93,7 @@
     </div>
 
     {#snippet footer()}
+        <Button variant="outline" onclick={onClose}>Cancel</Button>
         <Button class="bg-emerald-600 text-white hover:bg-emerald-700" onclick={onConfirm}>
             <DownloadIcon class="mr-1.5 size-4" />
             Start Download
