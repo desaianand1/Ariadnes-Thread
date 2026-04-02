@@ -9,6 +9,12 @@ import { MIN_FORM_SUBMIT_TIME_MS, EMAIL_RECIPIENT_LIMITS } from '$lib/config/con
 import { siteConfig } from '$lib/config/site';
 
 export const POST: RequestHandler = async ({ request }) => {
+    const config = getEnvConfig();
+
+    if (!config.ENABLE_EMAIL_SHARING) {
+        return json({ error: 'Email sharing is currently disabled' }, { status: 503 });
+    }
+
     const contentType = request.headers.get('content-type');
     if (!contentType?.includes('application/json')) {
         return json({ error: 'Content-Type must be application/json' }, { status: 415 });
@@ -35,8 +41,6 @@ export const POST: RequestHandler = async ({ request }) => {
     if (Date.now() - data.loadedAt < MIN_FORM_SUBMIT_TIME_MS) {
         return json({ success: true });
     }
-
-    const config = getEnvConfig();
 
     // Turnstile verification
     const remoteIp =

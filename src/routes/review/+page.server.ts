@@ -284,7 +284,7 @@ export const load: PageServerLoad = async ({ url, platform }) => {
             concurrentDownloads: reviewOptions.concurrentDownloads,
             retryCount: reviewOptions.retryCount
         },
-        emailEnabled: !!envConfig.RESEND_API_KEY,
+        emailEnabled: envConfig.ENABLE_EMAIL_SHARING && !!envConfig.RESEND_API_KEY,
         turnstileSiteKey: publicEnv.PUBLIC_TURNSTILE_SITE_KEY ?? ''
     };
 };
