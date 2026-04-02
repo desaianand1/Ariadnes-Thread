@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { parseCollectionId, parseReviewOptions, type ReviewParams } from './collection';
+import {
+    downloadFormSchema,
+    parseCollectionId,
+    parseReviewOptions,
+    type ReviewParams
+} from './collection';
 
 describe('parseCollectionId', () => {
     it('extracts ID from a full https URL', () => {
@@ -59,6 +64,14 @@ describe('parseCollectionId', () => {
     it('returns null for a modrinth URL with wrong path', () => {
         expect(parseCollectionId('https://modrinth.com/mod/Abc12345')).toBe(null);
     });
+
+    it('extracts ID from URL with port number', () => {
+        expect(parseCollectionId('https://modrinth.com:443/collection/Abc12345')).toBe('Abc12345');
+    });
+
+    it('extracts ID from http:// URL', () => {
+        expect(parseCollectionId('http://modrinth.com/collection/Abc12345')).toBe('Abc12345');
+    });
 });
 
 describe('parseReviewOptions', () => {
@@ -94,7 +107,7 @@ describe('parseReviewOptions', () => {
     });
 
     it('sets flags correctly when all are present', () => {
-        const result = parseReviewOptions(makeParams({ opts: 'dofa' }));
+        const result = parseReviewOptions(makeParams({ opts: 'd,o,f,a' }));
         expect(result.includeDependencies).toBe(true);
         expect(result.includeOptionalDeps).toBe(true);
         expect(result.enableCrossLoaderFallback).toBe(true);
@@ -126,5 +139,110 @@ describe('parseReviewOptions', () => {
     it('filters empty segments from comma-separated values', () => {
         const result = parseReviewOptions(makeParams({ c: ',col1,,col2,' }));
         expect(result.collectionIds).toEqual(['col1', 'col2']);
+    });
+
+    it('parses concurrent download and retry settings when provided', () => {
+        const result = parseReviewOptions(makeParams({ cd: 6, rc: 5 } as Partial<ReviewParams>));
+        expect(result.concurrentDownloads).toBe(6);
+        expect(result.retryCount).toBe(5);
+    });
+
+    it('leaves download settings undefined when not provided', () => {
+        const result = parseReviewOptions(makeParams());
+        expect(result.concurrentDownloads).toBeUndefined();
+        expect(result.retryCount).toBeUndefined();
+    });
+});
+
+describe('downloadFormSchema advanced fields', () => {
+    function validForm(overrides: Record<string, unknown> = {}) {
+        return {
+            collections: ['col1'],
+            modLoader: 'fabric',
+            minecraftVersion: '1.20.1',
+            ...overrides
+        };
+    }
+
+    it('defaults includeDependencies to true', () => {
+        const result = downloadFormSchema.safeParse(validForm());
+        expect(result.success).toBe(true);
+        if (result.success) {
+            expect(result.data.includeDependencies).toBe(true);
+        }
+    });
+
+    it('defaults includeOptionalDeps to false', () => {
+        const result = downloadFormSchema.safeParse(validForm());
+        expect(result.success).toBe(true);
+        if (result.success) {
+            expect(result.data.includeOptionalDeps).toBe(false);
+        }
+    });
+
+    it('defaults allowAlphaBeta to true', () => {
+        const result = downloadFormSchema.safeParse(validForm());
+        expect(result.success).toBe(true);
+        if (result.success) {
+            expect(result.data.allowAlphaBeta).toBe(true);
+        }
+    });
+
+    it('defaults enableCrossLoaderFallback to true', () => {
+        const result = downloadFormSchema.safeParse(validForm());
+        expect(result.success).toBe(true);
+        if (result.success) {
+            expect(result.data.enableCrossLoaderFallback).toBe(true);
+        }
+    });
+
+    it('accepts explicit overrides of all boolean fields', () => {
+        const result = downloadFormSchema.safeParse(
+            validForm({
+                includeDependencies: false,
+                includeOptionalDeps: true,
+                allowAlphaBeta: true,
+                enableCrossLoaderFallback: false
+            })
+        );
+        expect(result.success).toBe(true);
+        if (result.success) {
+            expect(result.data.includeDependencies).toBe(false);
+            expect(result.data.includeOptionalDeps).toBe(true);
+            expect(result.data.allowAlphaBeta).toBe(true);
+            expect(result.data.enableCrossLoaderFallback).toBe(false);
+        }
+    });
+
+    it('rejects empty collections array', () => {
+        const result = downloadFormSchema.safeParse(validForm({ collections: [] }));
+        expect(result.success).toBe(false);
+    });
+
+    it('rejects missing modLoader', () => {
+        const result = downloadFormSchema.safeParse(validForm({ modLoader: '' }));
+        expect(result.success).toBe(false);
+    });
+
+    it('rejects missing minecraftVersion', () => {
+        const result = downloadFormSchema.safeParse(validForm({ minecraftVersion: '' }));
+        expect(result.success).toBe(false);
+    });
+
+    it('round-trips opts flags through parseReviewOptions', () => {
+        const opts = 'd,o,a,f';
+        const params: ReviewParams = {
+            c: 'col1',
+            v: '1.20.1',
+            l: 'fabric',
+            opts,
+            x: '',
+            add: ''
+        };
+        const result = parseReviewOptions(params);
+        expect(result.includeDependencies).toBe(true);
+        expect(result.includeOptionalDeps).toBe(true);
+        expect(result.allowAlphaBeta).toBe(true);
+        expect(result.enableCrossLoaderFallback).toBe(true);
     });
 });

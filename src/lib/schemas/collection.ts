@@ -3,7 +3,14 @@
  */
 
 import { z } from 'zod';
-import { COLLECTION_ID_PATTERN, MAX_COLLECTIONS } from '$lib/config/constants';
+import {
+    COLLECTION_ID_PATTERN,
+    MAX_COLLECTIONS,
+    MIN_CONCURRENT_DOWNLOADS,
+    MAX_CONCURRENT_DOWNLOADS_LIMIT,
+    MIN_RETRY_COUNT,
+    MAX_RETRY_COUNT_LIMIT
+} from '$lib/config/constants';
 
 /**
  * Validates a Modrinth collection URL or ID
@@ -59,7 +66,13 @@ export const downloadFormSchema = z.object({
 
     minecraftVersion: z.string().min(1, 'Minecraft version is required'),
 
-    includeDependencies: z.boolean().default(true)
+    includeDependencies: z.boolean().default(true),
+
+    includeOptionalDeps: z.boolean().default(false),
+
+    allowAlphaBeta: z.boolean().default(true),
+
+    enableCrossLoaderFallback: z.boolean().default(true)
 });
 
 export type DownloadFormSchema = typeof downloadFormSchema;
@@ -82,13 +95,20 @@ export type DownloadFormData = z.infer<typeof downloadFormSchema>;
 export const reviewParamsSchema = z.object({
     c: z.string().min(1, 'At least one collection ID is required'),
     v: z.string().min(1, 'Minecraft version is required (e.g., 1.20.1)'),
-    l: z.string().min(1, 'Loader is required (e.g., fabric, forge, quilt)'),
+    l: z.string().min(1, 'Mod loader is required (e.g., fabric, forge, quilt)'),
     opts: z
         .string()
         .default('')
         .transform((val) => val.toLowerCase()),
     x: z.string().optional().default(''),
-    add: z.string().optional().default('')
+    add: z.string().optional().default(''),
+    cd: z.coerce
+        .number()
+        .int()
+        .min(MIN_CONCURRENT_DOWNLOADS)
+        .max(MAX_CONCURRENT_DOWNLOADS_LIMIT)
+        .optional(),
+    rc: z.coerce.number().int().min(MIN_RETRY_COUNT).max(MAX_RETRY_COUNT_LIMIT).optional()
 });
 
 export type ReviewParams = z.infer<typeof reviewParamsSchema>;
@@ -106,18 +126,22 @@ export function parseReviewOptions(params: ReviewParams): {
     allowAlphaBeta: boolean;
     excludedProjectIds: Set<string>;
     addedProjectIds: string[];
+    concurrentDownloads?: number;
+    retryCount?: number;
 } {
-    const flags = params.opts;
+    const flagSet = new Set(params.opts.split(',').filter(Boolean));
 
     return {
         collectionIds: params.c.split(',').filter(Boolean),
         gameVersion: params.v,
         loader: params.l,
-        includeDependencies: flags.includes('d'),
-        includeOptionalDeps: flags.includes('o'),
-        enableCrossLoaderFallback: flags.includes('f'),
-        allowAlphaBeta: flags.includes('a'),
+        includeDependencies: flagSet.has('d'),
+        includeOptionalDeps: flagSet.has('o'),
+        enableCrossLoaderFallback: flagSet.has('f'),
+        allowAlphaBeta: flagSet.has('a'),
         excludedProjectIds: new Set(params.x.split(',').filter(Boolean)),
-        addedProjectIds: params.add.split(',').filter(Boolean)
+        addedProjectIds: params.add.split(',').filter(Boolean),
+        concurrentDownloads: params.cd,
+        retryCount: params.rc
     };
 }
