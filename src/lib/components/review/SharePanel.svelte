@@ -4,6 +4,7 @@
     import { Input } from '$lib/components/ui/input';
     import { Textarea } from '$lib/components/ui/textarea';
     import { Label } from '$lib/components/ui/label';
+    import { Turnstile } from '$lib/components/ui/turnstile';
     import { toast } from 'svelte-sonner';
     import CopyIcon from '@lucide/svelte/icons/copy';
     import CheckIcon from '@lucide/svelte/icons/check';
@@ -13,9 +14,16 @@
         pageUrl: string;
         collectionNames: string;
         emailEnabled: boolean;
+        turnstileSiteKey: string;
     }
 
-    let { open = $bindable(), pageUrl, collectionNames, emailEnabled }: Props = $props();
+    let {
+        open = $bindable(),
+        pageUrl,
+        collectionNames,
+        emailEnabled,
+        turnstileSiteKey
+    }: Props = $props();
 
     let copied = $state(false);
     let curatorName = $state('');
@@ -23,7 +31,11 @@
     let message = $state('');
     let honeypot = $state('');
     let sending = $state(false);
+    let turnstileToken = $state('');
+    let turnstileRef: ReturnType<typeof Turnstile> | undefined = $state(undefined);
     const loadedAt = Date.now();
+
+    const turnstileReady = $derived(turnstileToken.length > 0);
 
     async function copyLink() {
         try {
@@ -38,7 +50,7 @@
 
     async function sendEmail(e: SubmitEvent) {
         e.preventDefault();
-        if (sending) return;
+        if (sending || !turnstileReady) return;
 
         sending = true;
         try {
@@ -52,7 +64,8 @@
                     shareUrl: pageUrl,
                     collectionNames,
                     website: honeypot,
-                    loadedAt
+                    loadedAt,
+                    turnstileToken
                 })
             });
 
@@ -61,8 +74,14 @@
                 curatorName = '';
                 recipientEmail = '';
                 message = '';
+                turnstileToken = '';
+                turnstileRef?.reset();
             } else if (res.status === 429) {
                 toast.error('Too many emails sent. Please try again later.');
+            } else if (res.status === 403) {
+                toast.error('Verification failed. Please try again.');
+                turnstileToken = '';
+                turnstileRef?.reset();
             } else if (res.status === 503) {
                 toast.error('Email service is currently unavailable.');
             } else {
@@ -142,7 +161,17 @@
                     </p>
                 </div>
 
-                <Button type="submit" class="w-full" disabled={sending}>
+                {#if turnstileSiteKey}
+                    <Turnstile
+                        bind:this={turnstileRef}
+                        siteKey={turnstileSiteKey}
+                        onVerify={(token) => (turnstileToken = token)}
+                        onExpire={() => (turnstileToken = '')}
+                        onError={() => (turnstileToken = '')}
+                    />
+                {/if}
+
+                <Button type="submit" class="w-full" disabled={sending || !turnstileReady}>
                     <SendIcon class="mr-1.5 size-3.5" />
                     {sending ? 'Sending...' : 'Send Email'}
                 </Button>

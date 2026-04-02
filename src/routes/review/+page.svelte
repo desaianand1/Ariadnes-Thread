@@ -226,7 +226,7 @@
         a.href = url;
         a.download = filename;
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     function handleRetryDownload() {
@@ -247,6 +247,10 @@
 
     function handleDownloadAnyway() {
         downloadOverride = true;
+        // Scroll hero into view so the user sees the now-green download buttons
+        requestAnimationFrame(() => {
+            heroRef?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
     }
 
     function handleSelectProject(project: ResolvedProject) {
@@ -294,6 +298,7 @@
         pageUrl={$page.url.toString()}
         {collectionNames}
         emailEnabled={data.emailEnabled}
+        turnstileSiteKey={data.turnstileSiteKey}
     />
 
     {#if isDownloading}

@@ -12,11 +12,11 @@ directory = ".svelte-kit/cloudflare"
 
 # Secrets (set via Cloudflare dashboard or `wrangler secret put`):
 # - RESEND_API_KEY: Email sending via Resend (optional)
-# - TURNSTILE_SECRET_KEY: Cloudflare Turnstile server verification (optional)
+# - TURNSTILE_SECRET_KEY: Cloudflare Turnstile server verification (required)
 #
 # Public env vars (safe to commit):
-# - PUBLIC_TURNSTILE_SITE_KEY: Turnstile widget site key
+# - PUBLIC_TURNSTILE_SITE_KEY: Turnstile widget site key (required)
 
 [env.preview.vars]
 MODRINTH_USER_AGENT = "AriadnesThread/preview"
-# PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"  # Turnstile test key for preview
+PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"

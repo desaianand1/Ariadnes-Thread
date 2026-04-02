@@ -10,6 +10,7 @@ function validInput(overrides: Record<string, unknown> = {}) {
         collectionNames: 'Essential Mods',
         website: '',
         loadedAt: Date.now() - 10_000,
+        turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX',
         ...overrides
     };
 }
@@ -138,6 +139,23 @@ describe('shareEmailSchema', () => {
         const result = shareEmailSchema.safeParse(
             validInput({ shareUrl: 'https://modrinth.download:8080/review' })
         );
+        expect(result.success).toBe(false);
+    });
+
+    it('rejects missing turnstileToken', () => {
+        const input = validInput();
+        delete (input as Record<string, unknown>).turnstileToken;
+        const result = shareEmailSchema.safeParse(input);
+        expect(result.success).toBe(false);
+    });
+
+    it('rejects empty turnstileToken', () => {
+        const result = shareEmailSchema.safeParse(validInput({ turnstileToken: '' }));
+        expect(result.success).toBe(false);
+    });
+
+    it('rejects turnstileToken over 2048 chars', () => {
+        const result = shareEmailSchema.safeParse(validInput({ turnstileToken: 'x'.repeat(2049) }));
         expect(result.success).toBe(false);
     });
 

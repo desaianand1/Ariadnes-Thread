@@ -6,6 +6,7 @@ import { resolveCollection } from '$lib/services/resolution.server';
 import { decimalToHex } from '$lib/utils/colors';
 import { MAX_TOTAL_PROJECTS } from '$lib/config/constants';
 import { getEnvConfig } from '$lib/config/env.server';
+import { env as publicEnv } from '$env/dynamic/public';
 import type { ModrinthCollection, ModrinthProject } from '$lib/api/types';
 import type {
     CollectionGroup,
@@ -283,6 +284,7 @@ export const load: PageServerLoad = async ({ url, platform }) => {
             concurrentDownloads: reviewOptions.concurrentDownloads,
             retryCount: reviewOptions.retryCount
         },
-        emailEnabled: !!envConfig.RESEND_API_KEY
+        emailEnabled: !!envConfig.RESEND_API_KEY,
+        turnstileSiteKey: publicEnv.PUBLIC_TURNSTILE_SITE_KEY ?? ''
     };
 };

@@ -4,6 +4,7 @@ import { shareEmailSchema } from '$lib/schemas/share';
 import { sendShareEmail } from '$lib/server/email/resend';
 import { getEnvConfig } from '$lib/config/env.server';
 import { checkRecipientRateLimit } from '$lib/server/rate-limit';
+import { verifyTurnstileToken } from '$lib/server/turnstile';
 import { MIN_FORM_SUBMIT_TIME_MS, EMAIL_RECIPIENT_LIMITS } from '$lib/config/constants';
 import { siteConfig } from '$lib/config/site';
 
@@ -35,14 +36,30 @@ export const POST: RequestHandler = async ({ request }) => {
         return json({ success: true });
     }
 
+    const config = getEnvConfig();
+
+    // Turnstile verification
+    const remoteIp =
+        request.headers.get('CF-Connecting-IP') ??
+        request.headers.get('X-Forwarded-For') ??
+        undefined;
+
+    const turnstileResult = await verifyTurnstileToken(
+        config.TURNSTILE_SECRET_KEY,
+        data.turnstileToken,
+        remoteIp
+    );
+
+    if (!turnstileResult.success) {
+        return json({ error: 'Bot verification failed' }, { status: 403 });
+    }
+
     // Per-recipient rate limit
     const recipientCheck = checkRecipientRateLimit(data.recipientEmail, EMAIL_RECIPIENT_LIMITS);
     if (!recipientCheck.allowed) {
         return json({ error: 'Too many emails to this recipient' }, { status: 429 });
     }
 
-    // Check API key availability
-    const config = getEnvConfig();
     if (!config.RESEND_API_KEY) {
         return json({ error: 'Email service unavailable' }, { status: 503 });
     }

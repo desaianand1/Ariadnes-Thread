@@ -13,7 +13,8 @@ export const shareEmailSchema = z.object({
         }),
     collectionNames: z.string().min(1).max(500),
     website: z.string().max(0).optional(),
-    loadedAt: z.number()
+    loadedAt: z.number(),
+    turnstileToken: z.string().min(1).max(2048)
 });
 
 export type ShareEmailData = z.infer<typeof shareEmailSchema>;
