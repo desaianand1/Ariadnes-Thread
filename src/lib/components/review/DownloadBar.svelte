@@ -58,7 +58,9 @@
                                         <span class="flex items-center gap-1.5">
                                             <DownloadIcon class="size-3.5" />
                                             <MonitorIcon class="size-3.5" />
-                                            Download Mods
+                                            {hasServerMods
+                                                ? 'Download Client Mods'
+                                                : 'Download Mods'}
                                         </span>
                                         <span class="text-[10px] font-normal opacity-70">
                                             For your .minecraft · {sideStats.client.count} mods · {formatBytes(

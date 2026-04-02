@@ -72,17 +72,17 @@
                     {/if}
                 </div>
 
-                <div class="flex flex-wrap gap-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     {#if hasClientMods}
                         <div class="flex flex-col items-start">
                             <Button
                                 size="lg"
-                                class="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                                class="w-full bg-emerald-600 text-white hover:bg-emerald-700 sm:w-auto dark:bg-emerald-600 dark:hover:bg-emerald-700"
                                 onclick={() => onStartDownload('client')}
                             >
                                 <DownloadIcon class="mr-1.5 size-4" />
                                 <MonitorIcon class="mr-1 size-4" />
-                                Download Mods
+                                {hasServerMods ? 'Download Client Mods' : 'Download Mods'}
                             </Button>
                             <span
                                 class="mt-1 pl-1 text-xs text-emerald-600/70 dark:text-emerald-400/70"
@@ -98,7 +98,7 @@
                             <Button
                                 size="lg"
                                 variant="outline"
-                                class="border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                                class="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-100 sm:w-auto dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
                                 onclick={() => onStartDownload('server')}
                             >
                                 <DownloadIcon class="mr-1.5 size-4" />
@@ -156,17 +156,17 @@
                     {/if}
                 </div>
 
-                <div class="flex flex-wrap gap-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     {#if hasClientMods}
                         <div class="flex flex-col items-start">
                             <Button
                                 variant="outline"
-                                class="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                                class="w-full border-amber-300 text-amber-700 hover:bg-amber-50 sm:w-auto dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
                                 onclick={() => onStartDownload('client')}
                             >
                                 <DownloadIcon class="mr-1.5 size-4" />
                                 <MonitorIcon class="mr-1 size-4" />
-                                Download Mods
+                                {hasServerMods ? 'Download Client Mods' : 'Download Mods'}
                             </Button>
                             <span
                                 class="mt-1 pl-1 text-xs text-amber-600/70 dark:text-amber-400/70"
@@ -181,7 +181,7 @@
                         <div class="flex flex-col items-start">
                             <Button
                                 variant="outline"
-                                class="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                                class="w-full border-amber-300 text-amber-700 hover:bg-amber-50 sm:w-auto dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
                                 onclick={() => onStartDownload('server')}
                             >
                                 <DownloadIcon class="mr-1.5 size-4" />
