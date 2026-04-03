@@ -100,11 +100,14 @@
 
     /**
      * Resolves any CSS color (including variables, Tailwind tokens,
-     * and hsla(var(...), alpha) patterns) to an { r, g, b, a } object.
+     * oklch, etc.) to an { r, g, b, a } object.
      *
-     * Uses a hidden DOM element with `background-color` which preserves
-     * alpha in the computed value (unlike `color` which can strip it).
+     * DOM element resolves CSS var() references, then canvas fillStyle
+     * normalizes any color space to a parseable #rrggbb or rgba() string.
      */
+    const scratchCtx =
+        typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null;
+
     function resolveToRgba(cssColor: string, container: HTMLElement): Rgba {
         const el = document.createElement('span');
         el.style.display = 'none';
@@ -112,11 +115,27 @@
         container.appendChild(el);
         const computed = getComputedStyle(el).backgroundColor;
         el.remove();
-        const m = computed.match(
-            /rgba?\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\s*\)/
-        );
-        if (!m) return { r: 0, g: 0, b: 0, a: 1 };
-        return { r: +m[1], g: +m[2], b: +m[3], a: m[4] !== undefined ? +m[4] : 1 };
+
+        if (!scratchCtx) return { r: 0, g: 0, b: 0, a: 1 };
+
+        scratchCtx.fillStyle = '#000';
+        scratchCtx.fillStyle = computed;
+        const norm = scratchCtx.fillStyle;
+
+        // fillStyle returns "#rrggbb" for opaque or "rgba(r, g, b, a)" with alpha
+        if (norm.startsWith('#')) {
+            return {
+                r: parseInt(norm.slice(1, 3), 16),
+                g: parseInt(norm.slice(3, 5), 16),
+                b: parseInt(norm.slice(5, 7), 16),
+                a: 1
+            };
+        }
+        const m = norm.match(/rgba?\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\s*\)/);
+        if (m) {
+            return { r: +m[1], g: +m[2], b: +m[3], a: m[4] !== undefined ? +m[4] : 1 };
+        }
+        return { r: 0, g: 0, b: 0, a: 1 };
     }
 
     // ── Throttle utility ────────────────────────────────────────────
