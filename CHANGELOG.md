@@ -1,3 +1,23 @@
+# [1.20.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.19.0...v1.20.0) (2026-04-03)
+
+### Bug Fixes
+
+- **a11y:** improve mobile responsive layout and touch targets ([da94c8f](https://github.com/desaianand1/Ariadnes-Thread/commit/da94c8f65a99fcb9c5eae49a599fd96e5f876033))
+- **effects:** normalize oklch colors via canvas in DotGrid ([9f7d490](https://github.com/desaianand1/Ariadnes-Thread/commit/9f7d490206597018cb492c394ffb83a947111f6b)), closes [#rrggbb](https://github.com/desaianand1/Ariadnes-Thread/issues/rrggbb)
+- **review:** clear timeout to prevent unhandled rejection crash ([59b4bf0](https://github.com/desaianand1/Ariadnes-Thread/commit/59b4bf02ef5ffd7889832d0237c4a88a3950dc0c))
+
+### Features
+
+- **downloads:** improve download flow for server AND client side mod zipping, sharing etc ([bb21e8f](https://github.com/desaianand1/Ariadnes-Thread/commit/bb21e8f7a214237b8ce5891b7ce05638bc85cc1c))
+- **review:** add mod status derivation, filtering, and enriched metadata ([37386de](https://github.com/desaianand1/Ariadnes-Thread/commit/37386deee1d9e5cb9344fbf8616f55ee746bd27e))
+- **review:** graceful error handling with empty response fallback ([8533c54](https://github.com/desaianand1/Ariadnes-Thread/commit/8533c5480d44b138841f7908ca185aa46fe919ca))
+- **seo:** add favicon variants and update icon config ([93df55a](https://github.com/desaianand1/Ariadnes-Thread/commit/93df55ab1c1d155a61751fab73243aac64980162))
+- **seo:** add JSON-LD WebApplication structured data on home page ([e931077](https://github.com/desaianand1/Ariadnes-Thread/commit/e9310774e03460eefcca00029a7068535ea76971))
+- **seo:** harden MetaTags with twitter image, keywords, and author ([785e4d8](https://github.com/desaianand1/Ariadnes-Thread/commit/785e4d8d63532dec6757e85679db83502b1294ae))
+- **share:** add ENABLE_EMAIL_SHARING env feature flag ([741aab1](https://github.com/desaianand1/Ariadnes-Thread/commit/741aab1327860890dabcc2f88fbb163cac7a8162))
+- **share:** add Web Share API, QR code, and Discord copy to SharePanel ([42c2a9e](https://github.com/desaianand1/Ariadnes-Thread/commit/42c2a9e10082fd38669b1c1517a3c02f6fda453c))
+- **ui:** add chart shadcn-svelte components and review error page ([4048f27](https://github.com/desaianand1/Ariadnes-Thread/commit/4048f27b456c1418496b58fa33868d20e5fe4ae2))
+
 # [1.19.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.18.3...v1.19.0) (2026-04-02)
 
 ### Bug Fixes
