@@ -16,7 +16,10 @@ import {
     getCollectionProjectIds,
     countByProjectType,
     buildWarningsMap,
-    getConflictProjectIds
+    getConflictProjectIds,
+    deriveModStatus,
+    matchesModFilters,
+    type ModFilterCriteria
 } from './review-resolution';
 
 function makeProject(overrides: Partial<ResolvedProject> = {}): ResolvedProject {
@@ -71,7 +74,7 @@ describe('computeAutoResolution', () => {
         expect(result.items).toHaveLength(1);
         expect(result.items[0].type).toBe('fallback');
         expect(result.items[0].projectId).toBe('p1');
-        expect(result.items[0].message).toContain('fabric');
+        expect(result.items[0].message).toContain('Fabric');
     });
 
     it('detects beta/alpha version resolutions', () => {
@@ -427,5 +430,142 @@ describe('buildWarningsMap edge cases', () => {
 
         const map = buildWarningsMap(warnings);
         expect(map.get('p1')).toHaveLength(3);
+    });
+});
+
+describe('deriveModStatus', () => {
+    it('returns conflict status when isConflict is true', () => {
+        const result = deriveModStatus(true, []);
+
+        expect(result.status).toBe('conflict');
+        expect(result.statusMessage).toBe('Incompatible');
+        expect(result.borderClass).toContain('border-l-red-400');
+    });
+
+    it('returns warning status with first warning message', () => {
+        const warnings = [
+            { type: 'fallback-used' as const, projectId: 'p1', message: 'Using fallback' },
+            { type: 'alpha-beta-version' as const, projectId: 'p1', message: 'Beta version' }
+        ];
+
+        const result = deriveModStatus(false, warnings);
+
+        expect(result.status).toBe('warning');
+        expect(result.statusMessage).toBe('Using fallback');
+        expect(result.borderClass).toContain('border-l-yellow-400');
+    });
+
+    it('returns compatible status when no issues', () => {
+        const result = deriveModStatus(false, []);
+
+        expect(result.status).toBe('compatible');
+        expect(result.statusMessage).toBeUndefined();
+        expect(result.borderClass).toBe('');
+    });
+
+    it('prioritizes conflict over warnings', () => {
+        const warnings = [
+            { type: 'fallback-used' as const, projectId: 'p1', message: 'Using fallback' }
+        ];
+
+        const result = deriveModStatus(true, warnings);
+
+        expect(result.status).toBe('conflict');
+    });
+});
+
+describe('matchesModFilters', () => {
+    const baseCriteria: ModFilterCriteria = {
+        searchQuery: '',
+        typeFilter: 'all',
+        sideFilter: 'all',
+        issuesOnly: false,
+        warningsByProject: new Map(),
+        conflictProjectIds: new Set()
+    };
+
+    it('matches all projects with default criteria', () => {
+        const project = makeProject();
+        expect(matchesModFilters(project, baseCriteria)).toBe(true);
+    });
+
+    it('filters by search query (case insensitive)', () => {
+        const project = makeProject({ projectTitle: 'Sodium' });
+
+        expect(matchesModFilters(project, { ...baseCriteria, searchQuery: 'sod' })).toBe(true);
+        expect(matchesModFilters(project, { ...baseCriteria, searchQuery: 'SOD' })).toBe(true);
+        expect(matchesModFilters(project, { ...baseCriteria, searchQuery: 'lithium' })).toBe(false);
+    });
+
+    it('filters by project type', () => {
+        const mod = makeProject({ projectType: 'mod' });
+        const shader = makeProject({ projectType: 'shader' });
+
+        expect(matchesModFilters(mod, { ...baseCriteria, typeFilter: 'mod' })).toBe(true);
+        expect(matchesModFilters(shader, { ...baseCriteria, typeFilter: 'mod' })).toBe(false);
+    });
+
+    it('filters by side', () => {
+        const clientMod = makeProject({ side: 'client' });
+        const serverMod = makeProject({ side: 'server' });
+
+        expect(matchesModFilters(clientMod, { ...baseCriteria, sideFilter: 'client' })).toBe(true);
+        expect(matchesModFilters(serverMod, { ...baseCriteria, sideFilter: 'client' })).toBe(false);
+    });
+
+    it('filters to issues only — warnings', () => {
+        const project = makeProject({ projectId: 'p1' });
+        const warningsMap = new Map([
+            ['p1', [{ type: 'fallback-used' as const, projectId: 'p1', message: 'Fallback' }]]
+        ]);
+
+        expect(
+            matchesModFilters(project, {
+                ...baseCriteria,
+                issuesOnly: true,
+                warningsByProject: warningsMap
+            })
+        ).toBe(true);
+    });
+
+    it('filters to issues only — conflicts', () => {
+        const project = makeProject({ projectId: 'p1' });
+        const conflictIds = new Set(['p1']);
+
+        expect(
+            matchesModFilters(project, {
+                ...baseCriteria,
+                issuesOnly: true,
+                conflictProjectIds: conflictIds
+            })
+        ).toBe(true);
+    });
+
+    it('excludes non-issue projects when issuesOnly is true', () => {
+        const project = makeProject({ projectId: 'clean' });
+
+        expect(matchesModFilters(project, { ...baseCriteria, issuesOnly: true })).toBe(false);
+    });
+
+    it('applies multiple filters together', () => {
+        const project = makeProject({ projectTitle: 'Sodium', side: 'client', projectType: 'mod' });
+
+        expect(
+            matchesModFilters(project, {
+                ...baseCriteria,
+                searchQuery: 'Sodium',
+                sideFilter: 'client',
+                typeFilter: 'mod'
+            })
+        ).toBe(true);
+
+        expect(
+            matchesModFilters(project, {
+                ...baseCriteria,
+                searchQuery: 'Sodium',
+                sideFilter: 'server',
+                typeFilter: 'mod'
+            })
+        ).toBe(false);
     });
 });

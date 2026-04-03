@@ -3,8 +3,11 @@ import type {
     CollectionGroup,
     ConflictEntry,
     UnresolvedDependency,
-    ResolutionWarning
+    ResolutionWarning,
+    SideClassification
 } from './types';
+import type { VersionType } from '$lib/api/types';
+import { getLoaderDisplayName, LOADER_DISPLAY_NAMES } from '$lib/utils/format';
 
 // --- Types ---
 
@@ -13,6 +16,13 @@ export interface AutoResolvedItem {
     message: string;
     projectTitle: string;
     projectId: string;
+    iconUrl?: string;
+    versionNumber?: string;
+    fileSize?: number;
+    side?: SideClassification;
+    loaders?: string[];
+    versionType?: VersionType;
+    resolvedLoader?: string;
 }
 
 export interface AutoResolutionResult {
@@ -40,6 +50,71 @@ export interface SideStats {
     downloadSize: number;
 }
 
+export type ModStatus = 'compatible' | 'warning' | 'conflict';
+
+export interface DerivedModStatus {
+    status: ModStatus;
+    statusMessage: string | undefined;
+    borderClass: string;
+}
+
+const STATUS_BORDER_CLASSES: Record<ModStatus, string> = {
+    conflict: 'border-l-2 border-l-red-400',
+    warning: 'border-l-2 border-l-yellow-400',
+    compatible: ''
+};
+
+export function deriveModStatus(
+    isConflict: boolean,
+    warnings: ResolutionWarning[]
+): DerivedModStatus {
+    if (isConflict) {
+        return {
+            status: 'conflict',
+            statusMessage: 'Incompatible',
+            borderClass: STATUS_BORDER_CLASSES.conflict
+        };
+    }
+    if (warnings.length > 0) {
+        return {
+            status: 'warning',
+            statusMessage: warnings[0].message,
+            borderClass: STATUS_BORDER_CLASSES.warning
+        };
+    }
+    return {
+        status: 'compatible',
+        statusMessage: undefined,
+        borderClass: STATUS_BORDER_CLASSES.compatible
+    };
+}
+
+export interface ModFilterCriteria {
+    searchQuery: string;
+    typeFilter: string;
+    sideFilter: string;
+    issuesOnly: boolean;
+    warningsByProject: Map<string, ResolutionWarning[]>;
+    conflictProjectIds: Set<string>;
+}
+
+export function matchesModFilters(project: ResolvedProject, criteria: ModFilterCriteria): boolean {
+    if (
+        criteria.searchQuery &&
+        !project.projectTitle.toLowerCase().includes(criteria.searchQuery.toLowerCase())
+    )
+        return false;
+    if (criteria.typeFilter !== 'all' && project.projectType !== criteria.typeFilter) return false;
+    if (criteria.sideFilter !== 'all' && project.side !== criteria.sideFilter) return false;
+    if (criteria.issuesOnly) {
+        const hasIssue =
+            criteria.warningsByProject.has(project.projectId) ||
+            criteria.conflictProjectIds.has(project.projectId);
+        if (!hasIssue) return false;
+    }
+    return true;
+}
+
 // --- Functions ---
 
 /**
@@ -55,13 +130,25 @@ export function computeAutoResolution(
     const items: AutoResolvedItem[] = [];
     const autoExcludedIds = new Set<string>();
 
+    const projectMap = new Map<string, ResolvedProject>();
+    for (const p of projects) {
+        projectMap.set(p.projectId, p);
+    }
+
     for (const p of projects) {
         if (p.usedFallbackLoader && p.resolvedLoader) {
             items.push({
                 type: 'fallback',
-                message: `${p.projectTitle}: resolved via ${p.resolvedLoader} compatibility`,
+                message: `${p.projectTitle}: resolved via ${getLoaderDisplayName(p.resolvedLoader)} compatibility`,
                 projectTitle: p.projectTitle,
-                projectId: p.projectId
+                projectId: p.projectId,
+                iconUrl: p.iconUrl,
+                versionNumber: p.versionNumber,
+                fileSize: p.fileSize,
+                side: p.side,
+                loaders: p.loaders,
+                versionType: p.versionType,
+                resolvedLoader: p.resolvedLoader
             });
         }
     }
@@ -72,7 +159,14 @@ export function computeAutoResolution(
                 type: 'beta-version',
                 message: `${p.projectTitle}: using ${p.versionType} (no stable release available)`,
                 projectTitle: p.projectTitle,
-                projectId: p.projectId
+                projectId: p.projectId,
+                iconUrl: p.iconUrl,
+                versionNumber: p.versionNumber,
+                fileSize: p.fileSize,
+                side: p.side,
+                loaders: p.loaders,
+                versionType: p.versionType,
+                resolvedLoader: p.resolvedLoader
             });
         }
     }
@@ -88,19 +182,33 @@ export function computeAutoResolution(
 
         if (aInCollection && !bInCollection) {
             autoExcludedIds.add(conflict.conflictsWith);
+            const proj = projectMap.get(conflict.conflictsWith);
             items.push({
                 type: 'auto-excluded',
                 message: `${titleMap[conflict.conflictsWith] ?? conflict.conflictsWith}: auto-excluded (incompatible with ${titleMap[conflict.projectId] ?? conflict.projectId})`,
                 projectTitle: titleMap[conflict.conflictsWith] ?? conflict.conflictsWith,
-                projectId: conflict.conflictsWith
+                projectId: conflict.conflictsWith,
+                iconUrl: proj?.iconUrl,
+                versionNumber: proj?.versionNumber,
+                fileSize: proj?.fileSize,
+                side: proj?.side,
+                loaders: proj?.loaders,
+                versionType: proj?.versionType
             });
         } else if (!aInCollection && bInCollection) {
             autoExcludedIds.add(conflict.projectId);
+            const proj = projectMap.get(conflict.projectId);
             items.push({
                 type: 'auto-excluded',
                 message: `${titleMap[conflict.projectId] ?? conflict.projectId}: auto-excluded (incompatible with ${titleMap[conflict.conflictsWith] ?? conflict.conflictsWith})`,
                 projectTitle: titleMap[conflict.projectId] ?? conflict.projectId,
-                projectId: conflict.projectId
+                projectId: conflict.projectId,
+                iconUrl: proj?.iconUrl,
+                versionNumber: proj?.versionNumber,
+                fileSize: proj?.fileSize,
+                side: proj?.side,
+                loaders: proj?.loaders,
+                versionType: proj?.versionType
             });
         }
     }
@@ -163,11 +271,30 @@ export function getMissingDeps(
                 projectId: u.projectId,
                 projectTitle: titleMap[u.projectId] ?? u.projectId,
                 requiredBy: [titleMap[u.requiredBy] ?? u.requiredBy],
-                reason: u.reason
+                reason: formatReasonLoaderNames(u.reason)
             });
         }
     }
     return [...grouped.values()];
+}
+
+// Derive known slugs from the canonical map + common ones that capitalize cleanly
+const KNOWN_LOADER_SLUGS = [
+    ...Object.keys(LOADER_DISPLAY_NAMES),
+    'fabric',
+    'forge',
+    'quilt',
+    'modloader'
+];
+const LOADER_SLUG_PATTERN = new RegExp(
+    `\\b(${[...new Set(KNOWN_LOADER_SLUGS)].join('|')})\\b`,
+    'gi'
+);
+
+function formatReasonLoaderNames(reason: string): string {
+    return reason.replace(LOADER_SLUG_PATTERN, (match) =>
+        getLoaderDisplayName(match.toLowerCase())
+    );
 }
 
 /**
