@@ -7,7 +7,6 @@
     import { SiModrinth } from '@icons-pack/svelte-simple-icons';
     import GradientText from '$lib/components/effects/GradientText.svelte';
     import ShinyText from '$lib/components/effects/ShinyText.svelte';
-    import DotGrid from '$lib/components/effects/DotGrid.svelte';
     import type { PageData } from './$types';
     import { fly } from 'svelte/transition';
     import { browser } from '$app/environment';
@@ -25,23 +24,25 @@
 <MetaTags />
 <StructuredData />
 
-<!-- Animated dot grid background -->
+<!-- Animated dot grid background (lazy-loaded to defer GSAP from critical path) -->
 {#if browser && !prefersReducedMotion}
-    <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <DotGrid
-            dotSize={5}
-            gap={20}
-            baseColor="var(--color-ring)"
-            baseOpacity={isDark ? 0.12 : 0.05}
-            activeColor="var(--color-primary)"
-            activeOpacity={isDark ? 0.2 : 0.12}
-            vignette={0.5}
-            vignetteRadius={50}
-            proximity={100}
-            shockRadius={180}
-            shockStrength={3}
-        />
-    </div>
+    {#await import('$lib/components/effects/DotGrid.svelte') then { default: DotGrid }}
+        <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+            <DotGrid
+                dotSize={5}
+                gap={20}
+                baseColor="var(--color-ring)"
+                baseOpacity={isDark ? 0.12 : 0.05}
+                activeColor="var(--color-primary)"
+                activeOpacity={isDark ? 0.2 : 0.12}
+                vignette={0.5}
+                vignetteRadius={50}
+                proximity={100}
+                shockRadius={180}
+                shockStrength={3}
+            />
+        </div>
+    {/await}
 {/if}
 
 <div class="container mx-auto max-w-3xl p-6 pt-6">
