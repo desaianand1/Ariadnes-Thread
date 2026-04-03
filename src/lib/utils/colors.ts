@@ -3,6 +3,9 @@
  */
 
 import type { KnownLoader } from '$lib/config/constants';
+import MonitorIcon from '@lucide/svelte/icons/monitor';
+import ServerIcon from '@lucide/svelte/icons/server';
+import LayersIcon from '@lucide/svelte/icons/layers';
 
 /**
  * Tailwind text color classes for mod loaders
@@ -125,6 +128,36 @@ export const VERSION_TYPE_BADGE_CLASSES: Record<string, string> = {
     beta: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
     alpha: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
 };
+
+export const STATUS_COLORS = {
+    compatible: 'bg-emerald-500',
+    warning: 'bg-yellow-500',
+    conflict: 'bg-red-500'
+} as const;
+
+export const SEMANTIC_BANNER_COLORS = {
+    warning: {
+        bg: 'bg-amber-50 dark:bg-amber-900/20',
+        text: 'text-amber-700 dark:text-amber-400',
+        border: 'border-amber-200 dark:border-amber-800'
+    },
+    error: {
+        bg: 'bg-red-50 dark:bg-red-900/20',
+        text: 'text-red-700 dark:text-red-400',
+        border: 'border-red-200 dark:border-red-800'
+    },
+    success: {
+        bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+        text: 'text-emerald-700 dark:text-emerald-400',
+        border: 'border-emerald-200 dark:border-emerald-800'
+    }
+} as const;
+
+export const SIDE_ICONS = {
+    client: MonitorIcon,
+    server: ServerIcon,
+    both: LayersIcon
+} as const;
 
 /**
  * Convert Modrinth decimal color to hex string

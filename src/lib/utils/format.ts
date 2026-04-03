@@ -22,7 +22,7 @@ const NUMBER_SUFFIXES = [
     { threshold: 1_000, suffix: 'K' }
 ] as const;
 
-const LOADER_DISPLAY_NAMES: Record<string, string> = {
+export const LOADER_DISPLAY_NAMES: Record<string, string> = {
     neoforge: 'NeoForge',
     bungeecord: 'BungeeCord',
     liteloader: 'LiteLoader',
@@ -42,6 +42,20 @@ const LOADER_DISPLAY_NAMES: Record<string, string> = {
     geyser: 'Geyser',
     datapack: 'Datapack'
 };
+
+export function formatSlugToReadableText(slug: string): string {
+    if (!slug) return slug;
+    return slug
+        .split('-')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+
+export function formatVersionNumber(s: string): string {
+    // append a leading 'v' character for numeric-prefixed versions
+    const firstChar = s.charCodeAt(0);
+    return firstChar < 48 || firstChar > 57 ? s : 'v' + s;
+}
 
 export function capitalize(str: string): string {
     if (!str) return str;
@@ -91,6 +105,10 @@ export function formatEta(seconds: number): string {
     const days = Math.floor(seconds / 86400);
     const hours = Math.ceil((seconds % 86400) / 3600);
     return hours === 0 ? `${days}d` : `${days}d ${hours}h`;
+}
+
+export function getModrinthProjectUrl(projectType: string, projectSlug: string): string {
+    return `https://modrinth.com/${projectType}/${projectSlug}`;
 }
 
 export function formatRelativeTime(isoDate: string): string {
