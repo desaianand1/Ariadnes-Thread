@@ -1,8 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-
-vi.mock('$app/environment', () => ({ browser: false }));
-
-import { sanitizeSvg, sanitizeHtmlContent } from './sanitize';
+import { describe, it, expect } from 'vitest';
+import { sanitizeSvg, sanitizeHtmlContent } from './sanitize.server';
 
 describe('sanitizeSvg', () => {
     describe('preserves legitimate SVG content', () => {

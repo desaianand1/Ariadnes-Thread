@@ -56,7 +56,22 @@
     let projectUrl = $derived(
         project ? getModrinthProjectUrl(project.projectType, project.projectSlug) : '#'
     );
-    let renderedChangelog = $derived(project?.changelog ? renderMarkdown(project.changelog) : '');
+    let renderedChangelog = $state('');
+
+    $effect(() => {
+        const changelog = project?.changelog;
+        if (!changelog) {
+            renderedChangelog = '';
+            return;
+        }
+        let stale = false;
+        renderMarkdown(changelog).then((html) => {
+            if (!stale) renderedChangelog = html;
+        });
+        return () => {
+            stale = true;
+        };
+    });
     let hasChangelog = $derived(!!project?.changelog?.trim());
     let hasGallery = $derived(!!project?.gallery?.length);
 

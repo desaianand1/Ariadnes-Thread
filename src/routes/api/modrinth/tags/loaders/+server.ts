@@ -9,7 +9,7 @@ import { createClientFromPlatform } from '$lib/api/client.server';
 import type { ModrinthLoader } from '$lib/api/types';
 import { getErrorMessage, isModrinthAPIError } from '$lib/api/error';
 import { EXCLUDED_LOADERS } from '$lib/config/constants';
-import { sanitizeSvg } from '$lib/utils/sanitize';
+import { sanitizeSvg } from '$lib/utils/sanitize.server';
 
 export const GET: RequestHandler = async ({ platform }) => {
     const client = createClientFromPlatform(platform);

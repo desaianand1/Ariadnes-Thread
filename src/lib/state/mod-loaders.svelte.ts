@@ -56,10 +56,12 @@ export async function loadModLoaders(): Promise<void> {
                 CACHE_TTL.LOADERS
             );
             if (cached) {
-                state.loaders = cached.map((loader) => ({
-                    ...loader,
-                    icon: sanitizeSvg(loader.icon)
-                }));
+                state.loaders = await Promise.all(
+                    cached.map(async (loader) => ({
+                        ...loader,
+                        icon: await sanitizeSvg(loader.icon)
+                    }))
+                );
                 state.isLoading = false;
                 return;
             }
@@ -74,18 +76,21 @@ export async function loadModLoaders(): Promise<void> {
 
         const { loaders } = (await response.json()) as { loaders: ModrinthLoader[] };
 
-        // Transform to our format — re-sanitize on client for defense-in-depth
-        state.loaders = loaders.map((loader) => {
-            const slug = loader.name.toLowerCase();
+        // Re-sanitize on client for defense-in-depth (DOMPurify catches mutation
+        // XSS edge cases that the server's parser-based sanitizer might miss)
+        state.loaders = await Promise.all(
+            loaders.map(async (loader) => {
+                const slug = loader.name.toLowerCase();
 
-            return {
-                name: getLoaderDisplayName(slug),
-                slug,
-                icon: sanitizeSvg(loader.icon),
-                colorClass: getTextColorByModLoader(slug),
-                category: getLoaderCategory(slug)
-            };
-        });
+                return {
+                    name: getLoaderDisplayName(slug),
+                    slug,
+                    icon: await sanitizeSvg(loader.icon),
+                    colorClass: getTextColorByModLoader(slug),
+                    category: getLoaderCategory(slug)
+                };
+            })
+        );
 
         // Cache in localStorage
         if (isBrowser) {
