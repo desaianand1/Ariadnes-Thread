@@ -58,11 +58,11 @@ export const handle: Handle = async ({ event, resolve }) => {
             "default-src 'self'",
             // Known limitation: unsafe-inline needed for SvelteKit hydration.
             // Could use nonce-based CSP with adapter config for stronger policy.
-            `script-src 'self' 'unsafe-inline'${dev && pathname.startsWith('/email-preview') ? " 'wasm-unsafe-eval'" : ''}`,
+            `script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com${dev && pathname.startsWith('/email-preview') ? " 'wasm-unsafe-eval'" : ''}`,
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' https://cdn.modrinth.com https://cdn-raw.modrinth.com https://www.bisecthosting.com data:",
             "font-src 'self'",
-            "connect-src 'self' https://api.modrinth.com https://cdn.modrinth.com https://cdn-raw.modrinth.com",
+            "connect-src 'self' https://api.modrinth.com https://cdn.modrinth.com https://cdn-raw.modrinth.com https://cloudflareinsights.com",
             "frame-ancestors 'none'",
             "base-uri 'self'",
             "form-action 'self'"
