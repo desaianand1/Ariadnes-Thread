@@ -2,7 +2,7 @@
     import { page } from '$app/state';
     import { Button } from '$lib/components/ui/button';
     import * as Empty from '$lib/components/ui/empty';
-    import HomeIcon from '@lucide/svelte/icons/house';
+    import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
     import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
     import AlertCircleIcon from '@lucide/svelte/icons/circle-alert';
     import SearchXIcon from '@lucide/svelte/icons/search-x';
@@ -48,7 +48,7 @@
                     </Button>
                 {/if}
                 <Button href="/">
-                    <HomeIcon class="mr-2 size-4" />
+                    <ArrowLeftIcon class="mr-2 size-4" />
                     Back to home
                 </Button>
             </div>

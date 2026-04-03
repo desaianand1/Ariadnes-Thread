@@ -12,11 +12,14 @@
     import { fly } from 'svelte/transition';
     import { browser } from '$app/environment';
     import { prefersReducedMotion, safeTransition } from '$lib/utils/motion';
+    import { mode } from 'mode-watcher';
     import LinkIcon from '@lucide/svelte/icons/link';
     import SettingsIcon from '@lucide/svelte/icons/settings';
     import DownloadIcon from '@lucide/svelte/icons/download';
 
     let { data }: { data: PageData } = $props();
+
+    const isDark = $derived(mode.current === 'dark');
 </script>
 
 <MetaTags />
@@ -26,13 +29,13 @@
 {#if browser && !prefersReducedMotion}
     <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <DotGrid
-            dotSize={4}
-            gap={16}
+            dotSize={5}
+            gap={20}
             baseColor="var(--color-ring)"
-            baseOpacity={0.05}
+            baseOpacity={isDark ? 0.12 : 0.05}
             activeColor="var(--color-primary)"
-            activeOpacity={0.1}
-            vignette={0.7}
+            activeOpacity={isDark ? 0.2 : 0.12}
+            vignette={0.5}
             vignetteRadius={50}
             proximity={100}
             shockRadius={180}
