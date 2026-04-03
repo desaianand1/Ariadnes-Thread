@@ -1,12 +1,10 @@
 <div align="center">
 
-<!-- Replace with your hero image -->
-
-![Ariadne's Thread](/docs/hero.png)
-
-# Ariadne's Thread
+# 🧵 Ariadne's Thread
 
 **Download your Modrinth collections as ready-to-play ZIPs.**
+
+![Ariadne's Thread](/static/og-image.png)
 
 [![Live Site](https://img.shields.io/badge/modrinth.download-live-1bd96a?style=for-the-badge&logo=modrinth&logoColor=white)](https://modrinth.download)
 [![License: FSL-1.1-ALv2](https://img.shields.io/badge/license-FSL--1.1--ALv2-blue?style=for-the-badge)](LICENSE.md)
@@ -22,7 +20,7 @@
 
 Modrinth collections are bookmarks — not modpacks. They don't resolve versions, handle dependencies, or separate client and server mods. Downloading 50+ mods means 50+ individual clicks.
 
-**Ariadne's Thread fixes that.** Paste your collection URLs, pick your Minecraft version and mod loader, and get two ZIPs: one for client, one for server. Share a single link with friends and they get the exact same setup.
+**Ariadne's Thread fixes that.** Paste your Modrinth collection URLs, pick your Minecraft version and mod loader, and get two ZIPs: one for client, one for server. Share a single link with friends and they get the exact same setup.
 
 ## How It Works
 
