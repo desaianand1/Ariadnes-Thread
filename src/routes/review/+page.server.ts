@@ -45,6 +45,43 @@ async function fetchCollection(
     return { collection, projects };
 }
 
+function buildEmptyResponse(
+    reviewOptions: ReturnType<typeof parseReviewOptions>,
+    loadError: string
+) {
+    const envConfig = getEnvConfig();
+    return {
+        loadError,
+        collections: [] as CollectionGroup[],
+        dependencies: [] as ResolvedProject[],
+        conflicts: [] as ConflictEntry[],
+        warnings: [] as ResolutionWarning[],
+        unresolved: [] as UnresolvedDependency[],
+        stats: {
+            totalProjects: 0,
+            resolvedCount: 0,
+            unresolvedCount: 0,
+            dependencyCount: 0,
+            conflictCount: 0,
+            warningCount: 0,
+            totalDownloadSize: 0
+        } satisfies ResolutionStats,
+        projectTitleMap: {} as Record<string, string>,
+        context: {
+            gameVersion: reviewOptions.gameVersion,
+            loader: reviewOptions.loader,
+            collectionIds: reviewOptions.collectionIds,
+            excludedProjectIds: Array.from(reviewOptions.excludedProjectIds)
+        },
+        downloadSettings: {
+            concurrentDownloads: reviewOptions.concurrentDownloads,
+            retryCount: reviewOptions.retryCount
+        },
+        emailEnabled: envConfig.ENABLE_EMAIL_SHARING && !!envConfig.RESEND_API_KEY,
+        turnstileSiteKey: publicEnv.PUBLIC_TURNSTILE_SITE_KEY ?? ''
+    };
+}
+
 export const load: PageServerLoad = async ({ url, platform }) => {
     const parseResult = reviewParamsSchema.safeParse(Object.fromEntries(url.searchParams));
     if (!parseResult.success) {
@@ -96,48 +133,48 @@ export const load: PageServerLoad = async ({ url, platform }) => {
         totalProjectCount: number;
     }>[];
 
+    const resolutionPromise = Promise.allSettled(
+        reviewOptions.collectionIds.map(async (id, idx) => {
+            // Reuse prefetched data to avoid duplicate API calls
+            const prefetched = prefetchResults[idx];
+            const { collection, projects } =
+                prefetched.status === 'fulfilled'
+                    ? prefetched.value
+                    : await fetchCollection(client, id);
+
+            // Filter out modpacks
+            const modpacks = projects.filter((p) => p.project_type === 'modpack');
+            const filteredProjects = projects.filter((p) => p.project_type !== 'modpack');
+
+            const modpackWarnings: ResolutionWarning[] = modpacks.map((p) => ({
+                type: 'no-compatible-version' as const,
+                projectId: p.id,
+                message: `${p.title} is a modpack and was skipped`
+            }));
+
+            const result = await resolveCollection(client, filteredProjects, resolutionOptions);
+
+            return {
+                collection,
+                result,
+                modpackWarnings,
+                totalProjectCount: projects.length
+            };
+        })
+    );
+
     try {
-        collectionResults = await Promise.race([
-            Promise.allSettled(
-                reviewOptions.collectionIds.map(async (id, idx) => {
-                    // Reuse prefetched data to avoid duplicate API calls
-                    const prefetched = prefetchResults[idx];
-                    const { collection, projects } =
-                        prefetched.status === 'fulfilled'
-                            ? prefetched.value
-                            : await fetchCollection(client, id);
-
-                    // Filter out modpacks
-                    const modpacks = projects.filter((p) => p.project_type === 'modpack');
-                    const filteredProjects = projects.filter((p) => p.project_type !== 'modpack');
-
-                    const modpackWarnings: ResolutionWarning[] = modpacks.map((p) => ({
-                        type: 'no-compatible-version' as const,
-                        projectId: p.id,
-                        message: `${p.title} is a modpack and was skipped`
-                    }));
-
-                    const result = await resolveCollection(
-                        client,
-                        filteredProjects,
-                        resolutionOptions
-                    );
-
-                    return {
-                        collection,
-                        result,
-                        modpackWarnings,
-                        totalProjectCount: projects.length
-                    };
-                })
-            ),
-            timeoutPromise
-        ]);
+        collectionResults = await Promise.race([resolutionPromise, timeoutPromise]);
     } catch (e) {
-        if (e instanceof Error && e.message === 'Request timed out') {
-            error(504, 'The request took too long. Try with fewer collections or try again later.');
-        }
-        throw e;
+        // Swallow orphaned promise rejections so they don't crash the process
+        resolutionPromise.catch(() => {});
+
+        const message =
+            e instanceof Error && e.message === 'Request timed out'
+                ? 'The request took too long. Try with fewer collections or try again later.'
+                : 'Failed to resolve collections. Please try again.';
+
+        return buildEmptyResponse(reviewOptions, message);
     } finally {
         clearTimeout(timeoutId!);
     }
@@ -155,9 +192,39 @@ export const load: PageServerLoad = async ({ url, platform }) => {
     );
 
     if (successfulResults.length === 0) {
-        error(502, 'Could not fetch any collections');
+        return buildEmptyResponse(
+            reviewOptions,
+            'Could not fetch any collections. The Modrinth API may be temporarily unavailable.'
+        );
     }
 
+    try {
+        return buildSuccessResponse(reviewOptions, client, collectionResults, successfulResults);
+    } catch (e) {
+        console.error('Post-resolution processing failed:', e);
+        return buildEmptyResponse(
+            reviewOptions,
+            'An unexpected error occurred while processing results. Please try again.'
+        );
+    }
+};
+
+async function buildSuccessResponse(
+    reviewOptions: ReturnType<typeof parseReviewOptions>,
+    client: import('$lib/api/client').ModrinthClient,
+    collectionResults: PromiseSettledResult<{
+        collection: ModrinthCollection;
+        result: Awaited<ReturnType<typeof resolveCollection>>;
+        modpackWarnings: ResolutionWarning[];
+        totalProjectCount: number;
+    }>[],
+    successfulResults: PromiseFulfilledResult<{
+        collection: ModrinthCollection;
+        result: Awaited<ReturnType<typeof resolveCollection>>;
+        modpackWarnings: ResolutionWarning[];
+        totalProjectCount: number;
+    }>[]
+) {
     // Cross-collection dedup: first collection claims each project
     const claimedProjects = new Map<string, { collectionName: string; collectionIndex: number }>();
     const collections: CollectionGroup[] = [];
@@ -253,6 +320,37 @@ export const load: PageServerLoad = async ({ url, platform }) => {
         }
     }
 
+    // Batch-fetch metadata for unresolved deps still missing titles/icons
+    const missingIds = allUnresolved
+        .filter((u) => !projectTitleMap[u.projectId] || !u.projectTitle)
+        .map((u) => u.projectId);
+    const uniqueMissingIds = [...new Set(missingIds)];
+
+    if (uniqueMissingIds.length > 0) {
+        try {
+            const missingProjects = await client.requestVersion<ModrinthProject[]>(
+                'projects',
+                'v2',
+                { queryParams: { ids: JSON.stringify(uniqueMissingIds) } }
+            );
+            for (const p of missingProjects) {
+                if (!projectTitleMap[p.id]) {
+                    projectTitleMap[p.id] = p.title;
+                }
+                // Backfill unresolved entries with fetched metadata
+                for (const u of allUnresolved) {
+                    if (u.projectId === p.id) {
+                        u.projectTitle ??= p.title;
+                        u.projectDescription ??= p.description;
+                        u.projectIconUrl ??= p.icon_url;
+                    }
+                }
+            }
+        } catch {
+            // Non-critical — fall back to raw IDs
+        }
+    }
+
     // Aggregate stats
     const allResolved = collections.flatMap((g) => g.resolved);
     const stats: ResolutionStats = {
@@ -270,6 +368,7 @@ export const load: PageServerLoad = async ({ url, platform }) => {
     const envConfig = getEnvConfig();
 
     return {
+        loadError: undefined as string | undefined,
         collections,
         dependencies: allDependencies,
         conflicts: allConflicts,
@@ -290,4 +389,4 @@ export const load: PageServerLoad = async ({ url, platform }) => {
         emailEnabled: envConfig.ENABLE_EMAIL_SHARING && !!envConfig.RESEND_API_KEY,
         turnstileSiteKey: publicEnv.PUBLIC_TURNSTILE_SITE_KEY ?? ''
     };
-};
+}
