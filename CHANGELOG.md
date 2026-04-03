@@ -1,3 +1,20 @@
+# [1.19.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.18.3...v1.19.0) (2026-04-02)
+
+### Bug Fixes
+
+- **a11y:** add Space key support and aria-labels to review route ([076c38f](https://github.com/desaianand1/Ariadnes-Thread/commit/076c38f3336bdb6ccb1701332fc18fe01f5de0cf))
+- **deploy:** stub Node built-ins for Cloudflare Workers compatibility ([02e46cf](https://github.com/desaianand1/Ariadnes-Thread/commit/02e46cfb368b203acb9299157a8e536da6ef5b1c))
+- **review:** disambiguate download labels and stack buttons on mobile ([170f0f7](https://github.com/desaianand1/Ariadnes-Thread/commit/170f0f7237098bef37305e87ec21eec1b58898b8))
+- **review:** filter download confirmation by side and add cancel button ([72a2bfa](https://github.com/desaianand1/Ariadnes-Thread/commit/72a2bfadb93bc8f2525b6aef2bd98fce21a0434d))
+- **review:** reset tab state when switching mods in detail sheet ([4c8ee81](https://github.com/desaianand1/Ariadnes-Thread/commit/4c8ee810c3559609026f1b9b5d5bd27ec7d075af))
+- **review:** show active conflict count and prevent tab override ([218bbce](https://github.com/desaianand1/Ariadnes-Thread/commit/218bbcea55db340fb083a8dc7c5752db6e4449fd))
+
+### Features
+
+- **email:** integrate Turnstile bot protection into email sharing ([c596e54](https://github.com/desaianand1/Ariadnes-Thread/commit/c596e546777952aaf159e0503af19310a8a6f385))
+- **review:** detect OS and show copyable paths in install guides ([9cdb5c6](https://github.com/desaianand1/Ariadnes-Thread/commit/9cdb5c6ec6f571a44c983a7d6482ac8430e668f6))
+- **turnstile:** add Turnstile component and server-side verification ([9bdc519](https://github.com/desaianand1/Ariadnes-Thread/commit/9bdc5197d9cf1bfc0f80d84c4c4211377d6b17e6))
+
 ## [1.18.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.18.2...v1.18.3) (2026-04-02)
 
 ### Bug Fixes
