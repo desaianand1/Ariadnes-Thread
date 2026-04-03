@@ -4,12 +4,16 @@
     import * as Popover from '$lib/components/ui/popover';
     import * as Command from '$lib/components/ui/command';
     import * as Drawer from '$lib/components/ui/drawer';
+    import * as Empty from '$lib/components/ui/empty';
     import { Button } from '$lib/components/ui/button';
     import { Badge } from '$lib/components/ui/badge';
+    import { Skeleton } from '$lib/components/ui/skeleton';
     import { Spinner } from '$lib/components/ui/spinner';
     import { VERSION_TYPE_BADGE_CLASSES } from '$lib/utils/colors';
     import { cn } from '$lib/utils';
     import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
+    import SearchXIcon from '@lucide/svelte/icons/search-x';
+    import LoaderCircleIcon from '@lucide/svelte/icons/loader-circle';
     import {
         versionState,
         loadMinecraftVersions,
@@ -46,18 +50,41 @@
         }
     });
 
-    let displayedOther = $derived.by(() => {
-        if (searchQuery.trim()) return grouped.other;
-        return grouped.other.slice(0, visibleCount);
+    // Reset pagination when search changes
+    let prevSearch = $state('');
+    $effect(() => {
+        if (searchQuery !== prevSearch) {
+            prevSearch = searchQuery;
+            visibleCount = 50;
+        }
     });
+
+    let query = $derived(searchQuery.trim().toLowerCase());
+
+    let filteredPopular = $derived.by(() => {
+        if (!query) return grouped.popular;
+        return grouped.popular.filter((v) => v.value.toLowerCase().includes(query));
+    });
+
+    let filteredReleases = $derived.by(() => {
+        if (!query) return grouped.releases;
+        return grouped.releases.filter((v) => v.value.toLowerCase().includes(query));
+    });
+
+    let filteredAll = $derived.by(() => {
+        if (!query) return grouped.all;
+        return grouped.all.filter((v) => v.value.toLowerCase().includes(query));
+    });
+
+    let displayedAll = $derived(filteredAll.slice(0, visibleCount));
 
     function handleScroll(e: Event) {
         const el = e.currentTarget as HTMLElement;
         if (
             el.scrollHeight - el.scrollTop - el.clientHeight < 100 &&
-            visibleCount < grouped.other.length
+            visibleCount < filteredAll.length
         ) {
-            visibleCount = Math.min(visibleCount + 50, grouped.other.length);
+            visibleCount = Math.min(visibleCount + 50, filteredAll.length);
         }
     }
 
@@ -82,14 +109,69 @@
 <svelte:window onresize={onResize} />
 
 {#snippet versionList()}
-    <Command.Root>
+    <Command.Root shouldFilter={false}>
         <Command.Input placeholder="Search versions..." bind:value={searchQuery} />
         <Command.List class="max-h-60" onscroll={handleScroll}>
-            <Command.Empty>No version found.</Command.Empty>
+            {#if versionState.isLoading}
+                <div class="space-y-1 p-2">
+                    {#each { length: 5 } as _, i (i)}
+                        <Skeleton class="h-8 w-full rounded-sm" />
+                    {/each}
+                </div>
+            {:else if filteredAll.length === 0}
+                <Empty.Root class="border-none py-3 text-muted-foreground">
+                    <Empty.Header>
+                        <Empty.Media variant="icon">
+                            <SearchXIcon class="text-muted-foreground" />
+                        </Empty.Media>
+                        <Empty.Title class="text-sm">No version found</Empty.Title>
+                        <Empty.Description class="text-xs"
+                            >Try a different search term.</Empty.Description
+                        >
+                    </Empty.Header>
+                </Empty.Root>
+            {:else}
+                {#if filteredPopular.length > 0}
+                    <Command.Group heading="Popular Releases">
+                        {#each filteredPopular as version (version.value)}
+                            <Command.Item
+                                value={version.value}
+                                onSelect={() => handleSelect(version.value)}
+                            >
+                                <span class="truncate">{version.label}</span>
+                                {#if version.versionType !== 'release'}
+                                    <Badge
+                                        variant="secondary"
+                                        class={cn(
+                                            'ml-auto shrink-0 text-[10px] leading-tight',
+                                            VERSION_TYPE_BADGE_CLASSES[version.versionType]
+                                        )}
+                                    >
+                                        {capitalize(version.versionType)}
+                                    </Badge>
+                                {/if}
+                            </Command.Item>
+                        {/each}
+                    </Command.Group>
+                    <Command.Separator />
+                {/if}
 
-            {#if grouped.popular.length > 0}
-                <Command.Group heading="Popular Releases">
-                    {#each grouped.popular as version (version.value)}
+                {#if filteredReleases.length > 0}
+                    <Command.Group heading="Releases">
+                        {#each filteredReleases as version (version.value)}
+                            <Command.Item
+                                value={version.value}
+                                onSelect={() => handleSelect(version.value)}
+                            >
+                                <span class="truncate">{version.label}</span>
+                            </Command.Item>
+                        {/each}
+                    </Command.Group>
+                    <Command.Separator />
+                {/if}
+
+                <Command.Group heading="All Versions">
+                    {#each displayedAll as version (version.value)}
                         <Command.Item
                             value={version.value}
                             onSelect={() => handleSelect(version.value)}
@@ -109,30 +191,13 @@
                         </Command.Item>
                     {/each}
                 </Command.Group>
-                <Command.Separator />
-            {/if}
 
-            <Command.Group heading="All Versions">
-                {#each displayedOther as version (version.value)}
-                    <Command.Item
-                        value={version.value}
-                        onSelect={() => handleSelect(version.value)}
-                    >
-                        <span class="truncate">{version.label}</span>
-                        {#if version.versionType !== 'release'}
-                            <Badge
-                                variant="secondary"
-                                class={cn(
-                                    'ml-auto shrink-0 text-[10px] leading-tight',
-                                    VERSION_TYPE_BADGE_CLASSES[version.versionType]
-                                )}
-                            >
-                                {capitalize(version.versionType)}
-                            </Badge>
-                        {/if}
-                    </Command.Item>
-                {/each}
-            </Command.Group>
+                {#if visibleCount < filteredAll.length}
+                    <div class="flex items-center justify-center py-2">
+                        <LoaderCircleIcon class="size-4 animate-spin text-muted-foreground" />
+                    </div>
+                {/if}
+            {/if}
         </Command.List>
     </Command.Root>
 {/snippet}
