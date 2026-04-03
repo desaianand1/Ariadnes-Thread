@@ -12,8 +12,19 @@
 
     let copied = $state(false);
 
-    function copy() {
-        navigator.clipboard.writeText(value);
+    async function copy() {
+        try {
+            await navigator.clipboard.writeText(value);
+        } catch {
+            const textarea = document.createElement('textarea');
+            textarea.value = value;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+        }
         copied = true;
         setTimeout(() => (copied = false), 2000);
     }

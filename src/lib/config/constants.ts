@@ -182,6 +182,12 @@ export const RETRY_DELAY_MS = 1000;
  */
 export const DOWNLOAD_TIMEOUT_MS = 60_000;
 
+/**
+ * When the other-side download has at most this many files to fetch (after
+ * cache filtering), use inline mini-progress instead of the full download view.
+ */
+export const INLINE_DOWNLOAD_FILE_THRESHOLD = 20;
+
 // =============================================================================
 // API Configuration
 // =============================================================================

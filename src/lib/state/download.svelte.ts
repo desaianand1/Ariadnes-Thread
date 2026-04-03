@@ -1,6 +1,9 @@
 /**
  * Download lifecycle state management using Svelte 5 runes.
  * Orchestrates file downloading, hash verification, and ZIP generation.
+ *
+ * Maintains a module-level download cache so cross-side downloads
+ * (client → server) can skip already-fetched files.
  */
 
 import {
@@ -10,7 +13,8 @@ import {
     MAX_RETRIES,
     MIN_RETRY_COUNT,
     MAX_RETRY_COUNT_LIMIT,
-    RETRY_DELAY_MS
+    RETRY_DELAY_MS,
+    INLINE_DOWNLOAD_FILE_THRESHOLD
 } from '$lib/config/constants';
 import { downloadFiles, type DownloadCallbacks } from '$lib/services/download';
 import { buildSideZips, type ZipFileInfo } from '$lib/services/zip';
@@ -49,8 +53,11 @@ export interface DownloadState {
     startedAt: number | null;
     speedBytesPerSec: number;
     eta: number;
-    zipBlob: Blob | null;
-    zipSize: number;
+    clientZipBlob: Blob | null;
+    clientZipSize: number;
+    serverZipBlob: Blob | null;
+    serverZipSize: number;
+    isMiniProgress: boolean;
     errorMessage: string | null;
     abortController: AbortController | null;
     concurrentDownloads?: number;
@@ -70,13 +77,22 @@ const INITIAL_STATE: DownloadState = {
     startedAt: null,
     speedBytesPerSec: 0,
     eta: 0,
-    zipBlob: null,
-    zipSize: 0,
+    clientZipBlob: null,
+    clientZipSize: 0,
+    serverZipBlob: null,
+    serverZipSize: 0,
+    isMiniProgress: false,
     errorMessage: null,
     abortController: null
 };
 
 const state = $state<DownloadState>({ ...INITIAL_STATE });
+
+// Module-level cache: fileUrl → downloaded bytes, persists across initDownload calls
+const downloadCache = new SvelteMap<string, Uint8Array>();
+
+// All file infos seen so far (for building ZIPs across both sides)
+let allFileInfos: ZipFileInfo[] = [];
 
 // Rolling window for speed calculation
 let speedSamples: Array<{ time: number; bytes: number }> = [];
@@ -110,8 +126,18 @@ export function getDownloadState(): DownloadState {
     return state;
 }
 
+/** Total bytes held in the download cache */
+export function getCacheSize(): number {
+    let total = 0;
+    for (const data of downloadCache.values()) {
+        total += data.byteLength;
+    }
+    return total;
+}
+
 /**
  * Filter projects by the target side and populate file progress entries.
+ * Files already in downloadCache are excluded from the download queue.
  */
 export function initDownload(
     projects: ResolvedProject[],
@@ -128,9 +154,24 @@ export function initDownload(
         return true;
     });
 
+    // Accumulate file infos for cross-side ZIP building
+    for (const p of deduped) {
+        if (!allFileInfos.some((f) => f.fileUrl === p.fileUrl)) {
+            allFileInfos.push({
+                fileName: p.fileName,
+                fileUrl: p.fileUrl,
+                folder: p.folder,
+                side: p.side
+            });
+        }
+    }
+
+    // Filter out files already in cache
+    const toDownload = deduped.filter((p) => !downloadCache.has(p.fileUrl));
+
     state.phase = 'idle';
     state.targetSide = side;
-    state.files = deduped.map((p) => ({
+    state.files = toDownload.map((p) => ({
         projectId: p.projectId,
         projectTitle: p.projectTitle,
         fileName: p.fileName,
@@ -145,12 +186,11 @@ export function initDownload(
         bytesDownloaded: 0
     }));
     state.overallBytesDownloaded = 0;
-    state.overallTotalBytes = deduped.reduce((sum, p) => sum + p.fileSize, 0);
+    state.overallTotalBytes = toDownload.reduce((sum, p) => sum + p.fileSize, 0);
     state.startedAt = null;
     state.speedBytesPerSec = 0;
     state.eta = 0;
-    state.zipBlob = null;
-    state.zipSize = 0;
+    state.isMiniProgress = toDownload.length <= INLINE_DOWNLOAD_FILE_THRESHOLD;
     state.errorMessage = null;
     state.concurrentDownloads = settings?.concurrentDownloads;
     state.retryCount = settings?.retryCount;
@@ -160,92 +200,107 @@ export function initDownload(
 
 /**
  * Run the full download → verify → zip pipeline.
+ * If all files are cached, skips directly to zipping.
  */
 export async function startDownload(): Promise<void> {
-    if (state.files.length === 0 || !state.abortController) return;
+    if (!state.abortController) return;
 
-    state.phase = 'downloading';
-    state.startedAt = Date.now();
+    const hasFilesToDownload = state.files.length > 0;
 
-    const filesByUrl = new SvelteMap(state.files.map((f) => [f.fileUrl, f]));
+    if (hasFilesToDownload) {
+        state.phase = 'downloading';
+        state.startedAt = Date.now();
 
-    const callbacks: DownloadCallbacks = {
-        onFileStart(fileUrl: string) {
-            const file = filesByUrl.get(fileUrl);
-            if (file) file.status = 'downloading';
-        },
-        onFileProgress(fileUrl: string, bytesDownloaded: number) {
-            const file = filesByUrl.get(fileUrl);
-            if (!file) return;
-            const delta = bytesDownloaded - file.bytesDownloaded;
-            file.bytesDownloaded = bytesDownloaded;
-            state.overallBytesDownloaded += delta;
-            updateSpeed();
-        },
-        onFileComplete(fileUrl: string, _data: Uint8Array) {
-            const file = filesByUrl.get(fileUrl);
-            if (file) file.status = 'complete';
-        },
-        onFileError(fileUrl: string, error: Error) {
-            const file = filesByUrl.get(fileUrl);
-            if (file) {
-                file.status = 'error';
-                file.error = error.message;
-            }
-        }
-    };
+        const filesByUrl = new SvelteMap(state.files.map((f) => [f.fileUrl, f]));
 
-    const concurrency = Math.max(
-        MIN_CONCURRENT_DOWNLOADS,
-        Math.min(
-            MAX_CONCURRENT_DOWNLOADS_LIMIT,
-            state.concurrentDownloads ?? MAX_CONCURRENT_DOWNLOADS
-        )
-    );
-    const maxRetries = Math.max(
-        MIN_RETRY_COUNT,
-        Math.min(MAX_RETRY_COUNT_LIMIT, state.retryCount ?? MAX_RETRIES)
-    );
-
-    try {
-        const downloadInput = state.files.map((f) => ({
-            fileUrl: f.fileUrl,
-            fileSize: f.fileSize,
-            sha1: f.sha1,
-            sha512: f.sha512
-        }));
-
-        const data = await downloadFiles(
-            downloadInput,
-            {
-                concurrency,
-                maxRetries,
-                retryDelayMs: RETRY_DELAY_MS,
-                signal: state.abortController.signal
+        const callbacks: DownloadCallbacks = {
+            onFileStart(fileUrl: string) {
+                const file = filesByUrl.get(fileUrl);
+                if (file) file.status = 'downloading';
             },
-            callbacks
+            onFileProgress(fileUrl: string, bytesDownloaded: number) {
+                const file = filesByUrl.get(fileUrl);
+                if (!file) return;
+                const delta = bytesDownloaded - file.bytesDownloaded;
+                file.bytesDownloaded = bytesDownloaded;
+                state.overallBytesDownloaded += delta;
+                updateSpeed();
+            },
+            onFileComplete(fileUrl: string, data: Uint8Array) {
+                const file = filesByUrl.get(fileUrl);
+                if (file) file.status = 'complete';
+                downloadCache.set(fileUrl, data);
+            },
+            onFileError(fileUrl: string, error: Error) {
+                const file = filesByUrl.get(fileUrl);
+                if (file) {
+                    file.status = 'error';
+                    file.error = error.message;
+                }
+            }
+        };
+
+        const concurrency = Math.max(
+            MIN_CONCURRENT_DOWNLOADS,
+            Math.min(
+                MAX_CONCURRENT_DOWNLOADS_LIMIT,
+                state.concurrentDownloads ?? MAX_CONCURRENT_DOWNLOADS
+            )
+        );
+        const maxRetries = Math.max(
+            MIN_RETRY_COUNT,
+            Math.min(MAX_RETRY_COUNT_LIMIT, state.retryCount ?? MAX_RETRIES)
         );
 
-        if (state.abortController.signal.aborted) return;
+        try {
+            const downloadInput = state.files.map((f) => ({
+                fileUrl: f.fileUrl,
+                fileSize: f.fileSize,
+                sha1: f.sha1,
+                sha512: f.sha512
+            }));
 
-        state.phase = 'verifying';
-        await new Promise((resolve) => setTimeout(resolve, 0));
+            await downloadFiles(
+                downloadInput,
+                {
+                    concurrency,
+                    maxRetries,
+                    retryDelayMs: RETRY_DELAY_MS,
+                    signal: state.abortController.signal
+                },
+                callbacks
+            );
 
-        // Build ZIP
-        state.phase = 'zipping';
+            if (state.abortController.signal.aborted) return;
+        } catch (error) {
+            if (state.abortController?.signal.aborted) return;
+            state.phase = 'error';
+            state.errorMessage = error instanceof Error ? error.message : String(error);
+            return;
+        }
+    }
 
-        const zipFileInfos: ZipFileInfo[] = state.files.map((f) => ({
-            fileName: f.fileName,
-            fileUrl: f.fileUrl,
-            folder: f.folder,
-            side: f.side
-        }));
+    if (state.abortController?.signal.aborted) return;
 
-        const zips = buildSideZips(zipFileInfos, data);
-        const targetZip = state.targetSide === 'client' ? zips.client : zips.server;
+    // Verification phase
+    state.phase = 'verifying';
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-        state.zipBlob = targetZip;
-        state.zipSize = targetZip?.size ?? 0;
+    // Build ZIPs using all accumulated file infos + full cache
+    state.phase = 'zipping';
+
+    try {
+        const zips = buildSideZips(allFileInfos, downloadCache);
+
+        if (zips.client) {
+            state.clientZipBlob = zips.client;
+            state.clientZipSize = zips.client.size;
+        }
+        if (zips.server) {
+            state.serverZipBlob = zips.server;
+            state.serverZipSize = zips.server.size;
+        }
+
         state.phase = 'complete';
     } catch (error) {
         if (state.abortController?.signal.aborted) return;
@@ -259,8 +314,28 @@ export function cancelDownload(): void {
     resetDownload();
 }
 
+/** Soft reset: clears UI state but preserves downloadCache and zip blobs */
 export function resetDownload(): void {
+    const preservedClient = state.clientZipBlob;
+    const preservedClientSize = state.clientZipSize;
+    const preservedServer = state.serverZipBlob;
+    const preservedServerSize = state.serverZipSize;
+
     Object.assign(state, { ...INITIAL_STATE, abortController: null });
+
+    state.clientZipBlob = preservedClient;
+    state.clientZipSize = preservedClientSize;
+    state.serverZipBlob = preservedServer;
+    state.serverZipSize = preservedServerSize;
+
+    speedSamples = [];
+}
+
+/** Full reset: clears everything including cache (called on "Back to Review") */
+export function resetDownloadFull(): void {
+    Object.assign(state, { ...INITIAL_STATE, abortController: null });
+    downloadCache.clear();
+    allFileInfos = [];
     speedSamples = [];
 }
 

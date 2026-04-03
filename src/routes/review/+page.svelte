@@ -31,7 +31,7 @@
         initDownload,
         startDownload,
         cancelDownload,
-        resetDownload
+        resetDownloadFull
     } from '$lib/state/download.svelte';
     import { replaceState } from '$app/navigation';
     import { page } from '$app/stores';
@@ -39,7 +39,8 @@
     import { safeTransition } from '$lib/utils/motion';
     import * as Empty from '$lib/components/ui/empty';
     import { getCachedData, setCachedData } from '$lib/utils/cache';
-    import { CACHE_TTL, STORAGE_KEYS } from '$lib/config/constants';
+    import { CACHE_TTL, STORAGE_KEYS, TOAST_DURATION } from '$lib/config/constants';
+    import { toast } from 'svelte-sonner';
     import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
     import InfoIcon from '@lucide/svelte/icons/info';
     import AlertCircleIcon from '@lucide/svelte/icons/circle-alert';
@@ -84,17 +85,23 @@
     let modListRef = $state<HTMLElement | undefined>(undefined);
     let downloadConfirmOpen = $state(false);
     let pendingDownloadSide = $state<'client' | 'server'>('client');
+    let autoSaveTriggered = $state(false);
 
-    let excludedIds = new SvelteSet<string>(data.context.excludedProjectIds ?? []);
+    let excludedIds = new SvelteSet<string>((() => data.context.excludedProjectIds ?? [])());
 
     // --- Download state ---
     let dlState = $derived(getDownloadState());
-    let isDownloading = $derived(dlState.phase !== 'idle');
+    let isDownloading = $derived(
+        dlState.phase !== 'idle' && !(dlState.isMiniProgress && dlState.phase === 'complete')
+    );
     let downloadProgress = $derived(
         dlState.overallTotalBytes > 0
             ? Math.round((dlState.overallBytesDownloaded / dlState.overallTotalBytes) * 100)
             : 0
     );
+
+    // Show the full download view (file list + SummaryBar progress) only for non-mini downloads
+    let showDownloadView = $derived(isDownloading && !dlState.isMiniProgress);
 
     // --- Derived from service functions ---
     let warningsByProject = $derived(buildWarningsMap(data.warnings));
@@ -170,6 +177,8 @@
         allVisibleProjects.some((p) => p.side === 'server' || p.side === 'both')
     );
 
+    let serverOnlyCount = $derived(allVisibleProjects.filter((p) => p.side === 'server').length);
+
     // Active (unresolved) user conflicts — excluding ones where user already chose
     let activeConflictCount = $derived(
         userConflicts.filter(
@@ -178,6 +187,22 @@
     );
 
     let showDownloadBar = $derived(!heroVisible && dlState.phase === 'idle');
+
+    // --- Auto-save ZIP on download complete ---
+    $effect(() => {
+        if (dlState.phase === 'complete' && !autoSaveTriggered) {
+            autoSaveTriggered = true;
+            const side = dlState.targetSide;
+            if (side === 'client' && dlState.clientZipBlob) {
+                triggerSaveZip('client');
+            } else if (side === 'server' && dlState.serverZipBlob) {
+                triggerSaveZip('server');
+            }
+        }
+        if (dlState.phase === 'idle') {
+            autoSaveTriggered = false;
+        }
+    });
 
     // --- Intersection observer for hero ---
     $effect(() => {
@@ -237,6 +262,7 @@
 
     function handleConfirmDownload() {
         downloadConfirmOpen = false;
+        autoSaveTriggered = false;
         initDownload(allVisibleProjects, pendingDownloadSide, data.downloadSettings);
         startDownload();
     }
@@ -245,32 +271,54 @@
         cancelDownload();
     }
 
-    function handleSaveZip() {
-        if (!dlState.zipBlob) return;
-        const sideLabel = dlState.targetSide ?? 'mods';
-        const filename = `${collectionNames.replace(/[^a-zA-Z0-9 ]/g, '')}-${sideLabel}-${data.context.gameVersion}-${data.context.loader}.zip`;
-        const url = URL.createObjectURL(dlState.zipBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    function buildFilename(side: string): string {
+        return `${collectionNames.replace(/[^a-zA-Z0-9 ]/g, '')}-${side}-${data.context.gameVersion}-${data.context.loader}.zip`;
+    }
+
+    function triggerSaveZip(side: 'client' | 'server') {
+        try {
+            const blob = side === 'client' ? dlState.clientZipBlob : dlState.serverZipBlob;
+            if (!blob) return;
+            const filename = buildFilename(side);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            const label = side === 'client' ? 'Client mods' : 'Server mods';
+            toast.success(`${label} saved`, { duration: TOAST_DURATION.SUCCESS });
+        } catch {
+            toast.error("Download didn't start. Use the Save ZIP button below.", {
+                duration: TOAST_DURATION.ERROR
+            });
+        }
+    }
+
+    function handleSaveClientZip() {
+        triggerSaveZip('client');
+    }
+
+    function handleSaveServerZip() {
+        triggerSaveZip('server');
     }
 
     function handleRetryDownload() {
         const side = dlState.targetSide;
         if (!side) return;
+        autoSaveTriggered = false;
         initDownload(allVisibleProjects, side, data.downloadSettings);
         startDownload();
     }
 
     function handleDownloadOtherSide(side: 'client' | 'server') {
+        autoSaveTriggered = false;
         initDownload(allVisibleProjects, side, data.downloadSettings);
         startDownload();
     }
 
     function handleBackToReview() {
-        resetDownload();
+        resetDownloadFull();
     }
 
     function handleSelectProject(project: ResolvedProject) {
@@ -369,6 +417,7 @@
             {downloadProgress}
             downloadSpeed={dlState.speedBytesPerSec}
             downloadEta={dlState.eta}
+            isMiniProgress={dlState.isMiniProgress}
             onCancelDownload={handleCancelDownload}
             onShare={() => (shareOpen = true)}
             onClickMods={() => scrollToModList()}
@@ -388,12 +437,13 @@
             turnstileSiteKey={data.turnstileSiteKey}
         />
 
-        {#if isDownloading}
+        {#if showDownloadView}
             <div class="mx-auto max-w-7xl space-y-4 px-4 py-4">
                 <DownloadProgress
                     state={dlState}
                     onCancel={handleCancelDownload}
-                    onSave={handleSaveZip}
+                    onSaveClient={handleSaveClientZip}
+                    onSaveServer={handleSaveServerZip}
                     onBackToReview={handleBackToReview}
                     onRetry={handleRetryDownload}
                     onDownloadOtherSide={dlState.targetSide === 'client' && hasServerMods
@@ -401,10 +451,31 @@
                         : dlState.targetSide === 'server' && hasClientMods
                           ? handleDownloadOtherSide
                           : undefined}
+                    onShare={() => (shareOpen = true)}
+                    shareUrl={$page.url.toString()}
                 />
             </div>
         {:else}
             <div class="mx-auto max-w-7xl space-y-6 px-4 py-6">
+                <!-- Completion card shown inline when not in full download view -->
+                {#if dlState.phase === 'complete' || (dlState.isMiniProgress && dlState.phase !== 'idle')}
+                    <DownloadProgress
+                        state={dlState}
+                        onCancel={handleCancelDownload}
+                        onSaveClient={handleSaveClientZip}
+                        onSaveServer={handleSaveServerZip}
+                        onBackToReview={handleBackToReview}
+                        onRetry={handleRetryDownload}
+                        onDownloadOtherSide={dlState.targetSide === 'client' && hasServerMods
+                            ? handleDownloadOtherSide
+                            : dlState.targetSide === 'server' && hasClientMods
+                              ? handleDownloadOtherSide
+                              : undefined}
+                        onShare={() => (shareOpen = true)}
+                        shareUrl={$page.url.toString()}
+                    />
+                {/if}
+
                 <!-- Back link -->
                 <Button variant="ghost" size="sm" href="/">
                     <ArrowLeftIcon class="mr-1.5 size-3.5" />
@@ -522,6 +593,7 @@
                 bind:open={downloadConfirmOpen}
                 side={pendingDownloadSide}
                 projects={allVisibleProjects}
+                {serverOnlyCount}
                 onConfirm={handleConfirmDownload}
                 onClose={() => (downloadConfirmOpen = false)}
             />

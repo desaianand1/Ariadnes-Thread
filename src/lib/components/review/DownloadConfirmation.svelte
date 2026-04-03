@@ -11,11 +11,19 @@
         open: boolean;
         side: 'client' | 'server';
         projects: ResolvedProject[];
+        serverOnlyCount?: number;
         onConfirm: () => void;
         onClose: () => void;
     }
 
-    let { open = $bindable(), side, projects, onConfirm, onClose }: Props = $props();
+    let {
+        open = $bindable(),
+        side,
+        projects,
+        serverOnlyCount = 0,
+        onConfirm,
+        onClose
+    }: Props = $props();
 
     interface FolderEntry {
         path: string;
@@ -85,6 +93,13 @@
                 <span class="text-muted-foreground"> · {formatBytes(totalSize)} total</span>
             </div>
         </div>
+
+        {#if side === 'client' && serverOnlyCount > 0}
+            <p class="text-sm text-muted-foreground">
+                {serverOnlyCount} server-only mod{serverOnlyCount !== 1 ? 's' : ''} from your collections
+                won't be included in this download.
+            </p>
+        {/if}
 
         <p class="text-sm text-muted-foreground">
             After downloading, extract the ZIP contents into your game folder. Detailed instructions
