@@ -9,7 +9,7 @@ import { createClientFromPlatform } from '$lib/api/client.server';
 import type { ModrinthLoader } from '$lib/api/types';
 import { getErrorMessage, isModrinthAPIError } from '$lib/api/error';
 import { EXCLUDED_LOADERS } from '$lib/config/constants';
-import DOMPurify from 'isomorphic-dompurify';
+import { sanitizeSvg } from '$lib/utils/sanitize';
 
 export const GET: RequestHandler = async ({ platform }) => {
     const client = createClientFromPlatform(platform);
@@ -40,13 +40,10 @@ export const GET: RequestHandler = async ({ platform }) => {
                     types.includes('plugin')
                 );
             })
-            // Sanitize SVG icons to prevent XSS
+            // Sanitize SVG icons via allowlist-based parser (works in all runtimes)
             .map((loader) => ({
                 ...loader,
-                icon: DOMPurify.sanitize(loader.icon, {
-                    USE_PROFILES: { svg: true, svgFilters: true },
-                    ADD_TAGS: ['use']
-                })
+                icon: sanitizeSvg(loader.icon)
             }));
 
         return json(

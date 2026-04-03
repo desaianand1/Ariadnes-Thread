@@ -6,6 +6,7 @@
 import { getCachedData, setCachedData } from '$lib/utils/cache';
 import { getTextColorByModLoader } from '$lib/utils/colors';
 import { getLoaderDisplayName } from '$lib/utils/format';
+import { sanitizeSvg } from '$lib/utils/sanitize';
 import { STORAGE_KEYS, CACHE_TTL, getLoaderCategory } from '$lib/config/constants';
 import type { LoaderCategory } from '$lib/config/constants';
 import type { ModrinthLoader } from '$lib/api/types';
@@ -48,14 +49,17 @@ export async function loadModLoaders(): Promise<void> {
     state.error = null;
 
     try {
-        // Check cache first (browser only)
+        // Check cache first (browser only, re-sanitize since localStorage is user-accessible)
         if (isBrowser) {
             const cached = getCachedData<ModLoaderItem[]>(
                 STORAGE_KEYS.MOD_LOADERS,
                 CACHE_TTL.LOADERS
             );
             if (cached) {
-                state.loaders = cached;
+                state.loaders = cached.map((loader) => ({
+                    ...loader,
+                    icon: sanitizeSvg(loader.icon)
+                }));
                 state.isLoading = false;
                 return;
             }
@@ -70,14 +74,14 @@ export async function loadModLoaders(): Promise<void> {
 
         const { loaders } = (await response.json()) as { loaders: ModrinthLoader[] };
 
-        // Transform to our format with categories
+        // Transform to our format — re-sanitize on client for defense-in-depth
         state.loaders = loaders.map((loader) => {
             const slug = loader.name.toLowerCase();
 
             return {
                 name: getLoaderDisplayName(slug),
                 slug,
-                icon: loader.icon,
+                icon: sanitizeSvg(loader.icon),
                 colorClass: getTextColorByModLoader(slug),
                 category: getLoaderCategory(slug)
             };
