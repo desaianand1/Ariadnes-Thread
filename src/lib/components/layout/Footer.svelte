@@ -16,7 +16,7 @@
     >
         <!-- Left: brand + links -->
         <div class="flex flex-wrap items-center gap-1">
-            <a href="/" class="flex items-center gap-2">
+            <a href="/" class="flex items-center gap-2" aria-label="{siteConfig.name} home">
                 <img src={logo} alt="" class="size-5" />
                 <span class="font-semibold">{siteConfig.name}</span>
             </a>
@@ -92,6 +92,7 @@
                     target="_blank"
                     rel="noopener noreferrer external"
                     class="inline-flex items-center underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                    aria-label="Modrinth"
                 >
                     <ModrinthWordmark class="h-3.5 w-auto" />
                 </a>

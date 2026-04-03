@@ -20,7 +20,7 @@
         class="container mx-auto flex h-14 max-w-7xl items-center justify-between px-4"
         aria-label="Main"
     >
-        <a href={resolve('/')} class="flex items-center gap-2">
+        <a href={resolve('/')} class="flex items-center gap-2" aria-label="{siteConfig.name} home">
             <img src={logo} alt="" class="size-8" />
             <span class="hidden font-semibold sm:inline">{siteConfig.name}</span>
         </a>

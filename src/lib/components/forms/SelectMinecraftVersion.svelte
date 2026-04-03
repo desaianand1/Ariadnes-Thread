@@ -225,6 +225,7 @@
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
+                    aria-label="Select Minecraft version"
                     class={cn('w-full min-w-50 justify-between', error && 'border-destructive')}
                     {disabled}
                     {...props}
@@ -246,6 +247,7 @@
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
+                    aria-label="Select Minecraft version"
                     class={cn('w-full min-w-50 justify-between', error && 'border-destructive')}
                     {disabled}
                     {...props}
