@@ -1,3 +1,14 @@
+## [1.21.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.21.0...v1.21.1) (2026-04-03)
+
+### Bug Fixes
+
+- **a11y:** add accessible names to combobox triggers and logo links ([10aaa42](https://github.com/desaianand1/Ariadnes-Thread/commit/10aaa42df64da53fd976e4ca9d0938ce0bf19e84))
+- **csp:** allow Cloudflare Web Analytics beacon in CSP headers ([49d867f](https://github.com/desaianand1/Ariadnes-Thread/commit/49d867f934d0cfc47929bf41e74313ddf74d788b))
+
+### Performance Improvements
+
+- **home:** lazy-load DotGrid to defer GSAP from critical path ([9b86810](https://github.com/desaianand1/Ariadnes-Thread/commit/9b86810019c508d958394470aa4639d0b2abbd0d))
+
 # [1.21.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.20.0...v1.21.0) (2026-04-03)
 
 ### Features
