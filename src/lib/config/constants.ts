@@ -126,7 +126,8 @@ export const MAX_DEPENDENCY_DEPTH = 10;
 export const CACHE_TTL = {
     VERSIONS: 7 * 24 * 60 * 60 * 1000,
     LOADERS: 7 * 24 * 60 * 60 * 1000,
-    COLLECTIONS: 30 * 60 * 1000
+    COLLECTIONS: 30 * 60 * 1000,
+    REVIEW_RESULTS: 5 * 60 * 1000
 } as const;
 
 /**
@@ -140,7 +141,8 @@ export const CACHE_VERSION = 1;
 export const STORAGE_KEYS = {
     MINECRAFT_VERSIONS: 'ariadnes-thread-mc-versions',
     MOD_LOADERS: 'ariadnes-thread-loaders',
-    THEME: 'ariadnes-thread-theme'
+    THEME: 'ariadnes-thread-theme',
+    REVIEW_PREFIX: 'ariadnes-thread-review:'
 } as const;
 
 // =============================================================================
@@ -153,9 +155,9 @@ export const STORAGE_KEYS = {
 export const MAX_COLLECTIONS = 7;
 
 /**
- * Default maximum concurrent downloads (PRD spec: default 4, max 8)
+ * Default maximum concurrent downloads (PRD spec: default 6, max 8)
  */
-export const MAX_CONCURRENT_DOWNLOADS = 4;
+export const MAX_CONCURRENT_DOWNLOADS = 6;
 
 /** Bounds for the concurrent downloads stepper */
 export const MIN_CONCURRENT_DOWNLOADS = 1;

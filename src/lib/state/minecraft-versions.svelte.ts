@@ -94,6 +94,7 @@ export async function loadMinecraftVersions(): Promise<void> {
 
 /** Hand-picked versions that represent major community milestones */
 const CURATED_POPULAR_VERSIONS = new Set([
+    '1.21.1',
     '1.20.1',
     '1.19.2',
     '1.18.2',
@@ -106,11 +107,15 @@ const CURATED_POPULAR_VERSIONS = new Set([
 ]);
 
 /**
- * Returns grouped versions: curated popular list (latest release + community favorites) + everything else
+ * Returns versions in three tiers:
+ * - popular: curated community favorites for quick selection
+ * - releases: all stable releases in chronological order
+ * - all: every version (releases + snapshots + alpha + beta) in chronological order
  */
 export function getGroupedVersions(): {
     popular: MinecraftVersionItem[];
-    other: MinecraftVersionItem[];
+    releases: MinecraftVersionItem[];
+    all: MinecraftVersionItem[];
 } {
     const latestRelease = state.versions.find((v) => v.versionType === 'release');
     const versionsByValue = new SvelteMap(state.versions.map((v) => [v.value, v]));
@@ -131,9 +136,9 @@ export function getGroupedVersions(): {
         }
     }
 
-    const other = state.versions.filter((v) => !popularSet.has(v.value));
+    const releases = state.versions.filter((v) => v.versionType === 'release');
 
-    return { popular, other };
+    return { popular, releases, all: state.versions };
 }
 
 /**
