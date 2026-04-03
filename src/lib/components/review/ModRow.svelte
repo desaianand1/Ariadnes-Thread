@@ -1,15 +1,18 @@
 <script lang="ts">
     import type { ResolvedProject, ResolutionWarning } from '$lib/services/types';
-    import * as Avatar from '$lib/components/ui/avatar';
-    import * as AlertDialog from '$lib/components/ui/alert-dialog';
+    import { deriveModStatus } from '$lib/services/review-resolution';
+    import ModAvatar from './ModAvatar.svelte';
+    import ExcludeConfirmDialog from './ExcludeConfirmDialog.svelte';
+    import { Badge } from '$lib/components/ui/badge';
     import { Button } from '$lib/components/ui/button';
     import SideBadge from './SideBadge.svelte';
     import LoaderBadge from './LoaderBadge.svelte';
     import StatusIndicator from './StatusIndicator.svelte';
-    import { formatBytes } from '$lib/utils/format';
+    import { formatBytes, formatVersionNumber } from '$lib/utils/format';
     import { cn } from '$lib/utils';
     import EyeOffIcon from '@lucide/svelte/icons/eye-off';
     import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
+    import FileIcon from '@lucide/svelte/icons/file';
 
     interface Props {
         project: ResolvedProject;
@@ -33,19 +36,10 @@
         onSelect
     }: Props = $props();
 
-    let status = $derived<'compatible' | 'warning' | 'conflict'>(
-        isConflict ? 'conflict' : warnings.length > 0 ? 'warning' : 'compatible'
-    );
-    let statusMessage = $derived(
-        isConflict ? 'Incompatible' : warnings.length > 0 ? warnings[0].message : undefined
-    );
-    let borderClass = $derived(
-        isConflict
-            ? 'border-l-2 border-l-red-400'
-            : warnings.length > 0
-              ? 'border-l-2 border-l-yellow-400'
-              : ''
-    );
+    let modStatus = $derived(deriveModStatus(isConflict, warnings));
+    let status = $derived(modStatus.status);
+    let statusMessage = $derived(modStatus.statusMessage);
+    let borderClass = $derived(modStatus.borderClass);
 
     function handleRowClick(e: MouseEvent) {
         if (isExcluded) return;
@@ -75,14 +69,7 @@
     <StatusIndicator {status} message={statusMessage} />
 
     <!-- Avatar -->
-    <Avatar.Root class="size-8 shrink-0 rounded-lg">
-        {#if project.iconUrl}
-            <Avatar.Image src={project.iconUrl} alt={project.projectTitle} />
-        {/if}
-        <Avatar.Fallback class="rounded-lg text-xs">
-            {project.projectTitle.charAt(0)}
-        </Avatar.Fallback>
-    </Avatar.Root>
+    <ModAvatar iconUrl={project.iconUrl} title={project.projectTitle} size="md" class="shrink-0" />
 
     <!-- Content -->
     <div class="min-w-0 flex-1">
@@ -101,17 +88,25 @@
             <span class="min-w-0 truncate">
                 {project.projectDescription || 'No description'}
             </span>
-            {#if collectionName}
-                <span class="hidden shrink-0 sm:inline">from: {collectionName}</span>
+            {#if project.dependencyOf && collectionName}
+                <span class="hidden shrink-0 text-muted-foreground/70 sm:inline"
+                    >required by: {collectionName}</span
+                >
+            {:else if collectionName}
+                <span class="hidden shrink-0 sm:inline">from {collectionName}</span>
             {/if}
         </div>
     </div>
 
     <!-- Right side metadata -->
-    <span class="hidden shrink-0 font-mono text-xs text-muted-foreground md:inline">
-        {project.versionNumber}
-    </span>
-    <span class="hidden shrink-0 text-xs text-muted-foreground md:inline">
+    <Badge
+        variant="outline"
+        class="hidden shrink-0 font-mono text-[10px] leading-tight md:inline-flex"
+    >
+        {formatVersionNumber(project.versionNumber)}
+    </Badge>
+    <span class="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground md:inline-flex">
+        <FileIcon class="size-3" />
         {formatBytes(project.fileSize)}
     </span>
 
@@ -128,36 +123,22 @@
                 <span class="sr-only">Restore</span>
             </Button>
         {:else}
-            <AlertDialog.Root>
-                <AlertDialog.Trigger>
-                    {#snippet child({ props })}
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            class="size-9 shrink-0 p-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive sm:size-7"
-                            {...props}
-                        >
-                            <EyeOffIcon class="size-3.5" />
-                            <span class="sr-only">Exclude</span>
-                        </Button>
-                    {/snippet}
-                </AlertDialog.Trigger>
-                <AlertDialog.Content>
-                    <AlertDialog.Header>
-                        <AlertDialog.Title>Exclude {project.projectTitle}?</AlertDialog.Title>
-                        <AlertDialog.Description>
-                            This mod won't be included in the ZIP download. You can restore it
-                            anytime from the mod list.
-                        </AlertDialog.Description>
-                    </AlertDialog.Header>
-                    <AlertDialog.Footer>
-                        <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-                        <AlertDialog.Action onclick={() => onExclude(project.projectId)}>
-                            Exclude
-                        </AlertDialog.Action>
-                    </AlertDialog.Footer>
-                </AlertDialog.Content>
-            </AlertDialog.Root>
+            <ExcludeConfirmDialog
+                projectTitle={project.projectTitle}
+                onConfirm={() => onExclude(project.projectId)}
+            >
+                {#snippet trigger({ props })}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="size-9 shrink-0 p-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive sm:size-7"
+                        {...props}
+                    >
+                        <EyeOffIcon class="size-3.5" />
+                        <span class="sr-only">Exclude</span>
+                    </Button>
+                {/snippet}
+            </ExcludeConfirmDialog>
         {/if}
     {/if}
 </div>

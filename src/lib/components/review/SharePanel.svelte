@@ -47,7 +47,7 @@
     const loadedAt = Date.now();
 
     let qrContainer = $state<HTMLDivElement | undefined>(undefined);
-    let qrInstance: import('qr-code-styling').default | null = $state(null);
+    let qrGenerated = $state(false);
 
     const turnstileReady = $derived(turnstileToken.length > 0);
     const webShareSupported = $derived(browser && 'share' in navigator);
@@ -63,45 +63,33 @@
     });
 
     async function generateQr() {
-        if (qrInstance || !qrContainer) return;
-        const QRCodeStyling = (await import('qr-code-styling')).default;
-        qrInstance = new QRCodeStyling({
-            width: 200,
-            height: 200,
-            data: pageUrl,
-            margin: 8,
-            dotsOptions: {
-                color: siteConfig.themeColor.light,
-                type: 'rounded'
-            },
-            backgroundOptions: {
-                color: '#ffffff'
-            },
-            cornersSquareOptions: {
-                type: 'extra-rounded',
-                color: siteConfig.themeColor.light
-            },
-            cornersDotOptions: {
-                type: 'dot',
-                color: siteConfig.themeColor.light
-            },
-            image: siteConfig.icons.favicon,
-            imageOptions: {
-                crossOrigin: 'anonymous',
-                margin: 4,
-                imageSize: 0.4
-            }
-        });
-        qrInstance.append(qrContainer);
+        if (qrGenerated || !qrContainer) return;
+        try {
+            const QRCode = (await import('qrcode')).default;
+            const canvas = await QRCode.toCanvas(pageUrl, {
+                width: 200,
+                margin: 2,
+                color: { dark: siteConfig.themeColor.light, light: '#ffffff' }
+            });
+            // eslint-disable-next-line svelte/no-dom-manipulating -- QR canvas is generated outside Svelte's reactivity
+            qrContainer.innerHTML = '';
+            // eslint-disable-next-line svelte/no-dom-manipulating
+            qrContainer.appendChild(canvas);
+            qrGenerated = true;
+        } catch (err) {
+            console.error('QR generation failed:', err);
+        }
     }
 
-    async function downloadQr() {
-        if (!qrInstance) return;
+    function downloadQr() {
+        const canvas = qrContainer?.querySelector('canvas');
+        if (!canvas) return;
         try {
-            await qrInstance.download({
-                name: 'ariadnes-thread-share',
-                extension: 'png'
-            });
+            const url = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ariadnes-thread-share.png';
+            a.click();
         } catch {
             toast.error('Failed to download QR code');
         }
@@ -226,7 +214,7 @@
             </Label>
             <div class="flex flex-col items-center gap-3 rounded-md border p-4">
                 <div bind:this={qrContainer} class="flex items-center justify-center"></div>
-                {#if qrInstance}
+                {#if qrGenerated}
                     <Button variant="outline" size="sm" onclick={downloadQr}>
                         <DownloadIcon class="mr-1.5 size-3.5" />
                         Download QR

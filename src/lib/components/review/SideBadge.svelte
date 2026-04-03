@@ -1,11 +1,8 @@
 <script lang="ts">
     import type { SideClassification } from '$lib/services/types';
     import { Badge } from '$lib/components/ui/badge';
-    import { SIDE_BADGE_CLASSES, SIDE_LABELS } from '$lib/utils/colors';
+    import { SIDE_BADGE_CLASSES, SIDE_LABELS, SIDE_ICONS } from '$lib/utils/colors';
     import { cn } from '$lib/utils';
-    import MonitorIcon from '@lucide/svelte/icons/monitor';
-    import ServerIcon from '@lucide/svelte/icons/server';
-    import LayersIcon from '@lucide/svelte/icons/layers';
 
     interface Props {
         side: SideClassification;
@@ -13,12 +10,6 @@
     }
 
     let { side, size = 'default' }: Props = $props();
-
-    const SIDE_ICONS = {
-        client: MonitorIcon,
-        server: ServerIcon,
-        both: LayersIcon
-    } as const;
 
     let Icon = $derived(SIDE_ICONS[side]);
     let iconSize = $derived(size === 'sm' ? 'size-2.5' : 'size-3');

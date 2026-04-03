@@ -35,10 +35,42 @@
     } from '$lib/state/download.svelte';
     import { replaceState } from '$app/navigation';
     import { page } from '$app/stores';
+    import { slide } from 'svelte/transition';
+    import { safeTransition } from '$lib/utils/motion';
+    import * as Empty from '$lib/components/ui/empty';
+    import { getCachedData, setCachedData } from '$lib/utils/cache';
+    import { CACHE_TTL, STORAGE_KEYS } from '$lib/config/constants';
     import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
+    import InfoIcon from '@lucide/svelte/icons/info';
+    import AlertCircleIcon from '@lucide/svelte/icons/circle-alert';
+    import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
+    import ArchiveRestoreIcon from '@lucide/svelte/icons/archive-restore';
     import { SvelteSet } from 'svelte/reactivity';
 
-    let { data }: { data: PageData } = $props();
+    let { data: serverData }: { data: PageData } = $props();
+
+    let cachedFallback = $state<PageData | null>(null);
+    let usingCache = $state(false);
+
+    // On transient server errors, try falling back to localStorage cache
+    $effect(() => {
+        if (serverData.loadError) {
+            const cacheKey = STORAGE_KEYS.REVIEW_PREFIX + $page.url.search;
+            const cached = getCachedData<PageData>(cacheKey, CACHE_TTL.REVIEW_RESULTS);
+            if (cached && !cached.loadError) {
+                cachedFallback = cached;
+            }
+        }
+    });
+
+    function loadFromCache() {
+        if (cachedFallback) {
+            usingCache = true;
+        }
+    }
+
+    let data = $derived(usingCache && cachedFallback ? cachedFallback : serverData);
+    let showLoadError = $derived(!!data.loadError && !usingCache);
 
     // --- UI-only state ---
     let selectedProject = $state<ResolvedProject | null>(null);
@@ -46,7 +78,7 @@
     let shareOpen = $state(false);
     let heroRef = $state<HTMLElement | undefined>(undefined);
     let heroVisible = $state(true);
-    let downloadOverride = $state(false);
+    let resolutionDetailsDismissed = $state(false);
     let resolutionDetailsRef = $state<HTMLElement | undefined>(undefined);
     let resolutionDetailsTab = $state<string>('action');
     let modListRef = $state<HTMLElement | undefined>(undefined);
@@ -101,39 +133,35 @@
         allProjects.filter((p) => !effectiveExcludedIds.has(p.projectId))
     );
 
-    let visibleUserProjects = $derived(allVisibleProjects.filter((p) => !p.dependencyOf));
-    let visibleDeps = $derived(allVisibleProjects.filter((p) => !!p.dependencyOf));
+    // Display lists: ALL mods (excluded shown dimmed) for browsing
+    let displayUserProjects = $derived(allProjects.filter((p) => !p.dependencyOf));
+    let displayDeps = $derived(allProjects.filter((p) => !!p.dependencyOf));
 
     let resolutionState = $derived(
-        downloadOverride
-            ? ('allClear' as const)
-            : getResolutionState(
-                  allVisibleProjects.length,
-                  userConflicts.filter(
-                      (c) => !excludedIds.has(c.projectA.id) && !excludedIds.has(c.projectB.id)
-                  ).length,
-                  userMissingDeps.length
-              )
+        getResolutionState(
+            allVisibleProjects.length,
+            userConflicts.filter(
+                (c) => !excludedIds.has(c.projectA.id) && !excludedIds.has(c.projectB.id)
+            ).length,
+            userMissingDeps.length
+        )
     );
 
     let sideStats = $derived(computeSideStats(allVisibleProjects));
     let collectionNameMap = $derived(buildCollectionNameMap(data.collections));
 
-    let resolvedModCount = $derived(
-        data.collections.reduce((sum, g) => sum + g.resolved.length, 0) + data.dependencies.length
+    let collectionModCount = $derived(
+        data.collections.reduce((sum, g) => sum + g.resolved.length, 0)
     );
-    let trueTotalCount = $derived(resolvedModCount + data.unresolved.length);
+    let depModCount = $derived(data.dependencies.length);
+    let unresolvedCount = $derived(data.unresolved.length);
+    let resolvedModCount = $derived(collectionModCount + depModCount);
+    let trueTotalCount = $derived(resolvedModCount + unresolvedCount);
 
     let collectionNames = $derived(data.collections.map((g) => g.name).join(', '));
     let pageTitle = $derived(
         `Review: ${collectionNames} — ${trueTotalCount} mods for MC ${data.context.gameVersion} ${getLoaderDisplayName(data.context.loader)}`
     );
-
-    let effectiveStats = $derived.by(() => ({
-        ...data.stats,
-        resolvedCount: allVisibleProjects.length,
-        totalDownloadSize: allVisibleProjects.reduce((sum, r) => sum + r.fileSize, 0)
-    }));
 
     let hasClientMods = $derived(
         allVisibleProjects.some((p) => p.side === 'client' || p.side === 'both')
@@ -245,18 +273,20 @@
         resetDownload();
     }
 
-    function handleDownloadAnyway() {
-        downloadOverride = true;
-        // Scroll hero into view so the user sees the now-green download buttons
-        requestAnimationFrame(() => {
-            heroRef?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-    }
-
     function handleSelectProject(project: ResolvedProject) {
         selectedProject = project;
         sheetOpen = true;
     }
+
+    // Cache successful resolution results for browser refresh fallback
+    $effect(() => {
+        if (!serverData.loadError) {
+            const searchParams = $page.url.search;
+            if (searchParams) {
+                setCachedData(STORAGE_KEYS.REVIEW_PREFIX + searchParams, serverData);
+            }
+        }
+    });
 
     // Prevent accidental navigation during download
     $effect(() => {
@@ -271,152 +301,230 @@
 </script>
 
 <MetaTags
-    title={pageTitle}
+    title={showLoadError ? "Error — Ariadne's Thread" : pageTitle}
     description="Review and download {trueTotalCount} mods from {collectionNames} for Minecraft {data
         .context.gameVersion} on {data.context.loader}"
     path="/review"
 />
 
-<div class="min-h-screen">
-    <SummaryBar
-        stats={effectiveStats}
-        context={data.context}
-        downloadPhase={dlState.phase}
-        {downloadProgress}
-        downloadSpeed={dlState.speedBytesPerSec}
-        downloadEta={dlState.eta}
-        onCancelDownload={handleCancelDownload}
-        onShare={() => (shareOpen = true)}
-        onClickCompatible={() => scrollToModList()}
-        onClickWarnings={() => scrollToResolutionDetails('auto')}
-        onClickConflicts={() => scrollToResolutionDetails('action')}
-        onClickMissing={() => scrollToResolutionDetails('action')}
-    />
+{#if showLoadError}
+    <div class="flex min-h-[60vh] items-center justify-center px-4">
+        <Empty.Root class="border-none">
+            <Empty.Header>
+                <Empty.Media>
+                    <AlertCircleIcon class="size-16 text-muted-foreground" />
+                </Empty.Media>
+                <Empty.Title class="text-2xl font-bold tracking-tight">Failed to load</Empty.Title>
+                <Empty.Description class="max-w-md text-base">
+                    {data.loadError}
+                </Empty.Description>
+            </Empty.Header>
+            <Empty.Content>
+                <div class="flex flex-col items-center gap-3">
+                    {#if cachedFallback}
+                        <p class="text-sm text-muted-foreground">
+                            A recently cached version of these results is available.
+                        </p>
+                    {/if}
+                    <div class="flex gap-3">
+                        {#if cachedFallback}
+                            <Button onclick={loadFromCache}>
+                                <ArchiveRestoreIcon class="mr-2 size-4" />
+                                Load cached results
+                            </Button>
+                        {/if}
+                        <Button variant="outline" onclick={() => location.reload()}>
+                            <RefreshCwIcon class="mr-2 size-4" />
+                            Try again
+                        </Button>
+                        <Button variant="ghost" href="/">
+                            <ArrowLeftIcon class="mr-2 size-4" />
+                            Back to home
+                        </Button>
+                    </div>
+                </div>
+            </Empty.Content>
+        </Empty.Root>
+    </div>
+{:else}
+    <div class="min-h-screen">
+        {#if usingCache}
+            <div
+                class="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+            >
+                Viewing cached results. <Button
+                    variant="link"
+                    class="p-0"
+                    onclick={() => location.reload()}>Reload</Button
+                > to fetch fresh data.
+            </div>
+        {/if}
 
-    <SharePanel
-        bind:open={shareOpen}
-        pageUrl={$page.url.toString()}
-        {collectionNames}
-        context={{
-            gameVersion: data.context.gameVersion,
-            loader: data.context.loader,
-            modCount: trueTotalCount
-        }}
-        emailEnabled={data.emailEnabled}
-        turnstileSiteKey={data.turnstileSiteKey}
-    />
+        <SummaryBar
+            {collectionModCount}
+            {depModCount}
+            issueCount={activeConflictCount + userMissingDeps.length + data.warnings.length}
+            context={data.context}
+            downloadPhase={dlState.phase}
+            {downloadProgress}
+            downloadSpeed={dlState.speedBytesPerSec}
+            downloadEta={dlState.eta}
+            onCancelDownload={handleCancelDownload}
+            onShare={() => (shareOpen = true)}
+            onClickMods={() => scrollToModList()}
+            onClickIssues={() => scrollToResolutionDetails('action')}
+        />
 
-    {#if isDownloading}
-        <div class="mx-auto max-w-7xl space-y-4 px-4 py-4">
-            <DownloadProgress
-                state={dlState}
-                onCancel={handleCancelDownload}
-                onSave={handleSaveZip}
-                onBackToReview={handleBackToReview}
-                onRetry={handleRetryDownload}
-                onDownloadOtherSide={dlState.targetSide === 'client' && hasServerMods
-                    ? handleDownloadOtherSide
-                    : dlState.targetSide === 'server' && hasClientMods
-                      ? handleDownloadOtherSide
-                      : undefined}
-            />
-        </div>
-    {:else}
-        <div class="mx-auto max-w-7xl space-y-6 px-4 py-6">
-            <!-- Back link -->
-            <Button variant="ghost" size="sm" href="/">
-                <ArrowLeftIcon class="mr-1.5 size-3.5" />
-                Back to Collections
-            </Button>
+        <SharePanel
+            bind:open={shareOpen}
+            pageUrl={$page.url.toString()}
+            {collectionNames}
+            context={{
+                gameVersion: data.context.gameVersion,
+                loader: data.context.loader,
+                modCount: trueTotalCount
+            }}
+            emailEnabled={data.emailEnabled}
+            turnstileSiteKey={data.turnstileSiteKey}
+        />
 
-            <!-- Resolution Hero -->
-            <div bind:this={heroRef}>
-                <ResolutionHero
-                    {resolutionState}
-                    totalResolved={allVisibleProjects.length}
-                    totalProjects={trueTotalCount}
-                    gameVersion={data.context.gameVersion}
-                    loader={data.context.loader}
-                    {sideStats}
-                    {hasClientMods}
-                    {hasServerMods}
-                    {collectionNames}
-                    onStartDownload={handleStartDownload}
-                    onShare={() => (shareOpen = true)}
+        {#if isDownloading}
+            <div class="mx-auto max-w-7xl space-y-4 px-4 py-4">
+                <DownloadProgress
+                    state={dlState}
+                    onCancel={handleCancelDownload}
+                    onSave={handleSaveZip}
+                    onBackToReview={handleBackToReview}
+                    onRetry={handleRetryDownload}
+                    onDownloadOtherSide={dlState.targetSide === 'client' && hasServerMods
+                        ? handleDownloadOtherSide
+                        : dlState.targetSide === 'server' && hasClientMods
+                          ? handleDownloadOtherSide
+                          : undefined}
                 />
             </div>
+        {:else}
+            <div class="mx-auto max-w-7xl space-y-6 px-4 py-6">
+                <!-- Back link -->
+                <Button variant="ghost" size="sm" href="/">
+                    <ArrowLeftIcon class="mr-1.5 size-3.5" />
+                    Back to Collections
+                </Button>
 
-            <!-- Resolution details (consolidated auto-resolved + action required) -->
-            {#if autoResolution.items.length > 0 || activeConflictCount > 0 || userMissingDeps.length > 0}
-                <div bind:this={resolutionDetailsRef}>
-                    <ResolutionDetails
-                        autoResolvedItems={autoResolution.items}
-                        conflicts={userConflicts}
-                        missingDeps={userMissingDeps}
-                        unresolvedRaw={data.unresolved}
-                        excludedIds={effectiveExcludedIds}
-                        {onExclude}
-                        {onRestore}
-                        onDownloadAnyway={handleDownloadAnyway}
-                        excludedCount={effectiveExcludedIds.size}
-                        bind:activeTab={resolutionDetailsTab}
+                <!-- Resolution Hero -->
+                <div bind:this={heroRef}>
+                    <ResolutionHero
+                        {resolutionState}
+                        {collectionModCount}
+                        dependencyCount={depModCount}
+                        {unresolvedCount}
+                        gameVersion={data.context.gameVersion}
+                        loader={data.context.loader}
+                        {sideStats}
+                        {hasClientMods}
+                        {hasServerMods}
+                        {collectionNames}
+                        onStartDownload={handleStartDownload}
                     />
                 </div>
-            {/if}
 
-            <!-- Mod list -->
-            <div bind:this={modListRef}>
-                <ModListSection
-                    projects={visibleUserProjects}
-                    dependencies={visibleDeps}
-                    projectTitleMap={data.projectTitleMap}
-                    {warningsByProject}
-                    {conflictProjectIds}
-                    loader={data.context.loader}
-                    excludedIds={effectiveExcludedIds}
-                    onExclude={toggleExclude}
-                    collectionNames={collectionNameMap}
-                    showCollectionNames={data.collections.length > 1}
-                    onSelectProject={handleSelectProject}
-                />
+                <!-- Resolution details (consolidated auto-resolved + action required) -->
+                {#if autoResolution.items.length > 0 || activeConflictCount > 0 || userMissingDeps.length > 0}
+                    {#if resolutionDetailsDismissed}
+                        <div transition:slide={safeTransition({ duration: 200 })}>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                class="text-xs text-muted-foreground"
+                                onclick={() => (resolutionDetailsDismissed = false)}
+                            >
+                                <InfoIcon class="mr-1.5 size-3.5" />
+                                Show mod dependency details
+                            </Button>
+                        </div>
+                    {:else}
+                        <div
+                            bind:this={resolutionDetailsRef}
+                            transition:slide={safeTransition({ duration: 200 })}
+                        >
+                            <ResolutionDetails
+                                autoResolvedItems={autoResolution.items}
+                                conflicts={userConflicts}
+                                missingDeps={userMissingDeps}
+                                unresolvedRaw={data.unresolved}
+                                excludedIds={effectiveExcludedIds}
+                                {onExclude}
+                                {onRestore}
+                                onDismiss={() => (resolutionDetailsDismissed = true)}
+                                loader={data.context.loader}
+                                bind:activeTab={resolutionDetailsTab}
+                            />
+                        </div>
+                    {/if}
+                {/if}
+
+                <!-- Mod list -->
+                <div bind:this={modListRef}>
+                    <ModListSection
+                        projects={displayUserProjects}
+                        dependencies={displayDeps}
+                        projectTitleMap={data.projectTitleMap}
+                        {warningsByProject}
+                        {conflictProjectIds}
+                        loader={data.context.loader}
+                        excludedIds={effectiveExcludedIds}
+                        onExclude={toggleExclude}
+                        collectionNames={collectionNameMap}
+                        showCollectionNames={data.collections.length > 1}
+                        onSelectProject={handleSelectProject}
+                    />
+                </div>
             </div>
-        </div>
 
-        <!-- Detail sheet -->
-        <ModDetailSheet
-            bind:open={sheetOpen}
-            project={selectedProject}
-            warnings={selectedProject
-                ? (warningsByProject.get(selectedProject.projectId) ?? [])
-                : []}
-            isExcluded={selectedProject
-                ? effectiveExcludedIds.has(selectedProject.projectId)
-                : false}
-            loader={data.context.loader}
-            onExclude={toggleExclude}
-            onClose={() => {
-                sheetOpen = false;
-                selectedProject = null;
-            }}
-        />
+            <!-- Detail sheet -->
+            <ModDetailSheet
+                bind:open={sheetOpen}
+                project={selectedProject}
+                warnings={selectedProject
+                    ? (warningsByProject.get(selectedProject.projectId) ?? [])
+                    : []}
+                isExcluded={selectedProject
+                    ? effectiveExcludedIds.has(selectedProject.projectId)
+                    : false}
+                loader={data.context.loader}
+                resolvedDependencies={(() => {
+                    const sel = selectedProject;
+                    return sel
+                        ? allProjects
+                              .filter((p) => p.dependencyOf === sel.projectId)
+                              .map((p) => ({ title: p.projectTitle, iconUrl: p.iconUrl }))
+                        : [];
+                })()}
+                onExclude={toggleExclude}
+                onClose={() => {
+                    sheetOpen = false;
+                    selectedProject = null;
+                }}
+            />
 
-        <!-- Sticky download bar -->
-        <DownloadBar
-            visible={showDownloadBar}
-            {sideStats}
-            {hasClientMods}
-            {hasServerMods}
-            hasUnresolvedIssues={resolutionState === 'hasIssues'}
-            onStartDownload={handleStartDownload}
-        />
+            <!-- Sticky download bar -->
+            <DownloadBar
+                visible={showDownloadBar}
+                {sideStats}
+                {hasClientMods}
+                {hasServerMods}
+                {unresolvedCount}
+                onStartDownload={handleStartDownload}
+            />
 
-        <!-- Download confirmation -->
-        <DownloadConfirmation
-            bind:open={downloadConfirmOpen}
-            side={pendingDownloadSide}
-            projects={allVisibleProjects}
-            onConfirm={handleConfirmDownload}
-            onClose={() => (downloadConfirmOpen = false)}
-        />
-    {/if}
-</div>
+            <!-- Download confirmation -->
+            <DownloadConfirmation
+                bind:open={downloadConfirmOpen}
+                side={pendingDownloadSide}
+                projects={allVisibleProjects}
+                onConfirm={handleConfirmDownload}
+                onClose={() => (downloadConfirmOpen = false)}
+            />
+        {/if}
+    </div>
+{/if}

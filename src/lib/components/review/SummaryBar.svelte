@@ -1,17 +1,19 @@
 <script lang="ts">
-    import type { ResolutionStats } from '$lib/services/types';
     import type { DownloadPhase } from '$lib/state/download.svelte';
     import { Badge } from '$lib/components/ui/badge';
     import { Button } from '$lib/components/ui/button';
     import { Progress } from '$lib/components/ui/progress';
+    import { Separator } from '$lib/components/ui/separator';
     import * as Tooltip from '$lib/components/ui/tooltip';
-    import { formatBytes, formatSpeed, formatEta } from '$lib/utils/format';
+    import { formatSpeed, formatEta } from '$lib/utils/format';
     import ShareIcon from '@lucide/svelte/icons/share-2';
     import XIcon from '@lucide/svelte/icons/x';
     import LoaderBadge from './LoaderBadge.svelte';
 
     interface Props {
-        stats: ResolutionStats;
+        collectionModCount: number;
+        depModCount: number;
+        issueCount: number;
         context: { gameVersion: string; loader: string };
         downloadPhase?: DownloadPhase;
         downloadProgress?: number;
@@ -19,14 +21,14 @@
         downloadEta?: number;
         onCancelDownload?: () => void;
         onShare?: () => void;
-        onClickCompatible?: () => void;
-        onClickWarnings?: () => void;
-        onClickConflicts?: () => void;
-        onClickMissing?: () => void;
+        onClickMods?: () => void;
+        onClickIssues?: () => void;
     }
 
     let {
-        stats,
+        collectionModCount,
+        depModCount,
+        issueCount,
         context,
         downloadPhase = 'idle',
         downloadProgress = 0,
@@ -34,10 +36,8 @@
         downloadEta = 0,
         onCancelDownload,
         onShare,
-        onClickCompatible,
-        onClickWarnings,
-        onClickConflicts,
-        onClickMissing
+        onClickMods,
+        onClickIssues
     }: Props = $props();
 
     let isActiveDownload = $derived(
@@ -48,9 +48,9 @@
 </script>
 
 <div class="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-sm">
-    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
         {#if isActiveDownload}
-            <!-- Download progress mode — emerald themed -->
+            <!-- Download progress mode -->
             <div class="flex flex-1 items-center gap-4">
                 <div
                     class="flex-1 **:data-[slot=progress-indicator]:bg-emerald-500 dark:**:data-[slot=progress-indicator]:bg-emerald-400"
@@ -74,71 +74,55 @@
                 Cancel
             </Button>
         {:else}
-            <!-- Normal review mode — clickable stats -->
+            <!-- Status stats -->
             <div class="flex flex-wrap items-center gap-1 text-sm">
                 <Button
                     variant="ghost"
                     size="sm"
                     class="h-auto gap-1.5 px-1.5 py-0.5"
-                    aria-label="Scroll to {stats.resolvedCount} compatible mods"
-                    onclick={onClickCompatible}
+                    aria-label="Scroll to {collectionModCount} mods"
+                    onclick={onClickMods}
                 >
                     <span class="size-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
-                    {stats.resolvedCount} compatible
+                    {collectionModCount} mods
                 </Button>
 
-                {#if stats.warningCount > 0}
+                {#if depModCount > 0}
                     <Button
                         variant="ghost"
                         size="sm"
                         class="h-auto gap-1.5 px-1.5 py-0.5"
-                        aria-label="Scroll to {stats.warningCount} warnings"
-                        onclick={onClickWarnings}
+                        aria-label="{depModCount} dependencies"
+                        onclick={onClickMods}
                     >
-                        <span class="size-2 rounded-full bg-yellow-500" aria-hidden="true"></span>
-                        {stats.warningCount} warnings
+                        <span class="size-2 rounded-full bg-blue-500" aria-hidden="true"></span>
+                        {depModCount} deps
                     </Button>
                 {/if}
 
-                {#if stats.conflictCount > 0}
+                {#if issueCount > 0}
                     <Button
                         variant="ghost"
                         size="sm"
                         class="h-auto gap-1.5 px-1.5 py-0.5"
-                        aria-label="Scroll to {stats.conflictCount} conflicts"
-                        onclick={onClickConflicts}
+                        aria-label="Scroll to {issueCount} issues"
+                        onclick={onClickIssues}
                     >
-                        <span class="size-2 rounded-full bg-red-500" aria-hidden="true"></span>
-                        {stats.conflictCount} conflicts
-                    </Button>
-                {/if}
-
-                {#if stats.unresolvedCount > 0}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        class="h-auto gap-1.5 px-1.5 py-0.5"
-                        aria-label="Scroll to {stats.unresolvedCount} missing dependencies"
-                        onclick={onClickMissing}
-                    >
-                        <span class="size-2 rounded-full bg-orange-500" aria-hidden="true"></span>
-                        {stats.unresolvedCount} missing
+                        <span class="size-2 rounded-full bg-amber-500" aria-hidden="true"></span>
+                        {issueCount} issues
                     </Button>
                 {/if}
             </div>
 
-            <!-- Context badges (hidden on mobile — already shown in ResolutionHero) -->
+            <!-- Context badges -->
+            <Separator orientation="vertical" class="hidden h-5 sm:block" />
             <div class="hidden items-center gap-2 sm:flex">
                 <Badge variant="outline">{context.gameVersion}</Badge>
                 <LoaderBadge loaderSlug={context.loader} size="sm" />
             </div>
 
-            <!-- Actions -->
+            <!-- Share -->
             <div class="flex items-center gap-2 md:ml-auto">
-                <span class="text-sm text-muted-foreground"
-                    >{formatBytes(stats.totalDownloadSize)}</span
-                >
-
                 <Tooltip.Root>
                     <Tooltip.Trigger>
                         {#snippet child({ props })}

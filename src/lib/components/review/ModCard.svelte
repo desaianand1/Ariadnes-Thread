@@ -1,15 +1,14 @@
 <script lang="ts">
     import type { ResolvedProject, ResolutionWarning } from '$lib/services/types';
+    import { deriveModStatus } from '$lib/services/review-resolution';
     import { Button } from '$lib/components/ui/button';
     import * as Card from '$lib/components/ui/card';
-    import * as Avatar from '$lib/components/ui/avatar';
     import * as Tooltip from '$lib/components/ui/tooltip';
-    import SideBadge from './SideBadge.svelte';
-    import LoaderBadge from './LoaderBadge.svelte';
+    import ModAvatar from './ModAvatar.svelte';
     import StatusIndicator from './StatusIndicator.svelte';
-    import { VERSION_TYPE_BADGE_CLASSES } from '$lib/utils/colors';
-    import { formatBytes, getLoaderDisplayName } from '$lib/utils/format';
-    import { Badge } from '$lib/components/ui/badge';
+    import ModBadgeRow from './ModBadgeRow.svelte';
+    import { SEMANTIC_BANNER_COLORS } from '$lib/utils/colors';
+    import { formatBytes, getModrinthProjectUrl } from '$lib/utils/format';
     import { cn } from '$lib/utils';
     import { fade, fly } from 'svelte/transition';
     import EyeOffIcon from '@lucide/svelte/icons/eye-off';
@@ -41,21 +40,12 @@
     }: Props = $props();
 
     let hasWarnings = $derived(warnings.length > 0);
-    let projectUrl = $derived(`https://modrinth.com/${project.projectType}/${project.projectSlug}`);
+    let projectUrl = $derived(getModrinthProjectUrl(project.projectType, project.projectSlug));
 
-    let status = $derived<'compatible' | 'warning' | 'conflict'>(
-        isConflict ? 'conflict' : hasWarnings ? 'warning' : 'compatible'
-    );
-    let statusMessage = $derived(
-        isConflict ? 'Incompatible' : hasWarnings ? warnings[0].message : undefined
-    );
-    let borderClass = $derived(
-        isConflict
-            ? 'border-l-2 border-l-red-400'
-            : hasWarnings
-              ? 'border-l-2 border-l-yellow-400'
-              : ''
-    );
+    let modStatus = $derived(deriveModStatus(isConflict, warnings));
+    let status = $derived(modStatus.status);
+    let statusMessage = $derived(modStatus.statusMessage);
+    let borderClass = $derived(modStatus.borderClass);
 </script>
 
 <div
@@ -72,14 +62,12 @@
         <Card.Content class="flex gap-3 p-3">
             <!-- Project Icon -->
             <div class="shrink-0">
-                <Avatar.Root class="size-10 rounded-lg">
-                    {#if project.iconUrl}
-                        <Avatar.Image src={project.iconUrl} alt={project.projectTitle} />
-                    {/if}
-                    <Avatar.Fallback class="rounded-lg text-sm">
-                        {project.projectTitle.charAt(0)}
-                    </Avatar.Fallback>
-                </Avatar.Root>
+                <ModAvatar
+                    iconUrl={project.iconUrl}
+                    title={project.projectTitle}
+                    size="md"
+                    class="size-10"
+                />
             </div>
 
             <!-- Content -->
@@ -161,30 +149,7 @@
                 {/if}
 
                 <!-- Badges Row -->
-                <div class="mt-1.5 flex flex-wrap items-center gap-1">
-                    <SideBadge side={project.side} size="sm" />
-                    {#each project.loaders.filter((l) => l === loader || project.usedFallbackLoader) as loaderName (loaderName)}
-                        <LoaderBadge loaderSlug={loaderName} size="sm" />
-                    {/each}
-
-                    {#if project.versionType !== 'release'}
-                        <Badge
-                            variant="secondary"
-                            class={cn(
-                                'text-[10px] leading-tight',
-                                VERSION_TYPE_BADGE_CLASSES[project.versionType]
-                            )}
-                        >
-                            {project.versionType}
-                        </Badge>
-                    {/if}
-
-                    {#if project.usedFallbackLoader && project.resolvedLoader}
-                        <Badge variant="outline" class="text-[10px] leading-tight">
-                            via {getLoaderDisplayName(project.resolvedLoader)}
-                        </Badge>
-                    {/if}
-                </div>
+                <ModBadgeRow {project} {loader} size="sm" class="mt-1.5" />
 
                 <!-- Metadata Row -->
                 <div class="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -200,7 +165,8 @@
                 <!-- Inline warning -->
                 {#if hasWarnings}
                     <div
-                        class="mt-1.5 rounded bg-yellow-50 px-2 py-1 text-xs text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400"
+                        class="mt-1.5 rounded px-2 py-1 text-xs {SEMANTIC_BANNER_COLORS.warning
+                            .bg} {SEMANTIC_BANNER_COLORS.warning.text}"
                     >
                         {warnings[0].message}
                     </div>

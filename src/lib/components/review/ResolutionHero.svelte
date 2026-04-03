@@ -2,20 +2,19 @@
     import type { ResolutionState, SideStats } from '$lib/services/review-resolution';
     import { Button } from '$lib/components/ui/button';
     import LoaderBadge from './LoaderBadge.svelte';
+    import { SIDE_ICONS } from '$lib/utils/colors';
     import { formatBytes } from '$lib/utils/format';
     import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
     import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
     import CircleXIcon from '@lucide/svelte/icons/circle-x';
     import DownloadIcon from '@lucide/svelte/icons/download';
-    import MonitorIcon from '@lucide/svelte/icons/monitor';
-    import ServerIcon from '@lucide/svelte/icons/server';
     import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
-    import ShareIcon from '@lucide/svelte/icons/share-2';
 
     interface Props {
         resolutionState: ResolutionState;
-        totalResolved: number;
-        totalProjects: number;
+        collectionModCount: number;
+        dependencyCount: number;
+        unresolvedCount: number;
         gameVersion: string;
         loader: string;
         sideStats: { client: SideStats; server: SideStats; total: SideStats };
@@ -23,25 +22,75 @@
         hasServerMods: boolean;
         collectionNames?: string;
         onStartDownload: (side: 'client' | 'server') => void;
-        onShare: () => void;
     }
 
     let {
         resolutionState,
-        totalResolved,
-        totalProjects,
+        collectionModCount,
+        dependencyCount,
+        unresolvedCount,
         gameVersion,
         loader,
         sideStats,
         hasClientMods,
         hasServerMods,
         collectionNames,
-        onStartDownload,
-        onShare
+        onStartDownload
     }: Props = $props();
 
-    let unresolved = $derived(totalProjects - totalResolved);
+    let readyHeading = $derived.by(() => {
+        const parts: string[] = [];
+        parts.push(`${collectionModCount} mod${collectionModCount !== 1 ? 's' : ''}`);
+        if (dependencyCount > 0) {
+            parts.push(
+                `${dependencyCount} ${dependencyCount === 1 ? 'dependency' : 'dependencies'}`
+            );
+        }
+        return parts.join(' + ') + ' ready for download';
+    });
 </script>
+
+{#snippet downloadButtons(subtitleColor: string, clientLabel: string, serverLabel: string)}
+    <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        {#if hasClientMods}
+            <div class="flex flex-col items-start">
+                <Button
+                    size="lg"
+                    class="w-full bg-emerald-600 text-white hover:bg-emerald-700 sm:w-auto dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                    onclick={() => onStartDownload('client')}
+                >
+                    <DownloadIcon class="mr-1.5 size-4" />
+                    <SIDE_ICONS.client class="mr-1 size-4" />
+                    {hasServerMods ? 'Download Client Mods' : 'Download Mods'}
+                </Button>
+                <span class="mt-1 pl-1 text-xs {subtitleColor}">
+                    {clientLabel} &middot; {sideStats.client.count} mods &middot; {formatBytes(
+                        sideStats.client.downloadSize
+                    )}
+                </span>
+            </div>
+        {/if}
+        {#if hasServerMods}
+            <div class="flex flex-col items-start">
+                <Button
+                    size="lg"
+                    variant="outline"
+                    class="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-100 sm:w-auto dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                    onclick={() => onStartDownload('server')}
+                >
+                    <DownloadIcon class="mr-1.5 size-4" />
+                    <SIDE_ICONS.server class="mr-1 size-4" />
+                    Download Server Mods
+                </Button>
+                <span class="mt-1 pl-1 text-xs {subtitleColor}">
+                    {serverLabel} &middot; {sideStats.server.count} mods &middot; {formatBytes(
+                        sideStats.server.downloadSize
+                    )}
+                </span>
+            </div>
+        {/if}
+    </div>
+{/snippet}
 
 {#if resolutionState === 'allClear'}
     <div
@@ -54,7 +103,7 @@
             <div class="min-w-0 flex-1 space-y-4">
                 <div>
                     <h2 class="text-lg font-semibold text-emerald-900 dark:text-emerald-100">
-                        All set! {totalResolved} mods ready for download
+                        {readyHeading}
                     </h2>
                     <p
                         class="mt-1 flex flex-wrap items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300"
@@ -72,57 +121,11 @@
                     {/if}
                 </div>
 
-                <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                    {#if hasClientMods}
-                        <div class="flex flex-col items-start">
-                            <Button
-                                size="lg"
-                                class="w-full bg-emerald-600 text-white hover:bg-emerald-700 sm:w-auto dark:bg-emerald-600 dark:hover:bg-emerald-700"
-                                onclick={() => onStartDownload('client')}
-                            >
-                                <DownloadIcon class="mr-1.5 size-4" />
-                                <MonitorIcon class="mr-1 size-4" />
-                                {hasServerMods ? 'Download Client Mods' : 'Download Mods'}
-                            </Button>
-                            <span
-                                class="mt-1 pl-1 text-xs text-emerald-600/70 dark:text-emerald-400/70"
-                            >
-                                For your .minecraft · {sideStats.client.count} mods · {formatBytes(
-                                    sideStats.client.downloadSize
-                                )}
-                            </span>
-                        </div>
-                    {/if}
-                    {#if hasServerMods}
-                        <div class="flex flex-col items-start">
-                            <Button
-                                size="lg"
-                                variant="outline"
-                                class="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-100 sm:w-auto dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
-                                onclick={() => onStartDownload('server')}
-                            >
-                                <DownloadIcon class="mr-1.5 size-4" />
-                                <ServerIcon class="mr-1 size-4" />
-                                Download Server Mods
-                            </Button>
-                            <span
-                                class="mt-1 pl-1 text-xs text-emerald-600/70 dark:text-emerald-400/70"
-                            >
-                                For dedicated servers · {sideStats.server.count} mods · {formatBytes(
-                                    sideStats.server.downloadSize
-                                )}
-                            </span>
-                        </div>
-                    {/if}
-                </div>
-
-                <button
-                    class="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200"
-                    onclick={onShare}
-                >
-                    <ShareIcon class="size-3.5" />
-                    Share this collection
-                </button>
+                {@render downloadButtons(
+                    'text-emerald-600/70 dark:text-emerald-400/70',
+                    'For MC Launchers',
+                    'For Servers'
+                )}
             </div>
         </div>
     </div>
@@ -135,9 +138,9 @@
             <div class="min-w-0 flex-1 space-y-4">
                 <div>
                     <h2 class="text-lg font-semibold text-amber-900 dark:text-amber-100">
-                        {totalResolved} mods ready
+                        {readyHeading}
                         <span class="text-amber-600 dark:text-amber-400">
-                            · {unresolved} could not be resolved
+                            &middot; {unresolvedCount} unavailable
                         </span>
                     </h2>
                     <p
@@ -156,48 +159,11 @@
                     {/if}
                 </div>
 
-                <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                    {#if hasClientMods}
-                        <div class="flex flex-col items-start">
-                            <Button
-                                variant="outline"
-                                class="w-full border-amber-300 text-amber-700 hover:bg-amber-50 sm:w-auto dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
-                                onclick={() => onStartDownload('client')}
-                            >
-                                <DownloadIcon class="mr-1.5 size-4" />
-                                <MonitorIcon class="mr-1 size-4" />
-                                {hasServerMods ? 'Download Client Mods' : 'Download Mods'}
-                            </Button>
-                            <span
-                                class="mt-1 pl-1 text-xs text-amber-600/70 dark:text-amber-400/70"
-                            >
-                                For your .minecraft · {sideStats.client.count} mods · {formatBytes(
-                                    sideStats.client.downloadSize
-                                )}
-                            </span>
-                        </div>
-                    {/if}
-                    {#if hasServerMods}
-                        <div class="flex flex-col items-start">
-                            <Button
-                                variant="outline"
-                                class="w-full border-amber-300 text-amber-700 hover:bg-amber-50 sm:w-auto dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
-                                onclick={() => onStartDownload('server')}
-                            >
-                                <DownloadIcon class="mr-1.5 size-4" />
-                                <ServerIcon class="mr-1 size-4" />
-                                Download Server Mods
-                            </Button>
-                            <span
-                                class="mt-1 pl-1 text-xs text-amber-600/70 dark:text-amber-400/70"
-                            >
-                                For dedicated servers · {sideStats.server.count} mods · {formatBytes(
-                                    sideStats.server.downloadSize
-                                )}
-                            </span>
-                        </div>
-                    {/if}
-                </div>
+                {@render downloadButtons(
+                    'text-amber-600/70 dark:text-amber-400/70',
+                    '.minecraft',
+                    'servers'
+                )}
             </div>
         </div>
     </div>

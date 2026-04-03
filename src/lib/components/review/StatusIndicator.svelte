@@ -1,5 +1,6 @@
 <script lang="ts">
     import * as Tooltip from '$lib/components/ui/tooltip';
+    import { STATUS_COLORS } from '$lib/utils/colors';
     import { cn } from '$lib/utils';
 
     interface Props {
@@ -8,12 +9,6 @@
     }
 
     let { status, message }: Props = $props();
-
-    const STATUS_COLORS = {
-        compatible: 'bg-emerald-500',
-        warning: 'bg-yellow-500',
-        conflict: 'bg-red-500'
-    } as const;
 </script>
 
 {#if message}

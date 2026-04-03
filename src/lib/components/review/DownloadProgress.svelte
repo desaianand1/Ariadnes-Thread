@@ -16,6 +16,7 @@
     import DownloadIcon from '@lucide/svelte/icons/download';
     import CheckCircleIcon from '@lucide/svelte/icons/circle-check';
     import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
+    import ScrollIcon from '@lucide/svelte/icons/scroll';
 
     interface Props {
         state: DownloadState;
@@ -98,7 +99,7 @@
     <!-- Complete state -->
     {#if state.phase === 'complete' && state.zipBlob}
         <div
-            class="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30"
+            class="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30"
         >
             <div class="flex items-center gap-2">
                 <CheckCircleIcon class="size-5 text-emerald-600 dark:text-emerald-400" />
@@ -135,7 +136,11 @@
 
         <!-- Installation Guide -->
         <div class="rounded-lg border bg-card p-4">
-            <h3 class="mb-3 text-sm font-medium">Installation Guide</h3>
+            <span class="mb-3 inline-flex items-center gap-1.5">
+                <ScrollIcon class="size-4" />
+                <h3 class="text-sm font-medium">Installation Guide</h3>
+            </span>
+
             <Tabs.Root value="vanilla">
                 <div class="scrollbar-thin overflow-x-auto">
                     <Tabs.List class="flex-nowrap">

@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { FileProgress } from '$lib/state/download.svelte';
-    import * as Avatar from '$lib/components/ui/avatar';
     import { Badge } from '$lib/components/ui/badge';
+    import ModAvatar from './ModAvatar.svelte';
     import { Progress } from '$lib/components/ui/progress';
     import * as Tooltip from '$lib/components/ui/tooltip';
     import { formatBytes } from '$lib/utils/format';
@@ -23,14 +23,13 @@
 
 <div class="flex items-center gap-3 rounded-md border px-3 py-2">
     <!-- Avatar -->
-    <Avatar.Root class="size-6 shrink-0 rounded">
-        {#if file.iconUrl}
-            <Avatar.Image src={file.iconUrl} alt={file.projectTitle} />
-        {/if}
-        <Avatar.Fallback class="rounded text-[10px]">
-            {file.projectTitle.charAt(0)}
-        </Avatar.Fallback>
-    </Avatar.Root>
+    <ModAvatar
+        iconUrl={file.iconUrl}
+        title={file.projectTitle}
+        size="sm"
+        rounding="rounded"
+        class="shrink-0"
+    />
 
     <!-- Title -->
     <span class="min-w-0 flex-1 truncate text-sm font-medium">

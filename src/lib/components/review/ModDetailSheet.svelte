@@ -1,31 +1,32 @@
 <script lang="ts">
     import type { ResolvedProject, ResolutionWarning } from '$lib/services/types';
     import * as Sheet from '$lib/components/ui/sheet';
-    import * as Avatar from '$lib/components/ui/avatar';
     import * as Tabs from '$lib/components/ui/tabs';
+    import ModAvatar from './ModAvatar.svelte';
     import * as ScrollArea from '$lib/components/ui/scroll-area';
-    import * as AlertDialog from '$lib/components/ui/alert-dialog';
+    import ExcludeConfirmDialog from './ExcludeConfirmDialog.svelte';
+    import * as Empty from '$lib/components/ui/empty';
     import { Badge } from '$lib/components/ui/badge';
     import { Button } from '$lib/components/ui/button';
-    import SideBadge from './SideBadge.svelte';
-    import LoaderBadge from './LoaderBadge.svelte';
+    import ModBadgeRow from './ModBadgeRow.svelte';
     import ModrinthWordmark from '$lib/components/icons/ModrinthWordmark.svelte';
-    import { VERSION_TYPE_BADGE_CLASSES, decimalToHex } from '$lib/utils/colors';
+    import { SEMANTIC_BANNER_COLORS, decimalToHex } from '$lib/utils/colors';
     import {
+        formatSlugToReadableText,
         formatBytes,
         formatNumber,
         formatRelativeTime,
-        getLoaderDisplayName
+        getModrinthProjectUrl
     } from '$lib/utils/format';
-    import { cn } from '$lib/utils';
-    import { marked } from 'marked';
-    import DOMPurify from 'isomorphic-dompurify';
+    import { renderMarkdown } from '$lib/utils/markdown';
     import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
     import DownloadIcon from '@lucide/svelte/icons/download';
     import EyeOffIcon from '@lucide/svelte/icons/eye-off';
     import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
     import CopyIcon from '@lucide/svelte/icons/copy';
+    import FileTextIcon from '@lucide/svelte/icons/file-text';
     import CheckIcon from '@lucide/svelte/icons/check';
+    import { SiModrinth } from '@icons-pack/svelte-simple-icons';
 
     interface Props {
         open: boolean;
@@ -33,6 +34,7 @@
         warnings: ResolutionWarning[];
         isExcluded: boolean;
         loader: string;
+        resolvedDependencies?: { title: string; iconUrl?: string }[];
         onExclude?: (id: string) => void;
         onClose: () => void;
     }
@@ -43,6 +45,7 @@
         warnings,
         isExcluded,
         loader,
+        resolvedDependencies = [],
         onExclude,
         onClose
     }: Props = $props();
@@ -51,13 +54,9 @@
     let activeTab = $state('overview');
 
     let projectUrl = $derived(
-        project ? `https://modrinth.com/${project.projectType}/${project.projectSlug}` : '#'
+        project ? getModrinthProjectUrl(project.projectType, project.projectSlug) : '#'
     );
-    let renderedChangelog = $derived(
-        project?.changelog
-            ? DOMPurify.sanitize(marked.parse(project.changelog, { async: false }) as string)
-            : ''
-    );
+    let renderedChangelog = $derived(project?.changelog ? renderMarkdown(project.changelog) : '');
     let hasChangelog = $derived(!!project?.changelog?.trim());
     let hasGallery = $derived(!!project?.gallery?.length);
 
@@ -87,14 +86,12 @@
                         class="shrink-0 rounded-xl ring-2"
                         style="--tw-ring-color: {accentColor ?? 'transparent'}"
                     >
-                        <Avatar.Root class="size-16 rounded-xl">
-                            {#if project.iconUrl}
-                                <Avatar.Image src={project.iconUrl} alt={project.projectTitle} />
-                            {/if}
-                            <Avatar.Fallback class="rounded-xl text-lg">
-                                {project.projectTitle.charAt(0)}
-                            </Avatar.Fallback>
-                        </Avatar.Root>
+                        <ModAvatar
+                            iconUrl={project.iconUrl}
+                            title={project.projectTitle}
+                            size="lg"
+                            rounding="rounded-xl"
+                        />
                     </div>
                     <div class="min-w-0 flex-1">
                         <Sheet.Title class="text-xl">{project.projectTitle}</Sheet.Title>
@@ -103,52 +100,78 @@
                         </Sheet.Description>
                     </div>
                 </div>
+
+                <!-- Categories below description -->
+                {#if project.categories && project.categories.length > 0}
+                    <div class="mt-3 flex flex-wrap gap-1">
+                        {#each project.categories as cat (cat)}
+                            <Badge variant="outline" class="text-xs"
+                                >{formatSlugToReadableText(cat)}</Badge
+                            >
+                        {/each}
+                    </div>
+                {/if}
             </Sheet.Header>
 
             <div class="space-y-5 px-6 pb-20">
-                <!-- Modrinth branded pill -->
-                <a
-                    href={projectUrl}
-                    target="_blank"
-                    rel="noopener noreferrer external"
-                    class="inline-flex items-center gap-2 rounded-full border border-[#1bd96a]/30 bg-[#1bd96a]/5 px-3 py-1 text-sm transition-colors hover:bg-[#1bd96a]/10 dark:border-[#1bd96a]/20 dark:bg-[#1bd96a]/5"
-                >
-                    <ModrinthWordmark class="h-3.5 w-auto text-[#1bd96a]" />
-                    <ExternalLinkIcon class="size-3 text-[#1bd96a]/70" />
-                </a>
-
-                <!-- Badge row -->
+                <!-- Badge row with Modrinth link -->
                 <div class="flex flex-wrap items-center gap-2">
-                    <SideBadge side={project.side} />
-                    {#each project.loaders.filter((l) => l === loader || project.usedFallbackLoader) as loaderName (loaderName)}
-                        <LoaderBadge loaderSlug={loaderName} />
-                    {/each}
-                    {#if project.versionType !== 'release'}
-                        <Badge
-                            variant="secondary"
-                            class={cn(
-                                'text-[10px]',
-                                VERSION_TYPE_BADGE_CLASSES[project.versionType]
-                            )}
-                        >
-                            {project.versionType}
-                        </Badge>
-                    {/if}
-                    {#if project.usedFallbackLoader && project.resolvedLoader}
-                        <Badge variant="outline" class="text-[10px]">
-                            via {getLoaderDisplayName(project.resolvedLoader)}
-                        </Badge>
-                    {/if}
+                    <ModBadgeRow {project} {loader} class="gap-2" />
+
+                    <a
+                        href={projectUrl}
+                        target="_blank"
+                        rel="noopener noreferrer external"
+                        class="ml-auto inline-flex items-center gap-2 rounded-full border border-modrinth/30 bg-modrinth px-3 py-1.5 text-sm text-white transition-colors hover:contrast-85 dark:border-modrinth/20 dark:bg-modrinth/5 dark:text-modrinth dark:hover:contrast-150"
+                    >
+                        <SiModrinth class="size-3 text-white dark:text-modrinth/70" />
+
+                        Visit
+                        <ExternalLinkIcon class="size-3 text-white/70 dark:text-modrinth/70" />
+                    </a>
                 </div>
 
                 <!-- Warnings -->
                 {#if warnings.length > 0}
                     <div
-                        class="rounded-md bg-yellow-50 px-3 py-2 text-sm text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400"
+                        class="rounded-md px-3 py-2 text-sm {SEMANTIC_BANNER_COLORS.warning
+                            .bg} {SEMANTIC_BANNER_COLORS.warning.text}"
                     >
                         {#each warnings as w (w.type)}
                             <p>{w.message}</p>
                         {/each}
+                    </div>
+                {/if}
+
+                <!-- Gallery (always visible, above tabs) -->
+                {#if hasGallery}
+                    <div class="space-y-2">
+                        <h4 class="text-sm font-medium">Gallery</h4>
+                        <ScrollArea.Root class="w-full" orientation="horizontal">
+                            <div class="flex gap-2">
+                                {#each project.gallery! as image (image.url)}
+                                    <a
+                                        href={image.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer external"
+                                        class="shrink-0"
+                                    >
+                                        <img
+                                            src={image.url}
+                                            alt={image.title ?? 'Gallery image'}
+                                            class="h-32 w-auto rounded-md border object-cover transition-opacity hover:opacity-80"
+                                        />
+                                        {#if image.title}
+                                            <p
+                                                class="mt-1 max-w-40 truncate text-xs text-muted-foreground"
+                                            >
+                                                {image.title}
+                                            </p>
+                                        {/if}
+                                    </a>
+                                {/each}
+                            </div>
+                        </ScrollArea.Root>
                     </div>
                 {/if}
 
@@ -174,13 +197,30 @@
                                 <span class="text-xs text-muted-foreground">File Size</span>
                                 <p class="text-sm font-medium">{formatBytes(project.fileSize)}</p>
                             </div>
-                            <div class="rounded-lg bg-muted/50 p-3">
+                            <!-- Dependencies: compact list or count -->
+                            <div class="col-span-2 rounded-lg bg-muted/50 p-3">
                                 <span class="text-xs text-muted-foreground">Dependencies</span>
-                                <p class="text-sm font-medium">
-                                    {project.dependencyCount > 0
-                                        ? `${project.dependencyCount} required`
-                                        : 'None'}
-                                </p>
+                                {#if resolvedDependencies.length > 0}
+                                    <div class="mt-1.5 space-y-1">
+                                        {#each resolvedDependencies as dep (dep.title)}
+                                            <div class="flex items-center gap-2">
+                                                <ModAvatar
+                                                    iconUrl={dep.iconUrl}
+                                                    title={dep.title}
+                                                    size="xs"
+                                                    rounding="rounded-md"
+                                                />
+                                                <span class="text-sm">{dep.title}</span>
+                                            </div>
+                                        {/each}
+                                    </div>
+                                {:else}
+                                    <p class="text-sm font-medium">
+                                        {project.dependencyCount > 0
+                                            ? `${project.dependencyCount} required`
+                                            : 'None'}
+                                    </p>
+                                {/if}
                             </div>
                             {#if project.downloadCount != null}
                                 <div class="rounded-lg bg-muted/50 p-3">
@@ -218,58 +258,33 @@
                                 </div>
                             {/if}
                         </div>
-
-                        <!-- Categories -->
-                        {#if project.categories && project.categories.length > 0}
-                            <div class="flex flex-wrap gap-1">
-                                {#each project.categories as cat (cat)}
-                                    <Badge variant="outline" class="text-xs">{cat}</Badge>
-                                {/each}
-                            </div>
-                        {/if}
-
-                        <!-- Gallery -->
-                        {#if hasGallery}
-                            <div class="space-y-2">
-                                <h4 class="text-sm font-medium">Gallery</h4>
-                                <ScrollArea.Root class="w-full" orientation="horizontal">
-                                    <div class="flex gap-2">
-                                        {#each project.gallery! as image (image.url)}
-                                            <a
-                                                href={image.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer external"
-                                                class="shrink-0"
-                                            >
-                                                <img
-                                                    src={image.url}
-                                                    alt={image.title ?? 'Gallery image'}
-                                                    class="h-32 w-auto rounded-md border object-cover transition-opacity hover:opacity-80"
-                                                />
-                                                {#if image.title}
-                                                    <p
-                                                        class="mt-1 max-w-40 truncate text-xs text-muted-foreground"
-                                                    >
-                                                        {image.title}
-                                                    </p>
-                                                {/if}
-                                            </a>
-                                        {/each}
-                                    </div>
-                                </ScrollArea.Root>
-                            </div>
-                        {/if}
                     </Tabs.Content>
 
                     <!-- Changelog Tab -->
                     {#if hasChangelog}
                         <Tabs.Content value="changelog" class="pt-4">
-                            <ScrollArea.Root class="max-h-[60vh]">
-                                <div class="prose prose-sm dark:prose-invert max-w-none">
-                                    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                                    {@html renderedChangelog}
-                                </div>
-                            </ScrollArea.Root>
+                            {#if renderedChangelog}
+                                <ScrollArea.Root class="max-h-[60vh]">
+                                    <div
+                                        class="prose prose-sm max-w-none dark:prose-invert prose-headings:text-base prose-headings:font-semibold prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-muted prose-li:text-sm prose-img:rounded-md"
+                                    >
+                                        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                                        {@html renderedChangelog}
+                                    </div>
+                                </ScrollArea.Root>
+                            {:else}
+                                <Empty.Root>
+                                    <Empty.Header>
+                                        <Empty.Media variant="icon">
+                                            <FileTextIcon />
+                                        </Empty.Media>
+                                        <Empty.Title>No changelog</Empty.Title>
+                                        <Empty.Description>
+                                            This version doesn't have changelog details.
+                                        </Empty.Description>
+                                    </Empty.Header>
+                                </Empty.Root>
+                            {/if}
                         </Tabs.Content>
                     {/if}
 
@@ -310,15 +325,24 @@
                                     </Button>
                                 </div>
                             </div>
-                            <div class="pt-2">
+
+                            <div class="space-y-1 pt-4">
+                                <!-- Modrinth download button -->
                                 <a
                                     href={project.fileUrl}
                                     target="_blank"
                                     rel="noopener noreferrer external"
-                                    class="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
                                 >
-                                    <DownloadIcon class="size-3.5" />
-                                    Direct download link
+                                    <span
+                                        class="flex items-center justify-center gap-2 rounded-full border border-modrinth/30 bg-modrinth px-2 py-2.5 font-medium text-white transition-colors
+                            hover:contrast-85 dark:border-modrinth/20 dark:bg-modrinth/5 dark:text-modrinth dark:hover:contrast-150"
+                                    >
+                                        <DownloadIcon class="size-4" />
+                                        Download from
+                                        <ModrinthWordmark
+                                            class="h-4 w-auto fill-white text-white dark:fill-modrinth dark:text-modrinth"
+                                        />
+                                    </span>
                                 </a>
                             </div>
                         </div>
@@ -341,39 +365,21 @@
                             Restore to download
                         </Button>
                     {:else}
-                        <AlertDialog.Root>
-                            <AlertDialog.Trigger>
-                                {#snippet child({ props })}
-                                    <Button
-                                        variant="outline"
-                                        class="w-full text-destructive hover:text-destructive"
-                                        {...props}
-                                    >
-                                        <EyeOffIcon class="mr-2 size-4" />
-                                        Exclude from download
-                                    </Button>
-                                {/snippet}
-                            </AlertDialog.Trigger>
-                            <AlertDialog.Content>
-                                <AlertDialog.Header>
-                                    <AlertDialog.Title
-                                        >Exclude {project.projectTitle}?</AlertDialog.Title
-                                    >
-                                    <AlertDialog.Description>
-                                        This mod won't be included in the ZIP download. You can
-                                        restore it anytime.
-                                    </AlertDialog.Description>
-                                </AlertDialog.Header>
-                                <AlertDialog.Footer>
-                                    <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-                                    <AlertDialog.Action
-                                        onclick={() => onExclude(project.projectId)}
-                                    >
-                                        Exclude
-                                    </AlertDialog.Action>
-                                </AlertDialog.Footer>
-                            </AlertDialog.Content>
-                        </AlertDialog.Root>
+                        <ExcludeConfirmDialog
+                            projectTitle={project.projectTitle}
+                            onConfirm={() => onExclude(project.projectId)}
+                        >
+                            {#snippet trigger({ props })}
+                                <Button
+                                    variant="outline"
+                                    class="w-full text-destructive hover:text-destructive"
+                                    {...props}
+                                >
+                                    <EyeOffIcon class="mr-2 size-4" />
+                                    Exclude from download
+                                </Button>
+                            {/snippet}
+                        </ExcludeConfirmDialog>
                     {/if}
                 {/if}
             </Sheet.Footer>
