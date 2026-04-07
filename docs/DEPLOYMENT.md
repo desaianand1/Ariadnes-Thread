@@ -216,7 +216,7 @@ All server-side env vars are validated via Zod in `src/lib/config/env.server.ts`
 | `RETRY_DELAY_MS`           | `1000`                     | Base retry delay                   |
 | `RETRY_BACKOFF_STRATEGY`   | `exponential`              | `exponential` / `linear` / `fixed` |
 | `MAX_CONCURRENT_DOWNLOADS` | `4`                        | Parallel download limit (1–10)     |
-| `FETCH_TIMEOUT_MS`         | `30000`                    | HTTP request timeout               |
+| `FETCH_TIMEOUT_MS`         | `60000`                    | HTTP request timeout               |
 | `RESEND_API_KEY`           | _(none)_                   | Resend API key (optional)          |
 | `TURNSTILE_SECRET_KEY`     | _(none — required)_        | Turnstile server secret            |
 

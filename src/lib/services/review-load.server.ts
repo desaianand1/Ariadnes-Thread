@@ -23,6 +23,7 @@ import {
     ADVISOR_MIN_ABSOLUTE_GAIN,
     PAGE_LOAD_TIMEOUT_MS,
     LARGE_LOAD_TIMEOUT_MS,
+    PREFETCH_TIMEOUT_MS,
     MODRINTH_BATCH_SIZE,
     RESOLUTION_MESSAGES,
     VIEW_MODE_COOKIE,
@@ -753,14 +754,35 @@ export async function loadReviewData(params: ReviewLoadParams) {
         timeoutId = setTimeout(() => reject(new Error('Request timed out')), TIMEOUT_MS);
     });
 
-    const [prefetchResults, gameVersionsResult] = await Promise.all([
-        Promise.allSettled(reviewOptions.collectionIds.map((id) => fetchCollection(client, id))),
-        skipAdvisor
-            ? ([] as ModrinthGameVersion[])
-            : client
-                  .requestVersion<ModrinthGameVersion[]>('tag/game_version', 'v2')
-                  .catch(() => [] as ModrinthGameVersion[])
-    ]);
+    let prefetchResults: PromiseSettledResult<CollectionFetchResult>[];
+    let gameVersionsResult: ModrinthGameVersion[];
+
+    const prefetchTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Prefetch timed out')), PREFETCH_TIMEOUT_MS);
+    });
+
+    try {
+        [prefetchResults, gameVersionsResult] = await Promise.race([
+            Promise.all([
+                Promise.allSettled(
+                    reviewOptions.collectionIds.map((id) => fetchCollection(client, id))
+                ),
+                skipAdvisor
+                    ? ([] as ModrinthGameVersion[])
+                    : client
+                          .requestVersion<ModrinthGameVersion[]>('tag/game_version', 'v2')
+                          .catch(() => [] as ModrinthGameVersion[])
+            ]),
+            prefetchTimeoutPromise
+        ]);
+    } catch {
+        clearTimeout(timeoutId!);
+        return buildEmptyResponse(
+            reviewOptions,
+            RESOLUTION_MESSAGES.PREFETCH_TIMEOUT,
+            initialViewMode
+        );
+    }
 
     const totalProjects = prefetchResults.reduce((sum, r) => {
         if (r.status === 'fulfilled') return sum + r.value.projects.length;

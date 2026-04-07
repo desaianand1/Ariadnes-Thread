@@ -48,7 +48,7 @@ const envSchema = z.object({
         .default(MAX_CONCURRENT_DOWNLOADS),
 
     // Network
-    FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
+    FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
     // Optional services
     RESEND_API_KEY: z.string().optional(),

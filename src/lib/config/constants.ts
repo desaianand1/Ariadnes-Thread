@@ -360,6 +360,7 @@ export const RATE_LIMIT_DEFAULT_RETRY_SECONDS = 5;
 /** Centralized error messages for the /review resolution page */
 export const RESOLUTION_MESSAGES = {
     TIMEOUT: 'The request took too long. Try with fewer collections or try again later.',
+    PREFETCH_TIMEOUT: 'Modrinth took too long to respond. Please try again later.',
     ALL_FAILED: 'Could not reach Modrinth. The API may be temporarily unavailable.',
     GENERIC: 'Something went wrong while processing results. Please try again.'
 } as const;
@@ -371,11 +372,12 @@ export const RESOLUTION_BATCH_SIZE = 50;
 export const MODRINTH_RATE_LIMIT = 300;
 
 /**
- * Show MultiStepLoader when total projects exceed 50% of Modrinth's rate limit.
- * Each mod costs ~1.5-2x requests (version lookup + deps), so 150 mods ≈ 225-300
- * total API requests — right at the rate limit. Lower factor gives headroom.
+ * Show MultiStepLoader when total projects exceed 15% of Modrinth's rate limit.
+ * Each mod costs ~1.5-2x requests (version lookup + deps), so 45 mods ≈ 67-90
+ * total API requests — comfortably within the small-load 30s budget. Above this
+ * threshold the batched streaming path provides progress UI and rate-limit pacing.
  */
-export const LARGE_LOAD_THRESHOLD = Math.floor(MODRINTH_RATE_LIMIT * 0.5);
+export const LARGE_LOAD_THRESHOLD = Math.floor(MODRINTH_RATE_LIMIT * 0.15);
 
 /** Raised from 300 — batching handles pacing, this is just abuse prevention */
 export const MAX_TOTAL_PROJECTS = 1000;
@@ -390,7 +392,10 @@ export const MAX_RATE_LIMIT_WAIT_MS = 5_000;
 export const RATE_LIMIT_SAFETY_MARGIN = 50;
 
 /** Page-level load timeout for /review (covers all resolution + fetching) */
-export const PAGE_LOAD_TIMEOUT_MS = 25_000;
+export const PAGE_LOAD_TIMEOUT_MS = 30_000;
+
+/** Timeout for the prefetch phase (collection + game version fetches) before resolution begins */
+export const PREFETCH_TIMEOUT_MS = 10_000;
 
 /** Overall timeout for the large-load streaming path (2 minutes) */
 export const LARGE_LOAD_TIMEOUT_MS = 120_000;
