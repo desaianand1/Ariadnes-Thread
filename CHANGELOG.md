@@ -1,3 +1,9 @@
+## [1.25.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.25.2...v1.25.3) (2026-04-07)
+
+### Bug Fixes
+
+- **config:** pre-fetch timeout was too restrictive, loosened defaults ([0f5836a](https://github.com/desaianand1/Ariadnes-Thread/commit/0f5836a172c771632f66757f576a424712f218b5))
+
 ## [1.25.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.25.1...v1.25.2) (2026-04-07)
 
 ### Bug Fixes
