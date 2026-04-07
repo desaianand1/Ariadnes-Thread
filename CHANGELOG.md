@@ -1,3 +1,10 @@
+## [1.25.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.25.1...v1.25.2) (2026-04-07)
+
+### Bug Fixes
+
+- **review:** prevent timeout for medium-sized collections (46-150 mods) ([f722569](https://github.com/desaianand1/Ariadnes-Thread/commit/f72256984dd238714edd5b43105029d3b4da77ab))
+- **security:** add static.cloudflareinsights.com to CSP connect-src ([ba81eaf](https://github.com/desaianand1/Ariadnes-Thread/commit/ba81eaf01229bc70c8d534727c7c04b0bbe2e5af))
+
 ## [1.25.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.25.0...v1.25.1) (2026-04-07)
 
 ### Bug Fixes
