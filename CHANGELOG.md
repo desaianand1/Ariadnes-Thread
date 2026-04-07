@@ -1,3 +1,9 @@
+# [1.23.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.22.0...v1.23.0) (2026-04-07)
+
+### Features
+
+- **review:** redesign review page with simple/detailed views and config advisor ([b8048f4](https://github.com/desaianand1/Ariadnes-Thread/commit/b8048f479cdd4285eade82bde8a47a99f34a7974))
+
 # [1.22.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.21.1...v1.22.0) (2026-04-07)
 
 ### Features
