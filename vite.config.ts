@@ -42,6 +42,7 @@ function cloudflareNodeCompat(): Plugin {
 
 export default defineConfig({
     plugins: [tailwindcss(), sveltekit(), cloudflareNodeCompat(), devtoolsJson()],
+    optimizeDeps: { include: ['qrcode'] },
     define: { __APP_VERSION__: JSON.stringify(pkg.version) },
     test: {
         expect: { requireAssertions: true },

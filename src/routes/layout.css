@@ -15,6 +15,9 @@
     --modrinth: oklch(0.6608 0.171205 152.7071);
     --discord: oklch(0.5774 0.2091 273.85);
     --curseforge: oklch(0.6745 0.1841 37.96);
+    --vanilla: oklch(0.6709 0.2245 142.56);
+    --gdlauncher: oklch(0.4993 0.1186 252.03);
+    --prism: oklch(0.9 0.01 0);
     --gradient-start: oklch(25.71% 0.0133 298.468);
     --gradient-mid: oklch(0.68 0.2 37);
     --gradient-end: oklch(0.6 0.25 293);
@@ -124,6 +127,9 @@
     --color-modrinth: var(--modrinth);
     --color-discord: var(--discord);
     --color-curseforge: var(--curseforge);
+    --color-vanilla: var(--vanilla);
+    --color-gdlauncher: var(--gdlauncher);
+    --color-prism: var(--prism);
     --color-gradient-start: var(--gradient-start);
     --color-gradient-mid: var(--gradient-mid);
     --color-gradient-end: var(--gradient-end);
