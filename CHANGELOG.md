@@ -1,3 +1,10 @@
+# [1.22.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.21.1...v1.22.0) (2026-04-07)
+
+### Features
+
+- **advisor:** add best configuration advisor with histogram-guided probing ([7d83845](https://github.com/desaianand1/Ariadnes-Thread/commit/7d838454c6d686140b92450861f949c0ba560d4b))
+- **api:** add Cloudflare rate-limit handling, retry jitter, and batched resolution ([3840e1f](https://github.com/desaianand1/Ariadnes-Thread/commit/3840e1f9d66c76906eb1617ec9f83cb40ef8aa45))
+
 ## [1.21.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.21.0...v1.21.1) (2026-04-03)
 
 ### Bug Fixes
