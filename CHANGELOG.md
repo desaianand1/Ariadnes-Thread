@@ -1,3 +1,11 @@
+# [1.24.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.23.0...v1.24.0) (2026-04-07)
+
+### Features
+
+- **download:** track completed sides and improve download UX ([70b2827](https://github.com/desaianand1/Ariadnes-Thread/commit/70b2827b7292d76baf887ca1ad35ca0e2466c24c))
+- **review:** add category summary computation ([8e71a52](https://github.com/desaianand1/Ariadnes-Thread/commit/8e71a523ece59993127639f8e231ed7e375bec70))
+- **share:** add share URL builder with curator name param ([37f4ddc](https://github.com/desaianand1/Ariadnes-Thread/commit/37f4ddc18282f9ad942d14c2ea2efa862f4d7a7b))
+
 # [1.23.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.22.0...v1.23.0) (2026-04-07)
 
 ### Features
