@@ -1,3 +1,9 @@
+## [1.25.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.25.0...v1.25.1) (2026-04-07)
+
+### Bug Fixes
+
+- **README:** add missing badges to README ([b80fd2a](https://github.com/desaianand1/Ariadnes-Thread/commit/b80fd2a28912bbcbd2a6aaed6896a25aaee487da))
+
 # [1.25.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.24.0...v1.25.0) (2026-04-07)
 
 ### Features
