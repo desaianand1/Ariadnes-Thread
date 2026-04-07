@@ -12,7 +12,7 @@
         top: 0;
         left: 0;
         z-index: 100;
-        height: 2px;
+        height: 4px;
         background: var(--color-primary);
         animation: loading 2s ease-out forwards;
     }

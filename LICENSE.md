@@ -6,7 +6,7 @@ FSL-1.1-ALv2
 
 ## Notice
 
-Copyright 2024-2026 Nirnshard LLP (<https://nirnshard.com>)
+Copyright 2024-2026 Nirnshard (<https://nirnshard.com>)
 
 ## Terms and Conditions
 

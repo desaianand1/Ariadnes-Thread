@@ -5,7 +5,7 @@ export const siteConfig = {
     url: 'https://modrinth.download',
     domain: 'modrinth.download',
     supportEmail: 'support@modrinth.download',
-    legalEntity: 'Nirnshard LLP',
+    legalEntity: 'Nirnshard',
     author: { name: 'Nirnshard', url: 'https://nirnshard.com' },
     keywords: [
         'modrinth',
@@ -16,7 +16,7 @@ export const siteConfig = {
         'curseforge'
     ] as string[],
     locale: 'en_US',
-    themeColor: { light: '#1bd96a', dark: '#262626' },
+    themeColor: { light: '#fdfdfd', dark: '#0b0811' },
     ogImage: '/og-image.png',
     icons: {
         favicon: '/favicon.svg',
