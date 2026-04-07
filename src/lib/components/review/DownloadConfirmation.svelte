@@ -74,7 +74,7 @@
     {#snippet description()}
         {side === 'client'
             ? 'For your game — goes into your .minecraft folder'
-            : 'For your server — goes into the server directory'}
+            : "For your server — goes into the server's mods/ directory"}
     {/snippet}
 
     <div class="space-y-4 py-4">

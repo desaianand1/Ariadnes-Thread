@@ -39,6 +39,8 @@
         onDownloadOtherSide?: (side: 'client' | 'server') => void;
         onShare?: () => void;
         shareUrl?: string;
+        preselectedLauncher?: string;
+        hideOtherSideDownload?: boolean;
     }
 
     let {
@@ -50,16 +52,25 @@
         onRetry,
         onDownloadOtherSide,
         onShare,
-        shareUrl = ''
+        shareUrl = '',
+        preselectedLauncher,
+        hideOtherSideDownload = false
     }: Props = $props();
 
     let activeGuide = $state('vanilla');
+
+    // Initialize guide to preselected launcher when provided
+    $effect(() => {
+        if (preselectedLauncher) {
+            activeGuide = preselectedLauncher;
+        }
+    });
 
     let completedCount = $derived(dlState.files.filter((f) => f.status === 'complete').length);
     let totalCount = $derived(dlState.files.length);
 
     let userOS = $derived(detectOS());
-    let sideLabel = $derived(dlState.targetSide === 'client' ? 'Client Mods' : 'Server Mods');
+    let sideLabel = $derived(dlState.targetSide === 'client' ? 'Mods' : 'Server Mods');
     let otherSide = $derived<'client' | 'server'>(
         dlState.targetSide === 'client' ? 'server' : 'client'
     );
@@ -70,9 +81,9 @@
         otherSide === 'server' ? 'Download Server Mods' : 'Download Mods'
     );
 
-    let hasClientZip = $derived(!!dlState.clientZipBlob);
-    let hasServerZip = $derived(!!dlState.serverZipBlob);
-    let hasBothZips = $derived(hasClientZip && hasServerZip);
+    let hasBothCompleted = $derived(
+        dlState.completedSides.has('client') && dlState.completedSides.has('server')
+    );
 
     let currentSideZipSize = $derived(
         dlState.targetSide === 'client' ? dlState.clientZipSize : dlState.serverZipSize
@@ -158,29 +169,29 @@
             class="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30"
             in:fly={safeTransition({ y: 10, duration: ANIMATION_DURATION.NORMAL })}
         >
-            {#if hasBothZips}
-                <!-- Both downloads complete -->
+            {#if hasBothCompleted}
+                <!-- Both sides explicitly downloaded -->
                 <div
                     class="flex items-center gap-2"
                     in:slide={safeTransition({ duration: ANIMATION_DURATION.FAST })}
                 >
                     <CheckCircleIcon class="size-5 text-emerald-600 dark:text-emerald-400" />
                     <span class="font-medium text-emerald-800 dark:text-emerald-200">
-                        Both downloads complete
+                        All mods ready
                     </span>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
                     <Button size="sm" onclick={onSaveClient}>
                         <MonitorIcon class="mr-1.5 size-3.5" />
-                        Save Client ZIP
+                        Download Mods
                         <span class="ml-1 text-xs opacity-70"
                             >{formatBytes(dlState.clientZipSize)}</span
                         >
                     </Button>
                     <Button size="sm" variant="secondary" onclick={onSaveServer}>
                         <ServerIcon class="mr-1.5 size-3.5" />
-                        Save Server ZIP
+                        Download Server Mods
                         <span class="ml-1 text-xs opacity-70"
                             >{formatBytes(dlState.serverZipSize)}</span
                         >
@@ -194,24 +205,27 @@
                 <div class="flex items-center gap-2">
                     <CheckCircleIcon class="size-5 text-emerald-600 dark:text-emerald-400" />
                     <span class="font-medium text-emerald-800 dark:text-emerald-200">
-                        {sideLabel} ({formatBytes(currentSideZipSize)})
+                        {dlState.targetSide === 'client'
+                            ? 'Your mods are ready'
+                            : 'Server mods are ready'}
+                        ({formatBytes(currentSideZipSize)})
                     </span>
                 </div>
 
-                <p class="text-xs text-muted-foreground">
+                <p class="inline-flex items-center gap-2 text-xs text-muted-foreground">
                     Download didn't start?
                     <Button
-                        variant="link"
                         size="sm"
-                        class="h-auto p-0 text-xs"
+                        variant="link"
                         onclick={dlState.targetSide === 'client' ? onSaveClient : onSaveServer}
                     >
-                        Save ZIP
+                        <DownloadIcon class="mr-1.5 size-3.5" />
+                        {`Save ${sideLabel}`}
                     </Button>
                 </p>
 
                 <!-- "Download Other Side" CTA -->
-                {#if onDownloadOtherSide}
+                {#if onDownloadOtherSide && !hideOtherSideDownload}
                     <div
                         class="flex items-center gap-3 border-t pt-3"
                         transition:slide={safeTransition({ duration: ANIMATION_DURATION.FAST })}

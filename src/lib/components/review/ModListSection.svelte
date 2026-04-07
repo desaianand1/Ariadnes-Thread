@@ -42,7 +42,7 @@
         conflictProjectIds: Set<string>;
         loader: string;
         excludedIds: Set<string>;
-        onExclude: (id: string) => void;
+        onExclude?: (id: string) => void;
         collectionNames: Record<string, string>;
         showCollectionNames: boolean;
         onSelectProject: (project: ResolvedProject) => void;

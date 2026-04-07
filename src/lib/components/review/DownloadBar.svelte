@@ -17,6 +17,8 @@
         unavailableCount: number;
         onStartDownload: (side: 'client' | 'server') => void;
         onShare?: () => void;
+        hideServerDownload?: boolean;
+        hideShare?: boolean;
     }
 
     let {
@@ -26,7 +28,9 @@
         hasServerMods,
         unavailableCount,
         onStartDownload,
-        onShare
+        onShare,
+        hideServerDownload = false,
+        hideShare = false
     }: Props = $props();
 </script>
 
@@ -66,7 +70,7 @@
                     </Button>
                 {/if}
 
-                {#if hasServerMods}
+                {#if hasServerMods && !hideServerDownload}
                     <Button
                         size="sm"
                         variant="outline"
@@ -85,7 +89,7 @@
                     </Button>
                 {/if}
 
-                {#if onShare}
+                {#if onShare && !hideShare}
                     <Tooltip.Root>
                         <Tooltip.Trigger>
                             {#snippet child({ props })}

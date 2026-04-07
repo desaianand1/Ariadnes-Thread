@@ -25,6 +25,7 @@ import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 // Types
 // =============================================================================
 
+export type DownloadSide = Exclude<SideClassification, 'both'>;
 export type FileStatus = 'queued' | 'downloading' | 'verifying' | 'complete' | 'error';
 export type DownloadPhase = 'idle' | 'downloading' | 'verifying' | 'zipping' | 'complete' | 'error';
 
@@ -46,7 +47,7 @@ export interface FileProgress {
 
 export interface DownloadState {
     phase: DownloadPhase;
-    targetSide: 'client' | 'server' | null;
+    targetSide: DownloadSide | null;
     files: FileProgress[];
     overallBytesDownloaded: number;
     overallTotalBytes: number;
@@ -57,6 +58,8 @@ export interface DownloadState {
     clientZipSize: number;
     serverZipBlob: Blob | null;
     serverZipSize: number;
+    /** Tracks which sides the user explicitly completed downloads for */
+    completedSides: SvelteSet<DownloadSide>;
     isMiniProgress: boolean;
     errorMessage: string | null;
     abortController: AbortController | null;
@@ -82,6 +85,7 @@ const INITIAL_STATE: DownloadState = {
     clientZipSize: 0,
     serverZipBlob: null,
     serverZipSize: 0,
+    completedSides: new SvelteSet(),
     isMiniProgress: false,
     errorMessage: null,
     abortController: null,
@@ -151,7 +155,7 @@ export function isStaleSession(currentKey: string): boolean {
 
 export function initDownload(
     projects: ResolvedProject[],
-    side: 'client' | 'server',
+    side: DownloadSide,
     settings?: { concurrentDownloads?: number; retryCount?: number; sessionKey?: string }
 ): void {
     const filtered = projects.filter((p) => p.side === side || p.side === 'both');
@@ -312,6 +316,7 @@ export async function startDownload(): Promise<void> {
             state.serverZipSize = zips.server.size;
         }
 
+        if (state.targetSide) state.completedSides.add(state.targetSide);
         state.phase = 'complete';
     } catch (error) {
         if (state.abortController?.signal.aborted) return;
@@ -325,12 +330,13 @@ export function cancelDownload(): void {
     resetDownload();
 }
 
-/** Soft reset: clears UI state but preserves downloadCache and zip blobs */
+/** Soft reset: clears UI state but preserves downloadCache, zip blobs, and completedSides */
 export function resetDownload(): void {
     const preservedClient = state.clientZipBlob;
     const preservedClientSize = state.clientZipSize;
     const preservedServer = state.serverZipBlob;
     const preservedServerSize = state.serverZipSize;
+    const preservedSides = state.completedSides;
 
     Object.assign(state, { ...INITIAL_STATE, abortController: null });
 
@@ -338,6 +344,7 @@ export function resetDownload(): void {
     state.clientZipSize = preservedClientSize;
     state.serverZipBlob = preservedServer;
     state.serverZipSize = preservedServerSize;
+    state.completedSides = preservedSides;
 
     speedSamples = [];
 }
