@@ -3,6 +3,7 @@ import type { ModrinthProject, ModrinthVersion } from '$lib/api/types';
 import { getProjectFolder } from '$lib/api/types';
 import { classifySide } from './side-classification';
 import { MAX_DEPENDENCY_DEPTH } from '$lib/config/constants';
+import { chunkArray } from '$lib/utils/array';
 import { resolveVersion } from './resolution.server';
 import type {
     ResolutionOptions,
@@ -401,12 +402,4 @@ async function resolveUnpinnedDeps(
     }
 
     return { resolved, warnings, unresolved: unresolvedDeps };
-}
-
-function chunkArray<T>(arr: T[], size: number): T[][] {
-    const chunks: T[][] = [];
-    for (let i = 0; i < arr.length; i += size) {
-        chunks.push(arr.slice(i, i + size));
-    }
-    return chunks;
 }
