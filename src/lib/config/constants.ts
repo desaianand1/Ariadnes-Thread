@@ -395,7 +395,7 @@ export const RATE_LIMIT_SAFETY_MARGIN = 50;
 export const PAGE_LOAD_TIMEOUT_MS = 30_000;
 
 /** Timeout for the prefetch phase (collection + game version fetches) before resolution begins */
-export const PREFETCH_TIMEOUT_MS = 10_000;
+export const PREFETCH_TIMEOUT_MS = 30_000;
 
 /** Overall timeout for the large-load streaming path (2 minutes) */
 export const LARGE_LOAD_TIMEOUT_MS = 120_000;
