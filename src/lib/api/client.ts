@@ -32,7 +32,7 @@ const DEFAULT_CONFIG: APIClientConfig = {
     maxRetries: 3,
     retryDelayMs: 1000,
     retryBackoffStrategy: 'exponential',
-    fetchTimeoutMs: 30_000
+    fetchTimeoutMs: 90_000
 };
 
 /**
