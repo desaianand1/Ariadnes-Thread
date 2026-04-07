@@ -55,6 +55,8 @@ export interface ResolvedProject {
     usedFallbackLoader: boolean;
     /** The actual loader the resolved version targets, if different from requested */
     resolvedLoader?: string;
+    /** Set when a minor-version fallback was used (e.g. built for 1.20.2 instead of 1.20.1) */
+    resolvedGameVersion?: string;
 
     // Tier 2
     color?: number;
@@ -121,7 +123,9 @@ export type ResolutionWarningType =
     | 'cycle'
     | 'fallback-used'
     | 'alpha-beta-version'
-    | 'dependency-not-found';
+    | 'dependency-not-found'
+    | 'loader-independent'
+    | 'compatible-version-used';
 
 export interface ResolutionWarning {
     type: ResolutionWarningType;
@@ -159,4 +163,31 @@ export interface ResolutionResult {
     warnings: ResolutionWarning[];
     unresolved: UnresolvedDependency[];
     stats: ResolutionStats;
+}
+
+// =============================================================================
+// Best Configuration Advisor
+// =============================================================================
+
+export interface AlternativeProbe {
+    version: string;
+    loader: string;
+    resolvedCount: number;
+    missingCount: number;
+    netGain: number;
+    /** Project IDs that resolve in this alternative but NOT in current config */
+    newlyResolved: string[];
+    /** Project IDs that resolve in current config but NOT in this alternative */
+    newlyLost: string[];
+    /** Percentage of total projects resolved in this alternative */
+    percentage: number;
+}
+
+/** Per-mod availability data extracted from probe results, used to enrich issue cards */
+export interface ModAvailability {
+    projectId: string;
+    /** Configs where this mod has a version */
+    availableOn: Array<{ version: string; loader: string }>;
+    /** True if available on an adjacent version or compatible loader */
+    isNearMiss: boolean;
 }

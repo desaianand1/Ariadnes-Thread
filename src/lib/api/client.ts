@@ -5,6 +5,7 @@
 import { ClientError, ServerError, RateLimitError, NetworkError, isRetryableError } from './error';
 import type { ModrinthAPIVersion } from './types';
 import type { RetryBackoffStrategy } from '$lib/config/env.server';
+import { RATE_LIMIT_DEFAULT_RETRY_SECONDS } from '$lib/config/constants';
 
 /**
  * API Client configuration
@@ -288,10 +289,18 @@ export class ModrinthClient {
             }
 
             if (response.status === 429) {
-                const retryAfter = parseInt(
-                    response.headers.get('Retry-After') || String(this.config.resetIntervalSeconds),
-                    10
-                );
+                const headerRetryAfter = parseInt(response.headers.get('Retry-After') ?? '', 10);
+                // Cloudflare error 1015 sends retry_after in the JSON body
+                const bodyRetryAfter =
+                    typeof errorDetails === 'object' &&
+                    errorDetails !== null &&
+                    'retry_after' in errorDetails
+                        ? Number((errorDetails as Record<string, unknown>).retry_after)
+                        : NaN;
+                const retryAfter =
+                    (headerRetryAfter > 0 && headerRetryAfter) ||
+                    (bodyRetryAfter > 0 && bodyRetryAfter) ||
+                    RATE_LIMIT_DEFAULT_RETRY_SECONDS;
                 throw new RateLimitError(retryAfter, endpoint, errorDetails);
             }
 
@@ -362,20 +371,27 @@ export class ModrinthClient {
     }
 
     /**
-     * Calculates retry delay based on configured strategy
+     * Calculates retry delay based on configured strategy, with ±20% jitter
+     * to prevent thundering herd when multiple requests hit rate limits simultaneously.
      */
     private calculateDelay(attempt: number): number {
         const baseDelay = this.config.retryDelayMs;
+        let delay: number;
 
         switch (this.config.retryBackoffStrategy) {
             case 'exponential':
-                return baseDelay * Math.pow(2, attempt);
+                delay = baseDelay * Math.pow(2, attempt);
+                break;
             case 'linear':
-                return baseDelay * (attempt + 1);
+                delay = baseDelay * (attempt + 1);
+                break;
             case 'fixed':
             default:
-                return baseDelay;
+                delay = baseDelay;
         }
+
+        // ±20% jitter
+        return delay * (0.8 + Math.random() * 0.4);
     }
 
     /**
@@ -390,6 +406,16 @@ export class ModrinthClient {
      */
     getRemainingRequests(): number {
         return this.remainingRequests;
+    }
+
+    /**
+     * Get rate limit state for batched resolution pacing decisions
+     */
+    getRateLimitState(): { remaining: number; resetAt: number } {
+        return {
+            remaining: this.remainingRequests,
+            resetAt: this.lastResetTime + this.config.resetIntervalSeconds * 1000
+        };
     }
 }
 

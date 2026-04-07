@@ -108,7 +108,11 @@ export const reviewParamsSchema = z.object({
         .min(MIN_CONCURRENT_DOWNLOADS)
         .max(MAX_CONCURRENT_DOWNLOADS_LIMIT)
         .optional(),
-    rc: z.coerce.number().int().min(MIN_RETRY_COUNT).max(MAX_RETRY_COUNT_LIMIT).optional()
+    rc: z.coerce.number().int().min(MIN_RETRY_COUNT).max(MAX_RETRY_COUNT_LIMIT).optional(),
+    /** Previous version before advisor switch — prevents oscillation */
+    from_v: z.string().optional(),
+    /** Previous loader before advisor switch — prevents oscillation */
+    from_l: z.string().optional()
 });
 
 export type ReviewParams = z.infer<typeof reviewParamsSchema>;
@@ -128,8 +132,14 @@ export function parseReviewOptions(params: ReviewParams): {
     addedProjectIds: string[];
     concurrentDownloads?: number;
     retryCount?: number;
+    fromVersion?: string;
+    fromLoader?: string;
+    excludedConfigs: Array<{ version: string; loader: string }>;
 } {
     const flagSet = new Set(params.opts.split(',').filter(Boolean));
+
+    const fromVersions = params.from_v?.split(',').filter(Boolean) ?? [];
+    const fromLoaders = params.from_l?.split(',').filter(Boolean) ?? [];
 
     return {
         collectionIds: params.c.split(',').filter(Boolean),
@@ -142,6 +152,14 @@ export function parseReviewOptions(params: ReviewParams): {
         excludedProjectIds: new Set(params.x.split(',').filter(Boolean)),
         addedProjectIds: params.add.split(',').filter(Boolean),
         concurrentDownloads: params.cd,
-        retryCount: params.rc
+        retryCount: params.rc,
+        fromVersion: fromVersions[0],
+        fromLoader: fromLoaders[0],
+        excludedConfigs: fromVersions
+            .map((v, i) => ({
+                version: v,
+                loader: fromLoaders[i] ?? fromLoaders[0] ?? ''
+            }))
+            .filter((c) => c.version && c.loader)
     };
 }

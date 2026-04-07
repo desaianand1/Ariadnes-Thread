@@ -99,6 +99,21 @@ export function getLoaderCategory(slug: string): LoaderCategory {
 }
 
 // =============================================================================
+// Loader-Agnostic Project Types
+// =============================================================================
+
+/**
+ * Project types that don't require a mod loader — the API should be queried
+ * without a `loaders` filter for these.
+ */
+export const LOADER_AGNOSTIC_PROJECT_TYPES = new Set([
+    'resourcepack',
+    'shader',
+    'datapack',
+    'plugin'
+]);
+
+// =============================================================================
 // Cross-Loader Fallbacks & Dependency Resolution
 // =============================================================================
 
@@ -112,9 +127,72 @@ export const CROSS_LOADER_FALLBACKS: Record<string, string[]> = {
 };
 
 /**
+ * Bidirectional loader alternatives for the Best Configuration Advisor.
+ * Unlike CROSS_LOADER_FALLBACKS (which is one-directional for resolution),
+ * these map both directions for probing alternative configurations.
+ */
+export const CROSS_LOADER_ALTERNATIVES: Record<string, string[]> = {
+    fabric: ['quilt'],
+    forge: ['neoforge'],
+    quilt: ['fabric'],
+    neoforge: ['forge']
+};
+
+/**
  * BFS traversal stops after this many levels to prevent runaway resolution
  */
 export const MAX_DEPENDENCY_DEPTH = 10;
+
+// =============================================================================
+// Best Configuration Advisor
+// =============================================================================
+
+/** Minimum net improvement (% of total mods) before showing the advisor callout */
+export const ADVISOR_MIN_IMPROVEMENT_PERCENT = 5;
+
+/** Absolute net gain that always passes the advisor threshold regardless of percentage */
+export const ADVISOR_MIN_ABSOLUTE_GAIN = 3;
+
+/** Timeout for all alternative probes in milliseconds */
+export const ADVISOR_PROBE_TIMEOUT_MS = 120_000;
+
+/** Maximum number of adjacent MC versions to probe */
+export const MAX_ALTERNATIVE_VERSIONS = 3;
+
+/** Batch size for individual project version checks in checkGains() */
+export const GAIN_CHECK_BATCH_SIZE = 20;
+
+/** Stop probing once the best alternative resolves this % of total mods */
+export const ADVISOR_EARLY_STOP_PERCENT = 95;
+
+/** Skip probing versions where fewer than this many unresolved mods have support */
+export const HISTOGRAM_MIN_COVERAGE = 2;
+
+/** Maximum versions to select from histogram for full probing */
+export const HISTOGRAM_TOP_CANDIDATES = 5;
+
+/** Sub-timeout for the histogram pre-scan phase (ms) */
+export const HISTOGRAM_SCAN_TIMEOUT_MS = 10_000;
+
+/** Max configs remembered in the advisor switch chain to prevent oscillation */
+export const MAX_ADVISOR_HISTORY_LENGTH = 5;
+
+/** Versions older than this are considered "old" — only probe backward, not forward */
+export const VERSION_AGE_CUTOFF_DAYS = 730;
+
+/** Hand-picked MC versions that represent major community milestones */
+export const CURATED_POPULAR_VERSIONS = [
+    '1.21.1',
+    '1.20.1',
+    '1.19.2',
+    '1.18.2',
+    '1.16.5',
+    '1.12.2',
+    '1.10.2',
+    '1.8.9',
+    '1.7.10',
+    '1.6.4'
+] as const;
 
 // =============================================================================
 // Cache Configuration
@@ -142,7 +220,8 @@ export const STORAGE_KEYS = {
     MINECRAFT_VERSIONS: 'ariadnes-thread-mc-versions',
     MOD_LOADERS: 'ariadnes-thread-loaders',
     THEME: 'ariadnes-thread-theme',
-    REVIEW_PREFIX: 'ariadnes-thread-review:'
+    REVIEW_PREFIX: 'ariadnes-thread-review:',
+    VIEW_MODE_PREFERENCE: 'ariadnes-thread-view-mode'
 } as const;
 
 // =============================================================================
@@ -218,6 +297,15 @@ export const TOAST_DURATION = {
     WARNING: 4000
 } as const;
 
+/** Cookie name for persisting view mode preference (avoids SSR flash) */
+export const VIEW_MODE_COOKIE = 'at-view-mode';
+
+/** Resolution percentage thresholds for semantic coloring */
+export const RESOLUTION_PERCENTAGE_THRESHOLDS = { HIGH: 80, MEDIUM: 50 } as const;
+
+/** Mods not updated within this many days get amber "stale" styling */
+export const STALE_MOD_THRESHOLD_DAYS = 180;
+
 /**
  * Animation durations in milliseconds
  */
@@ -266,8 +354,49 @@ export const EMAIL_RECIPIENT_LIMITS = {
 /** Rate limiter internal housekeeping */
 export const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60_000;
 
-/** Maximum total projects across all collections on /review (prevents collection-bombing) */
-export const MAX_TOTAL_PROJECTS = 300;
+/** Fallback retry delay when a 429 response lacks a Retry-After header */
+export const RATE_LIMIT_DEFAULT_RETRY_SECONDS = 5;
+
+/** Centralized error messages for the /review resolution page */
+export const RESOLUTION_MESSAGES = {
+    TIMEOUT: 'The request took too long. Try with fewer collections or try again later.',
+    ALL_FAILED: 'Could not reach Modrinth. The API may be temporarily unavailable.',
+    GENERIC: 'Something went wrong while processing results. Please try again.'
+} as const;
+
+/** Projects per version-resolution batch */
+export const RESOLUTION_BATCH_SIZE = 50;
+
+/** Modrinth API rate limit (requests per minute per IP) */
+export const MODRINTH_RATE_LIMIT = 300;
+
+/**
+ * Show MultiStepLoader when total projects exceed 50% of Modrinth's rate limit.
+ * Each mod costs ~1.5-2x requests (version lookup + deps), so 150 mods ≈ 225-300
+ * total API requests — right at the rate limit. Lower factor gives headroom.
+ */
+export const LARGE_LOAD_THRESHOLD = Math.floor(MODRINTH_RATE_LIMIT * 0.5);
+
+/** Raised from 300 — batching handles pacing, this is just abuse prevention */
+export const MAX_TOTAL_PROJECTS = 1000;
+
+/** Breathing room between resolution batches (ms) */
+export const INTER_BATCH_DELAY_MS = 500;
+
+/** Upper bound on how long to wait for a rate-limit window reset between batches (ms) */
+export const MAX_RATE_LIMIT_WAIT_MS = 5_000;
+
+/** Reserve this many requests before pausing for rate limit */
+export const RATE_LIMIT_SAFETY_MARGIN = 50;
+
+/** Page-level load timeout for /review (covers all resolution + fetching) */
+export const PAGE_LOAD_TIMEOUT_MS = 25_000;
+
+/** Overall timeout for the large-load streaming path (2 minutes) */
+export const LARGE_LOAD_TIMEOUT_MS = 120_000;
+
+/** Max project IDs per batch when calling Modrinth bulk endpoints (GET /v2/projects, etc.) */
+export const MODRINTH_BATCH_SIZE = 100;
 
 /** Minimum form submission time in ms (anti-bot timing check) */
 export const MIN_FORM_SUBMIT_TIME_MS = 3_000;
