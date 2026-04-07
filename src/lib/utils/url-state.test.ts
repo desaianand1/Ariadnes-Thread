@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildReviewUrl, buildAdvisorSwitchUrl } from './url-state';
+import { buildReviewUrl, buildAdvisorSwitchUrl, buildShareUrl } from './url-state';
 
 describe('buildReviewUrl', () => {
     function url(path: string): URL {
@@ -182,5 +182,81 @@ describe('buildAdvisorSwitchUrl', () => {
         expect(parsed.searchParams.get('opts')).toBe('d,f');
         expect(parsed.searchParams.get('cd')).toBe('4');
         expect(parsed.searchParams.get('rc')).toBe('2');
+    });
+});
+
+describe('buildShareUrl', () => {
+    function url(path: string): URL {
+        return new URL(path, 'http://localhost');
+    }
+
+    it('changes pathname from /review to /share', () => {
+        const result = buildShareUrl(url('/review?c=abc&v=1.20.1&l=fabric'));
+        expect(result).toMatch(/^\/share\?/);
+    });
+
+    it('preserves core params (c, v, l, opts, x, add)', () => {
+        const result = buildShareUrl(
+            url('/review?c=abc,def&v=1.20.1&l=fabric&opts=d,f&x=id1&add=id2')
+        );
+        const parsed = new URL(result, 'http://localhost');
+        expect(parsed.searchParams.get('c')).toBe('abc,def');
+        expect(parsed.searchParams.get('v')).toBe('1.20.1');
+        expect(parsed.searchParams.get('l')).toBe('fabric');
+        expect(parsed.searchParams.get('opts')).toBe('d,f');
+        expect(parsed.searchParams.get('x')).toBe('id1');
+        expect(parsed.searchParams.get('add')).toBe('id2');
+    });
+
+    it('strips curator-only params from_v and from_l', () => {
+        const result = buildShareUrl(
+            url('/review?c=abc&v=1.20.1&l=fabric&from_v=1.21&from_l=quilt')
+        );
+        const parsed = new URL(result, 'http://localhost');
+        expect(parsed.searchParams.has('from_v')).toBe(false);
+        expect(parsed.searchParams.has('from_l')).toBe(false);
+    });
+
+    it('adds curator name as by param when provided', () => {
+        const result = buildShareUrl(url('/review?c=abc&v=1.20.1&l=fabric'), 'Alex');
+        const parsed = new URL(result, 'http://localhost');
+        expect(parsed.searchParams.get('by')).toBe('Alex');
+    });
+
+    it('does not add by param when curator name is empty', () => {
+        const result = buildShareUrl(url('/review?c=abc&v=1.20.1&l=fabric'), '');
+        const parsed = new URL(result, 'http://localhost');
+        expect(parsed.searchParams.has('by')).toBe(false);
+    });
+
+    it('does not add by param when curator name is undefined', () => {
+        const result = buildShareUrl(url('/review?c=abc&v=1.20.1&l=fabric'));
+        const parsed = new URL(result, 'http://localhost');
+        expect(parsed.searchParams.has('by')).toBe(false);
+    });
+
+    it('truncates curator name at CURATOR_NAME_MAX_LENGTH', () => {
+        const longName = 'A'.repeat(100);
+        const result = buildShareUrl(url('/review?c=abc&v=1.20.1&l=fabric'), longName);
+        const parsed = new URL(result, 'http://localhost');
+        expect(parsed.searchParams.get('by')!.length).toBe(50);
+    });
+
+    it('trims whitespace from curator name', () => {
+        const result = buildShareUrl(url('/review?c=abc&v=1.20.1&l=fabric'), '  Alex  ');
+        const parsed = new URL(result, 'http://localhost');
+        expect(parsed.searchParams.get('by')).toBe('Alex');
+    });
+
+    it('handles whitespace-only curator name as no name', () => {
+        const result = buildShareUrl(url('/review?c=abc&v=1.20.1&l=fabric'), '   ');
+        const parsed = new URL(result, 'http://localhost');
+        expect(parsed.searchParams.has('by')).toBe(false);
+    });
+
+    it('URL-encodes curator name with special characters', () => {
+        const result = buildShareUrl(url('/review?c=abc&v=1.20.1&l=fabric'), 'Alex & Bob');
+        const parsed = new URL(result, 'http://localhost');
+        expect(parsed.searchParams.get('by')).toBe('Alex & Bob');
     });
 });

@@ -398,6 +398,9 @@ export const LARGE_LOAD_TIMEOUT_MS = 120_000;
 /** Max project IDs per batch when calling Modrinth bulk endpoints (GET /v2/projects, etc.) */
 export const MODRINTH_BATCH_SIZE = 100;
 
+/** Maximum length for curator display name on share URLs */
+export const CURATOR_NAME_MAX_LENGTH = 50;
+
 /** Minimum form submission time in ms (anti-bot timing check) */
 export const MIN_FORM_SUBMIT_TIME_MS = 3_000;
 

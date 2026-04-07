@@ -3,7 +3,7 @@
  * Keeps query params in sync with client state.
  */
 
-import { MAX_ADVISOR_HISTORY_LENGTH } from '$lib/config/constants';
+import { MAX_ADVISOR_HISTORY_LENGTH, CURATOR_NAME_MAX_LENGTH } from '$lib/config/constants';
 
 interface ReviewUrlUpdates {
     x?: Set<string>;
@@ -80,4 +80,27 @@ export function buildAdvisorSwitchUrl(
         from_v: truncatedV,
         from_l: truncatedL
     });
+}
+
+/**
+ * Builds a /share URL from a /review URL.
+ * Changes pathname to /share, adds curator name if provided,
+ * and strips curator-only params (from_v, from_l) that recipients don't need.
+ */
+export function buildShareUrl(baseReviewUrl: URL, curatorName?: string): string {
+    const params = new URLSearchParams(baseReviewUrl.searchParams);
+
+    // Strip curator-only advisor params
+    params.delete('from_v');
+    params.delete('from_l');
+
+    if (curatorName) {
+        const trimmed = curatorName.trim().slice(0, CURATOR_NAME_MAX_LENGTH);
+        if (trimmed) {
+            params.set('by', trimmed);
+        }
+    }
+
+    const qs = params.toString();
+    return `/share${qs ? `?${qs}` : ''}`;
 }

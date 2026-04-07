@@ -9,9 +9,11 @@
     import { toast } from 'svelte-sonner';
     import { browser } from '$app/environment';
     import { mode } from 'mode-watcher';
-    import { TOAST_DURATION } from '$lib/config/constants';
+    import { TOAST_DURATION, CURATOR_NAME_MAX_LENGTH } from '$lib/config/constants';
     import { getLoaderDisplayName } from '$lib/utils/format';
     import { copyToClipboard } from '$lib/utils/clipboard';
+    import { buildShareUrl } from '$lib/utils/url-state';
+    import UserIcon from '@lucide/svelte/icons/user';
     import { scale } from 'svelte/transition';
     import { safeTransition } from '$lib/utils/motion';
     import CopyIcon from '@lucide/svelte/icons/copy';
@@ -22,7 +24,9 @@
     import QrCodeIcon from '@lucide/svelte/icons/qr-code';
     import LinkIcon from '@lucide/svelte/icons/link';
     import MailIcon from '@lucide/svelte/icons/mail';
+    import ServerIcon from '@lucide/svelte/icons/server';
     import { SiDiscord } from '@icons-pack/svelte-simple-icons';
+    import { SEMANTIC_BANNER_COLORS } from '$lib/utils/colors';
 
     interface Props {
         open: boolean;
@@ -31,6 +35,7 @@
         context: { gameVersion: string; loader: string; modCount: number };
         emailEnabled: boolean;
         turnstileSiteKey: string;
+        serverOnlyWarning?: boolean;
     }
 
     let {
@@ -39,12 +44,32 @@
         collectionNames,
         context,
         emailEnabled,
-        turnstileSiteKey
+        turnstileSiteKey,
+        serverOnlyWarning = false
     }: Props = $props();
 
     let copied = $state(false);
     let copiedDiscord = $state(false);
     let curatorName = $state('');
+
+    let shareUrl = $derived.by(() => {
+        try {
+            const base = new URL(pageUrl, 'http://placeholder');
+            return buildShareUrl(base, curatorName || undefined);
+        } catch {
+            return pageUrl;
+        }
+    });
+
+    // Resolve to absolute URL for sharing
+    let absoluteShareUrl = $derived.by(() => {
+        try {
+            const origin = new URL(pageUrl).origin;
+            return `${origin}${shareUrl}`;
+        } catch {
+            return shareUrl;
+        }
+    });
     let recipientEmail = $state('');
     let message = $state('');
     let honeypot = $state('');
@@ -60,14 +85,20 @@
     const webShareSupported = $derived(browser && 'share' in navigator);
 
     const discordMessage = $derived(
-        `**${collectionNames}** — ${context.modCount} mods for Minecraft ${context.gameVersion} on ${getLoaderDisplayName(context.loader)}\n${pageUrl}`
+        `**${collectionNames}** — ${context.modCount} mods for Minecraft ${context.gameVersion} on ${getLoaderDisplayName(context.loader)}\n${absoluteShareUrl}`
     );
 
-    // Reset QR state when modal closes so it regenerates on reopen
+    // Reset QR state when modal closes or share URL changes so it regenerates
     $effect(() => {
         if (!open) {
             qrGenerated = false;
         }
+    });
+
+    // Regenerate QR when curator name changes the URL
+    $effect(() => {
+        void absoluteShareUrl;
+        qrGenerated = false;
     });
 
     $effect(() => {
@@ -111,9 +142,11 @@
     async function generateQr() {
         if (qrGenerated || !qrContainer) return;
         try {
-            const QRCode = (await import('qrcode')).default;
+            const mod = await import('qrcode');
+            // CJS interop: Vite may expose .default or the module directly
+            const QRCode = mod.default ?? mod;
             const colors = getQrColors();
-            const canvas = await QRCode.toCanvas(pageUrl, {
+            const canvas = await QRCode.toCanvas(absoluteShareUrl, {
                 width: 200,
                 margin: 2,
                 color: colors
@@ -143,7 +176,7 @@
     }
 
     async function copyLink() {
-        await copyToClipboard(pageUrl);
+        await copyToClipboard(absoluteShareUrl);
         copied = true;
         toast.success('Link copied to clipboard', { duration: TOAST_DURATION.SUCCESS });
         setTimeout(() => (copied = false), 2000);
@@ -154,7 +187,7 @@
             await navigator.share({
                 title: collectionNames,
                 text: `Check out this mod collection: ${collectionNames}`,
-                url: pageUrl
+                url: absoluteShareUrl
             });
         } catch (err) {
             if (err instanceof Error && err.name !== 'AbortError') {
@@ -183,7 +216,7 @@
                     curatorName,
                     recipientEmail,
                     message,
-                    shareUrl: pageUrl,
+                    shareUrl: absoluteShareUrl,
                     collectionNames,
                     website: honeypot,
                     loadedAt,
@@ -232,12 +265,52 @@
                     Quick Share
                 </h3>
 
+                {#if serverOnlyWarning}
+                    <div
+                        class="rounded-md border px-3 py-2.5 text-sm {SEMANTIC_BANNER_COLORS.warning
+                            .bg} {SEMANTIC_BANNER_COLORS.warning.border} {SEMANTIC_BANNER_COLORS
+                            .warning.text}"
+                    >
+                        <div class="flex items-start gap-2">
+                            <ServerIcon class="mt-0.5 size-4 shrink-0" />
+                            <div>
+                                <p class="font-medium">Heads up — server-only mods</p>
+                                <p class="mt-0.5 text-xs opacity-80">
+                                    All the mods in this collection run on the server. Your friend
+                                    won't need to download anything — they can just join and play.
+                                    The share link will let them know.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
+
+                <!-- Curator name — personalizes the share URL -->
+                <div class="space-y-1.5">
+                    <Label
+                        for="share-curator-name"
+                        class="flex items-center gap-1.5 text-xs text-muted-foreground"
+                    >
+                        <UserIcon class="size-3" />
+                        Your name (optional)
+                    </Label>
+                    <Input
+                        id="share-curator-name"
+                        bind:value={curatorName}
+                        placeholder="e.g. Alex"
+                        maxlength={CURATOR_NAME_MAX_LENGTH}
+                        class="h-8 text-sm"
+                    />
+                </div>
+
                 <!-- Copy Link -->
                 <div class="flex min-w-0 gap-2">
                     <div
                         class="min-w-0 flex-1 overflow-hidden rounded-md border bg-muted/30 px-3 py-2"
                     >
-                        <code class="block truncate text-sm text-muted-foreground">{pageUrl}</code>
+                        <code class="block truncate text-sm text-muted-foreground"
+                            >{absoluteShareUrl}</code
+                        >
                     </div>
                     <Button variant="outline" size="icon" class="shrink-0" onclick={copyLink}>
                         {#if copied}

@@ -3,6 +3,7 @@ import {
     downloadFormSchema,
     parseCollectionId,
     parseReviewOptions,
+    reviewParamsSchema,
     type ReviewParams
 } from './collection';
 
@@ -244,5 +245,56 @@ describe('downloadFormSchema advanced fields', () => {
         expect(result.includeOptionalDeps).toBe(true);
         expect(result.allowAlphaBeta).toBe(true);
         expect(result.enableCrossLoaderFallback).toBe(true);
+    });
+});
+
+describe('by param', () => {
+    function parseWith(by?: string) {
+        return reviewParamsSchema.safeParse({
+            c: 'col1',
+            v: '1.20.1',
+            l: 'fabric',
+            ...(by !== undefined ? { by } : {})
+        });
+    }
+
+    it('parses successfully when by is absent', () => {
+        const result = parseWith();
+        expect(result.success).toBe(true);
+        if (result.success) {
+            expect(result.data.by).toBeUndefined();
+        }
+    });
+
+    it('preserves a normal curator name', () => {
+        const result = parseWith('Alex');
+        expect(result.success).toBe(true);
+        if (result.success) {
+            expect(result.data.by).toBe('Alex');
+        }
+    });
+
+    it('accepts a name at exactly 50 characters', () => {
+        const name = 'A'.repeat(50);
+        const result = parseWith(name);
+        expect(result.success).toBe(true);
+        if (result.success) {
+            expect(result.data.by).toBe(name);
+        }
+    });
+
+    it('rejects a name exceeding 50 characters', () => {
+        const name = 'A'.repeat(51);
+        const result = parseWith(name);
+        expect(result.success).toBe(false);
+    });
+
+    it('preserves URL-encoded special characters after decoding', () => {
+        const name = 'José & María';
+        const result = parseWith(name);
+        expect(result.success).toBe(true);
+        if (result.success) {
+            expect(result.data.by).toBe('José & María');
+        }
     });
 });

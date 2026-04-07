@@ -9,7 +9,8 @@ import {
     MIN_CONCURRENT_DOWNLOADS,
     MAX_CONCURRENT_DOWNLOADS_LIMIT,
     MIN_RETRY_COUNT,
-    MAX_RETRY_COUNT_LIMIT
+    MAX_RETRY_COUNT_LIMIT,
+    CURATOR_NAME_MAX_LENGTH
 } from '$lib/config/constants';
 
 /**
@@ -112,7 +113,9 @@ export const reviewParamsSchema = z.object({
     /** Previous version before advisor switch — prevents oscillation */
     from_v: z.string().optional(),
     /** Previous loader before advisor switch — prevents oscillation */
-    from_l: z.string().optional()
+    from_l: z.string().optional(),
+    /** Curator display name for share URLs */
+    by: z.string().max(CURATOR_NAME_MAX_LENGTH).optional()
 });
 
 export type ReviewParams = z.infer<typeof reviewParamsSchema>;

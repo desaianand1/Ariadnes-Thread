@@ -904,6 +904,7 @@
             }}
             emailEnabled={data.emailEnabled}
             turnstileSiteKey={data.turnstileSiteKey}
+            serverOnlyWarning={!hasClientMods}
         />
 
         {#if showDownloadView}
