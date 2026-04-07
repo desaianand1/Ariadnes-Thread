@@ -7,6 +7,7 @@
 ![Ariadne's Thread](/static/og-image.png)
 
 [![Live Site](https://img.shields.io/badge/modrinth.download-live-1bd96a?style=for-the-badge&logo=modrinth&logoColor=white)](https://modrinth.download)
+![Version](https://img.shields.io/github/v/tag/desaianand1/Ariadnes-Thread?sort=semver&style=for-the-badge&label=Version&color=gold)
 [![License: FSL-1.1-ALv2](https://img.shields.io/badge/license-FSL--1.1--ALv2-blue?style=for-the-badge)](LICENSE.md)
 [![Built with SvelteKit](https://img.shields.io/badge/SvelteKit-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)](https://svelte.dev)
 [![Deployed on Cloudflare](https://img.shields.io/badge/Cloudflare%20Pages-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
@@ -71,8 +72,8 @@ pnpm dev
 
 If you find Ariadne's Thread useful, consider supporting its development:
 
-- [Ko-fi](https://ko-fi.com/ananddesai)
-- [Buy Me a Coffee](https://buymeacoffee.com/ananddesai)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/ananddesai)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ananddesai)
 
 ## License
 
