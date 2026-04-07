@@ -12,6 +12,33 @@ import { formatVersionNumber, getLoaderDisplayName, LOADER_DISPLAY_NAMES } from 
 import { ADVISOR_MIN_IMPROVEMENT_PERCENT, isPluginLoader } from '$lib/config/constants';
 import { getLoaderCategory } from '$lib/config/constants';
 
+// --- Category Summary ---
+
+/**
+ * Collects category tags from resolved projects and returns the top 5
+ * by frequency, capitalized for display.
+ */
+export function computeCategorySummary(
+    projects: ResolvedProject[]
+): Array<{ category: string; count: number }> {
+    const counts = new Map<string, number>();
+    for (const p of projects) {
+        if (!p.categories) continue;
+        for (const cat of p.categories) {
+            const normalized = cat.toLowerCase();
+            counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+        }
+    }
+
+    return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([category, count]) => ({
+            category: category.charAt(0).toUpperCase() + category.slice(1),
+            count
+        }));
+}
+
 // --- Types ---
 
 export interface AutoResolvedItem {

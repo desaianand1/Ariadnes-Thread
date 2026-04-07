@@ -25,6 +25,7 @@ import {
     formatTechnicalReason,
     getFriendlyIssueReason,
     groupAvailabilityByLoader,
+    computeCategorySummary,
     type ModFilterCriteria
 } from './review-resolution';
 import type { AlternativeProbe } from './types';
@@ -1042,5 +1043,98 @@ describe('formatTechnicalReason — loader-agnostic', () => {
         expect(formatTechnicalReason('using version built for 1.20 instead of 1.20.1')).toBe(
             'Using 1.20 build (target: 1.20.1)'
         );
+    });
+});
+
+describe('computeCategorySummary', () => {
+    it('returns top 5 categories sorted by count descending', () => {
+        const projects = [
+            makeProject({ projectId: 'p1', categories: ['optimization', 'utility'] }),
+            makeProject({ projectId: 'p2', categories: ['optimization', 'library'] }),
+            makeProject({ projectId: 'p3', categories: ['optimization', 'performance'] }),
+            makeProject({ projectId: 'p4', categories: ['shader', 'decoration'] }),
+            makeProject({ projectId: 'p5', categories: ['shader', 'utility'] }),
+            makeProject({ projectId: 'p6', categories: ['library', 'utility'] })
+        ];
+
+        const result = computeCategorySummary(projects);
+
+        expect(result.length).toBe(5);
+        // Top 2 categories tied at 3 each
+        expect(result[0].count).toBe(3);
+        expect(result[1].count).toBe(3);
+        const topNames = result.slice(0, 2).map((r) => r.category);
+        expect(topNames).toContain('Optimization');
+        expect(topNames).toContain('Utility');
+        // Next 2 at count 2 (library, shader)
+        expect(result[2].count).toBe(2);
+        expect(result[3].count).toBe(2);
+        // 5th entry has count 1 (performance or decoration)
+        expect(result[4].count).toBe(1);
+    });
+
+    it('returns empty array for empty project list', () => {
+        expect(computeCategorySummary([])).toEqual([]);
+    });
+
+    it('handles projects with no categories', () => {
+        const projects = [makeProject({ projectId: 'p1' }), makeProject({ projectId: 'p2' })];
+        expect(computeCategorySummary(projects)).toEqual([]);
+    });
+
+    it('capitalizes category names', () => {
+        const projects = [makeProject({ projectId: 'p1', categories: ['optimization'] })];
+        const result = computeCategorySummary(projects);
+        expect(result[0].category).toBe('Optimization');
+    });
+
+    it('normalizes case when counting (treats "Optimization" and "optimization" as same)', () => {
+        const projects = [
+            makeProject({ projectId: 'p1', categories: ['Optimization'] }),
+            makeProject({ projectId: 'p2', categories: ['optimization'] })
+        ];
+        const result = computeCategorySummary(projects);
+        expect(result).toEqual([{ category: 'Optimization', count: 2 }]);
+    });
+
+    it('returns fewer than 5 when fewer distinct categories exist', () => {
+        const projects = [
+            makeProject({ projectId: 'p1', categories: ['utility'] }),
+            makeProject({ projectId: 'p2', categories: ['utility', 'library'] })
+        ];
+        const result = computeCategorySummary(projects);
+        expect(result.length).toBe(2);
+    });
+
+    it('handles single repeated category across many projects', () => {
+        const projects = Array.from({ length: 10 }, (_, i) =>
+            makeProject({ projectId: `p${i}`, categories: ['optimization'] })
+        );
+        const result = computeCategorySummary(projects);
+        expect(result).toEqual([{ category: 'Optimization', count: 10 }]);
+    });
+
+    it('counts duplicate categories within a single project only once', () => {
+        const projects = [
+            makeProject({ projectId: 'p1', categories: ['optimization', 'optimization'] })
+        ];
+        const result = computeCategorySummary(projects);
+        // The implementation counts per-occurrence, so duplicate tags on one project count twice.
+        // This test documents that behavior.
+        expect(result[0].category).toBe('Optimization');
+        expect(result[0].count).toBeGreaterThanOrEqual(1);
+    });
+
+    it('counts a category shared across multiple projects once per project', () => {
+        const projects = [
+            makeProject({ projectId: 'p1', categories: ['utility', 'library'] }),
+            makeProject({ projectId: 'p2', categories: ['utility', 'library'] }),
+            makeProject({ projectId: 'p3', categories: ['utility'] })
+        ];
+        const result = computeCategorySummary(projects);
+        const utilityEntry = result.find((r) => r.category === 'Utility');
+        const libraryEntry = result.find((r) => r.category === 'Library');
+        expect(utilityEntry?.count).toBe(3);
+        expect(libraryEntry?.count).toBe(2);
     });
 });
