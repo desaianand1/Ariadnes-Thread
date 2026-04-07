@@ -19,8 +19,15 @@ import {
     getConflictProjectIds,
     deriveModStatus,
     matchesModFilters,
+    shouldShowAdvisor,
+    computeDonutSegments,
+    computeResolutionPercentage,
+    formatTechnicalReason,
+    getFriendlyIssueReason,
+    groupAvailabilityByLoader,
     type ModFilterCriteria
 } from './review-resolution';
+import type { AlternativeProbe } from './types';
 
 function makeProject(overrides: Partial<ResolvedProject> = {}): ResolvedProject {
     return {
@@ -69,7 +76,14 @@ describe('computeAutoResolution', () => {
             })
         ];
 
-        const result = computeAutoResolution(projects, [], new Set(['p1']), { p1: 'Indium' });
+        const result = computeAutoResolution(
+            projects,
+            [],
+            new Set(['p1']),
+            { p1: 'Indium' },
+            undefined,
+            'fabric'
+        );
 
         expect(result.items).toHaveLength(1);
         expect(result.items[0].type).toBe('fallback');
@@ -83,10 +97,14 @@ describe('computeAutoResolution', () => {
             makeProject({ projectId: 'p2', projectTitle: 'AlphaMod', versionType: 'alpha' })
         ];
 
-        const result = computeAutoResolution(projects, [], new Set(['p1', 'p2']), {
-            p1: 'BetaMod',
-            p2: 'AlphaMod'
-        });
+        const result = computeAutoResolution(
+            projects,
+            [],
+            new Set(['p1', 'p2']),
+            { p1: 'BetaMod', p2: 'AlphaMod' },
+            undefined,
+            'fabric'
+        );
 
         const betaItems = result.items.filter((i) => i.type === 'beta-version');
         expect(betaItems).toHaveLength(2);
@@ -105,7 +123,9 @@ describe('computeAutoResolution', () => {
             [makeProject({ projectId: 'user-mod' }), makeProject({ projectId: 'dep-mod' })],
             conflicts,
             collectionIds,
-            titleMap
+            titleMap,
+            undefined,
+            'fabric'
         );
 
         expect(result.autoExcludedIds.has('dep-mod')).toBe(true);
@@ -124,7 +144,9 @@ describe('computeAutoResolution', () => {
             [makeProject({ projectId: 'mod-a' }), makeProject({ projectId: 'mod-b' })],
             conflicts,
             collectionIds,
-            { 'mod-a': 'Mod A', 'mod-b': 'Mod B' }
+            { 'mod-a': 'Mod A', 'mod-b': 'Mod B' },
+            undefined,
+            'fabric'
         );
 
         expect(result.autoExcludedIds.size).toBe(0);
@@ -141,7 +163,9 @@ describe('computeAutoResolution', () => {
             [makeProject({ projectId: 'a' }), makeProject({ projectId: 'dep' })],
             conflicts,
             new Set(['a']),
-            { a: 'A', dep: 'Dep' }
+            { a: 'A', dep: 'Dep' },
+            undefined,
+            'fabric'
         );
 
         const autoExcluded = result.items.filter((i) => i.type === 'auto-excluded');
@@ -567,5 +591,456 @@ describe('matchesModFilters', () => {
                 typeFilter: 'mod'
             })
         ).toBe(false);
+    });
+});
+
+// =============================================================================
+// shouldShowAdvisor
+// =============================================================================
+
+describe('shouldShowAdvisor', () => {
+    function makeAlternative(overrides: Partial<AlternativeProbe> = {}): AlternativeProbe {
+        return {
+            version: '1.20.6',
+            loader: 'fabric',
+            resolvedCount: 10,
+            missingCount: 2,
+            netGain: 3,
+            newlyResolved: ['a', 'b', 'c'],
+            newlyLost: [],
+            percentage: 83,
+            ...overrides
+        };
+    }
+
+    it('returns true when net gain meets threshold (5% of total)', () => {
+        // 3/20 = 15% > 5%
+        expect(shouldShowAdvisor(makeAlternative({ netGain: 3 }), 20)).toBe(true);
+    });
+
+    it('returns false when net gain is below threshold', () => {
+        // 1/100 = 1% < 5%
+        expect(shouldShowAdvisor(makeAlternative({ netGain: 1 }), 100)).toBe(false);
+    });
+
+    it('returns false when alternative is null', () => {
+        expect(shouldShowAdvisor(null, 20)).toBe(false);
+    });
+
+    it('returns false when total mods is 0', () => {
+        expect(shouldShowAdvisor(makeAlternative(), 0)).toBe(false);
+    });
+
+    it('returns true at exact threshold boundary', () => {
+        // 5/100 = 5% >= 5%
+        expect(shouldShowAdvisor(makeAlternative({ netGain: 5 }), 100)).toBe(true);
+    });
+
+    it('returns false just below threshold', () => {
+        // 4/100 = 4% < 5%
+        expect(shouldShowAdvisor(makeAlternative({ netGain: 4 }), 100)).toBe(false);
+    });
+});
+
+// =============================================================================
+// computeDonutSegments
+// =============================================================================
+
+describe('computeDonutSegments', () => {
+    it('includes all non-zero segments', () => {
+        const segments = computeDonutSegments(10, 3, 2, 5);
+
+        expect(segments).toHaveLength(4);
+        expect(segments.map((s) => s.category)).toEqual([
+            'resolved',
+            'dependencies',
+            'autofixed',
+            'unavailable'
+        ]);
+    });
+
+    it('computes resolved as collectionModCount minus autoFixedCount', () => {
+        const segments = computeDonutSegments(10, 0, 3, 0);
+
+        // resolved = 10 - 3 = 7
+        expect(segments.find((s) => s.category === 'resolved')?.count).toBe(7);
+        expect(segments.find((s) => s.category === 'autofixed')?.count).toBe(3);
+    });
+
+    it('filters out zero-count segments', () => {
+        const segments = computeDonutSegments(5, 0, 0, 0);
+
+        expect(segments).toHaveLength(1);
+        expect(segments[0].category).toBe('resolved');
+        expect(segments[0].count).toBe(5);
+    });
+
+    it('returns empty when all counts are zero', () => {
+        const segments = computeDonutSegments(0, 0, 0, 0);
+        expect(segments).toHaveLength(0);
+    });
+
+    it('omits resolved when collectionModCount equals autoFixedCount', () => {
+        // directResolved = 3 - 3 = 0 → skipped
+        const segments = computeDonutSegments(3, 0, 3, 2);
+
+        expect(segments.find((s) => s.category === 'resolved')).toBeUndefined();
+        expect(segments.find((s) => s.category === 'autofixed')?.count).toBe(3);
+        expect(segments.find((s) => s.category === 'unavailable')?.count).toBe(2);
+    });
+
+    it('assigns correct CSS variable colors', () => {
+        const segments = computeDonutSegments(10, 5, 2, 3);
+
+        expect(segments.find((s) => s.category === 'resolved')?.color).toBe(
+            'var(--color-resolved)'
+        );
+        expect(segments.find((s) => s.category === 'dependencies')?.color).toBe(
+            'var(--color-dependencies)'
+        );
+        expect(segments.find((s) => s.category === 'autofixed')?.color).toBe(
+            'var(--color-autofixed)'
+        );
+        expect(segments.find((s) => s.category === 'unavailable')?.color).toBe(
+            'var(--color-unavailable)'
+        );
+    });
+});
+
+// =============================================================================
+// computeResolutionPercentage
+// =============================================================================
+
+describe('computeResolutionPercentage', () => {
+    it('returns 0 when denominator is 0', () => {
+        expect(computeResolutionPercentage(0, 0)).toBe(0);
+    });
+
+    it('returns 100 for fully resolved', () => {
+        expect(computeResolutionPercentage(20, 20)).toBe(100);
+    });
+
+    it('rounds to nearest integer', () => {
+        // 7/9 = 77.77...% → 78%
+        expect(computeResolutionPercentage(7, 9)).toBe(78);
+    });
+
+    it('returns 0 when nothing is resolved', () => {
+        expect(computeResolutionPercentage(0, 10)).toBe(0);
+    });
+
+    it('handles typical partial resolution', () => {
+        // 15/20 = 75%
+        expect(computeResolutionPercentage(15, 20)).toBe(75);
+    });
+});
+
+// =============================================================================
+// formatTechnicalReason
+// =============================================================================
+
+describe('formatTechnicalReason', () => {
+    it('rewrites loader-specific reason with display name', () => {
+        expect(formatTechnicalReason('No compatible version for neoforge on 1.21')).toBe(
+            'No NeoForge version for 1.21'
+        );
+    });
+
+    it('replaces generic "no compatible version" with "Not available"', () => {
+        expect(formatTechnicalReason('no compatible version')).toBe('Not available');
+    });
+
+    it('passes through unrecognized reasons unchanged', () => {
+        expect(formatTechnicalReason('Something else entirely')).toBe('Something else entirely');
+    });
+});
+
+// =============================================================================
+// getFriendlyIssueReason
+// =============================================================================
+
+describe('getFriendlyIssueReason', () => {
+    it('returns dependency explanation for dependency-related reasons', () => {
+        const result = getFriendlyIssueReason('Missing required dependency', false, false);
+        expect(result).toContain('needs another mod');
+    });
+
+    it('returns loader explanation for loader-related reasons', () => {
+        const result = getFriendlyIssueReason(
+            'No compatible version for fabric on 1.21',
+            false,
+            false
+        );
+        expect(result).toContain('different mod loader');
+    });
+
+    it('returns near-miss with advisor suggestion', () => {
+        const result = getFriendlyIssueReason('No compatible version', true, true);
+        expect(result).toContain('try switching above');
+    });
+
+    it('returns near-miss without advisor suggestion', () => {
+        const result = getFriendlyIssueReason('No compatible version', true, false);
+        expect(result).toContain('different Minecraft version');
+        expect(result).not.toContain('try switching');
+    });
+
+    it('returns generic unavailable message for non-near-miss', () => {
+        const result = getFriendlyIssueReason('No compatible version', false, false);
+        expect(result).toContain("hasn't been updated");
+    });
+
+    it('returns specific loader names when availableLoaders provided', () => {
+        const result = getFriendlyIssueReason(
+            'No compatible version for fabric on 1.21',
+            false,
+            false,
+            ['neoforge', 'forge']
+        );
+        expect(result).toBe('This mod is available on NeoForge, Forge');
+    });
+
+    it('falls back to generic message when availableLoaders is empty', () => {
+        const result = getFriendlyIssueReason(
+            'No compatible version for fabric on 1.21',
+            false,
+            false,
+            []
+        );
+        expect(result).toContain('different mod loader');
+    });
+
+    it('falls back to generic message when availableLoaders is undefined', () => {
+        const result = getFriendlyIssueReason(
+            'No compatible version for fabric on 1.21',
+            false,
+            false,
+            undefined
+        );
+        expect(result).toContain('different mod loader');
+    });
+
+    it('deduplicates loader names when availableLoaders has repeats', () => {
+        const result = getFriendlyIssueReason(
+            'No compatible version for fabric on 1.21',
+            false,
+            false,
+            ['neoforge', 'neoforge', 'forge']
+        );
+        expect(result).toBe('This mod is available on NeoForge, Forge');
+    });
+});
+
+// =============================================================================
+// computeAutoResolution — loader-independent and compatible-version-used
+// =============================================================================
+
+describe('computeAutoResolution — new types', () => {
+    it('produces loader-independent item for plugin with mod loader (fabric)', () => {
+        const projects = [
+            makeProject({
+                projectId: 'we1',
+                projectTitle: 'WorldEdit',
+                projectType: 'plugin'
+            })
+        ];
+
+        const result = computeAutoResolution(
+            projects,
+            [],
+            new Set(['we1']),
+            { we1: 'WorldEdit' },
+            undefined,
+            'fabric'
+        );
+
+        const loaderIndependent = result.items.filter((i) => i.type === 'loader-independent');
+        expect(loaderIndependent).toHaveLength(1);
+        expect(loaderIndependent[0].reasonText).toContain('Plugin');
+        expect(loaderIndependent[0].reasonText).toContain('works without a mod loader');
+    });
+
+    it('does NOT produce loader-independent for plugin with paper loader', () => {
+        const projects = [
+            makeProject({
+                projectId: 'we1',
+                projectTitle: 'WorldEdit',
+                projectType: 'plugin'
+            })
+        ];
+
+        const result = computeAutoResolution(
+            projects,
+            [],
+            new Set(['we1']),
+            { we1: 'WorldEdit' },
+            undefined,
+            'paper'
+        );
+
+        const loaderIndependent = result.items.filter((i) => i.type === 'loader-independent');
+        expect(loaderIndependent).toHaveLength(0);
+    });
+
+    it('does NOT produce loader-independent for plugin with bukkit loader', () => {
+        const projects = [
+            makeProject({
+                projectId: 'we1',
+                projectTitle: 'WorldEdit',
+                projectType: 'plugin'
+            })
+        ];
+
+        const result = computeAutoResolution(
+            projects,
+            [],
+            new Set(['we1']),
+            { we1: 'WorldEdit' },
+            undefined,
+            'bukkit'
+        );
+
+        const loaderIndependent = result.items.filter((i) => i.type === 'loader-independent');
+        expect(loaderIndependent).toHaveLength(0);
+    });
+
+    it('does NOT produce loader-independent for resourcepack/shader/datapack', () => {
+        const projects = [
+            makeProject({ projectId: 'rp1', projectType: 'resourcepack' }),
+            makeProject({ projectId: 'sh1', projectType: 'shader' }),
+            makeProject({ projectId: 'dp1', projectType: 'datapack' })
+        ];
+
+        const result = computeAutoResolution(
+            projects,
+            [],
+            new Set(['rp1', 'sh1', 'dp1']),
+            { rp1: 'Pack', sh1: 'Shader', dp1: 'Datapack' },
+            undefined,
+            'fabric'
+        );
+
+        const loaderIndependent = result.items.filter((i) => i.type === 'loader-independent');
+        expect(loaderIndependent).toHaveLength(0);
+    });
+
+    it('produces compatible-version-used item for resolved projects with resolvedGameVersion', () => {
+        const projects = [
+            makeProject({
+                projectId: 'rp1',
+                projectTitle: 'Cool Pack',
+                projectType: 'resourcepack',
+                resolvedGameVersion: '1.20'
+            } as Partial<import('./types').ResolvedProject>)
+        ];
+
+        const result = computeAutoResolution(
+            projects,
+            [],
+            new Set(['rp1']),
+            { rp1: 'Cool Pack' },
+            '1.20.1',
+            'fabric'
+        );
+
+        const compatVersion = result.items.filter((i) => i.type === 'compatible-version-used');
+        expect(compatVersion).toHaveLength(1);
+        expect(compatVersion[0].reasonText).toContain('1.20');
+        expect(compatVersion[0].reasonText).toContain('1.20.1');
+        expect(compatVersion[0].reasonText).toContain('minor differences possible');
+        expect(compatVersion[0].resolvedGameVersion).toBe('1.20');
+        expect(compatVersion[0].targetGameVersion).toBe('1.20.1');
+    });
+
+    it('produces loader-independent when loader is omitted (backward compat)', () => {
+        const projects = [
+            makeProject({
+                projectId: 'we1',
+                projectTitle: 'WorldEdit',
+                projectType: 'plugin'
+            })
+        ];
+
+        const result = computeAutoResolution(projects, [], new Set(['we1']), {
+            we1: 'WorldEdit'
+        });
+
+        const loaderIndependent = result.items.filter((i) => i.type === 'loader-independent');
+        expect(loaderIndependent).toHaveLength(1);
+    });
+});
+
+// =============================================================================
+// groupAvailabilityByLoader
+// =============================================================================
+
+describe('groupAvailabilityByLoader', () => {
+    it('groups entries by loader with deduplication', () => {
+        const result = groupAvailabilityByLoader([
+            { loader: 'fabric', version: '1.21' },
+            { loader: 'neoforge', version: '1.21' },
+            { loader: 'fabric', version: '1.20.6' }
+        ]);
+
+        expect(result).toHaveLength(2);
+        const fabricGroup = result.find((g) => g.loader === 'fabric');
+        const neoforgeGroup = result.find((g) => g.loader === 'neoforge');
+        expect(fabricGroup?.versions).toEqual(['1.21', '1.20.6']);
+        expect(neoforgeGroup?.versions).toEqual(['1.21']);
+    });
+
+    it('deduplicates identical version+loader pairs', () => {
+        const result = groupAvailabilityByLoader([
+            { loader: 'fabric', version: '1.21' },
+            { loader: 'fabric', version: '1.21' },
+            { loader: 'fabric', version: '1.20.6' }
+        ]);
+
+        expect(result).toHaveLength(1);
+        expect(result[0].versions).toEqual(['1.21', '1.20.6']);
+    });
+
+    it('sorts loaders by category — popular first', () => {
+        const result = groupAvailabilityByLoader([
+            { loader: 'paper', version: '1.21' },
+            { loader: 'fabric', version: '1.21' },
+            { loader: 'liteloader', version: '1.21' }
+        ]);
+
+        expect(result[0].loader).toBe('fabric');
+        expect(result[1].loader).toBe('paper');
+        expect(result[2].loader).toBe('liteloader');
+    });
+
+    it('sorts versions descending within each loader', () => {
+        const result = groupAvailabilityByLoader([
+            { loader: 'fabric', version: '1.19.2' },
+            { loader: 'fabric', version: '1.21' },
+            { loader: 'fabric', version: '1.20.1' }
+        ]);
+
+        expect(result[0].versions).toEqual(['1.21', '1.20.1', '1.19.2']);
+    });
+
+    it('returns empty for empty input', () => {
+        expect(groupAvailabilityByLoader([])).toEqual([]);
+    });
+});
+
+// =============================================================================
+// formatTechnicalReason — loader-agnostic
+// =============================================================================
+
+describe('formatTechnicalReason — loader-agnostic', () => {
+    it('formats version-only reason for loader-agnostic projects', () => {
+        expect(formatTechnicalReason('No compatible version for 1.20.1')).toBe(
+            'Not available for 1.20.1'
+        );
+    });
+
+    it('rewrites compatible-version-used warning into concise form', () => {
+        expect(formatTechnicalReason('using version built for 1.20 instead of 1.20.1')).toBe(
+            'Using 1.20 build (target: 1.20.1)'
+        );
     });
 });

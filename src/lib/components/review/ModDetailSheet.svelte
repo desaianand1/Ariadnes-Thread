@@ -16,8 +16,11 @@
         formatBytes,
         formatNumber,
         formatRelativeTime,
-        getModrinthProjectUrl
+        formatFullDate,
+        getModrinthProjectUrl,
+        getLoaderDisplayName
     } from '$lib/utils/format';
+    import * as Tooltip from '$lib/components/ui/tooltip';
     import { renderMarkdown } from '$lib/utils/markdown';
     import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
     import DownloadIcon from '@lucide/svelte/icons/download';
@@ -27,6 +30,11 @@
     import FileTextIcon from '@lucide/svelte/icons/file-text';
     import CheckIcon from '@lucide/svelte/icons/check';
     import { SiModrinth } from '@icons-pack/svelte-simple-icons';
+    import { copyToClipboard } from '$lib/utils/clipboard';
+    import { toast } from 'svelte-sonner';
+    import { TOAST_DURATION } from '$lib/config/constants';
+    import { scale } from 'svelte/transition';
+    import { safeTransition } from '$lib/utils/motion';
 
     interface Props {
         open: boolean;
@@ -77,10 +85,11 @@
 
     let accentColor = $derived(project?.color ? decimalToHex(project.color) : undefined);
 
-    function copyHash() {
+    async function copyHash() {
         if (!project) return;
-        navigator.clipboard.writeText(project.fileHashes.sha512);
+        await copyToClipboard(project.fileHashes.sha512);
         copiedHash = true;
+        toast.success('Hash copied to clipboard', { duration: TOAST_DURATION.SUCCESS });
         setTimeout(() => (copiedHash = false), 2000);
     }
 
@@ -212,6 +221,36 @@
                                 <span class="text-xs text-muted-foreground">File Size</span>
                                 <p class="text-sm font-medium">{formatBytes(project.fileSize)}</p>
                             </div>
+                            <!-- Compatibility -->
+                            <div class="col-span-2 rounded-lg bg-muted/50 p-3">
+                                <span class="text-xs text-muted-foreground">Compatibility</span>
+                                <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                                    <Badge
+                                        variant="secondary"
+                                        class="text-xs {project.versionType === 'release'
+                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+                                            : project.versionType === 'beta'
+                                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
+                                              : 'bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-300'}"
+                                    >
+                                        {project.versionType === 'release'
+                                            ? 'Release'
+                                            : project.versionType === 'beta'
+                                              ? 'Beta'
+                                              : 'Alpha'}
+                                    </Badge>
+                                    {#if project.usedFallbackLoader && project.resolvedLoader}
+                                        <Badge variant="outline" class="text-xs">
+                                            Via {getLoaderDisplayName(project.resolvedLoader)}
+                                        </Badge>
+                                    {/if}
+                                    {#if warnings.length > 0}
+                                        <span class="text-xs text-amber-600 dark:text-amber-400">
+                                            {warnings[0].message}
+                                        </span>
+                                    {/if}
+                                </div>
+                            </div>
                             <!-- Dependencies: compact list or count -->
                             <div class="col-span-2 rounded-lg bg-muted/50 p-3">
                                 <span class="text-xs text-muted-foreground">Dependencies</span>
@@ -265,11 +304,24 @@
                                 </div>
                             {/if}
                             {#if project.lastUpdated}
+                                {@const lastUpdated = project.lastUpdated}
                                 <div class="rounded-lg bg-muted/50 p-3">
                                     <span class="text-xs text-muted-foreground">Updated</span>
-                                    <p class="text-sm font-medium">
-                                        {formatRelativeTime(project.lastUpdated)}
-                                    </p>
+                                    <Tooltip.Root>
+                                        <Tooltip.Trigger>
+                                            {#snippet child({ props })}
+                                                <p
+                                                    class="cursor-default text-sm font-medium"
+                                                    {...props}
+                                                >
+                                                    {formatRelativeTime(lastUpdated)}
+                                                </p>
+                                            {/snippet}
+                                        </Tooltip.Trigger>
+                                        <Tooltip.Content
+                                            >{formatFullDate(lastUpdated)}</Tooltip.Content
+                                        >
+                                    </Tooltip.Root>
                                 </div>
                             {/if}
                         </div>
@@ -321,23 +373,54 @@
                             <div class="space-y-1">
                                 <span class="font-medium">SHA-512</span>
                                 <div class="flex items-center gap-2">
-                                    <code
-                                        class="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs"
-                                    >
-                                        {project.fileHashes.sha512.slice(0, 32)}...
-                                    </code>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        class="size-7 shrink-0 p-0"
-                                        onclick={copyHash}
-                                    >
-                                        {#if copiedHash}
-                                            <CheckIcon class="size-3.5 text-emerald-500" />
-                                        {:else}
-                                            <CopyIcon class="size-3.5" />
-                                        {/if}
-                                    </Button>
+                                    <Tooltip.Root>
+                                        <Tooltip.Trigger>
+                                            {#snippet child({ props })}
+                                                <code
+                                                    class="flex-1 cursor-default truncate rounded bg-muted px-2 py-1 font-mono text-xs"
+                                                    {...props}
+                                                >
+                                                    {project.fileHashes.sha512.slice(0, 32)}...
+                                                </code>
+                                            {/snippet}
+                                        </Tooltip.Trigger>
+                                        <Tooltip.Content
+                                            class="max-w-80 font-mono text-[10px] break-all"
+                                        >
+                                            {project.fileHashes.sha512}
+                                        </Tooltip.Content>
+                                    </Tooltip.Root>
+                                    <Tooltip.Root>
+                                        <Tooltip.Trigger>
+                                            {#snippet child({ props })}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    class="size-7 shrink-0 p-0"
+                                                    {...props}
+                                                    onclick={copyHash}
+                                                >
+                                                    {#if copiedHash}
+                                                        <span
+                                                            in:scale={safeTransition({
+                                                                duration: 200,
+                                                                start: 0.5
+                                                            })}
+                                                        >
+                                                            <CheckIcon
+                                                                class="size-3.5 text-emerald-500"
+                                                            />
+                                                        </span>
+                                                    {:else}
+                                                        <CopyIcon class="size-3.5" />
+                                                    {/if}
+                                                </Button>
+                                            {/snippet}
+                                        </Tooltip.Trigger>
+                                        <Tooltip.Content>
+                                            {copiedHash ? 'Copied!' : 'Copy SHA-512 hash'}
+                                        </Tooltip.Content>
+                                    </Tooltip.Root>
                                 </div>
                             </div>
 

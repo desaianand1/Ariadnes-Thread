@@ -111,6 +111,24 @@ export function getModrinthProjectUrl(projectType: string, projectSlug: string):
     return `https://modrinth.com/${projectType}/${projectSlug}`;
 }
 
+export function isStaleUpdate(isoDate: string, thresholdDays: number): boolean {
+    const date = new Date(isoDate);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    return diffDays >= thresholdDays;
+}
+
+export function formatFullDate(isoDate: string): string {
+    return new Date(isoDate).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
 export function formatRelativeTime(isoDate: string): string {
     const date = new Date(isoDate);
     const now = new Date();

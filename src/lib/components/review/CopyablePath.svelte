@@ -1,6 +1,11 @@
 <script lang="ts">
     import { Button } from '$lib/components/ui/button';
     import * as Tooltip from '$lib/components/ui/tooltip';
+    import { copyToClipboard } from '$lib/utils/clipboard';
+    import { toast } from 'svelte-sonner';
+    import { TOAST_DURATION } from '$lib/config/constants';
+    import { scale } from 'svelte/transition';
+    import { safeTransition } from '$lib/utils/motion';
     import CopyIcon from '@lucide/svelte/icons/copy';
     import CheckIcon from '@lucide/svelte/icons/check';
 
@@ -13,19 +18,9 @@
     let copied = $state(false);
 
     async function copy() {
-        try {
-            await navigator.clipboard.writeText(value);
-        } catch {
-            const textarea = document.createElement('textarea');
-            textarea.value = value;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-        }
+        await copyToClipboard(value);
         copied = true;
+        toast.success('Copied to clipboard', { duration: TOAST_DURATION.SUCCESS });
         setTimeout(() => (copied = false), 2000);
     }
 </script>
@@ -37,12 +32,14 @@
                 variant="outline"
                 size="sm"
                 class="h-auto gap-1.5 px-2 py-0.5 font-mono text-xs"
-                onclick={copy}
                 {...props}
+                onclick={copy}
             >
                 <code class="min-w-0 truncate">{value}</code>
                 {#if copied}
-                    <CheckIcon class="size-3 shrink-0 text-emerald-500" />
+                    <span in:scale={safeTransition({ duration: 200, start: 0.5 })}>
+                        <CheckIcon class="size-3 shrink-0 text-emerald-500" />
+                    </span>
                 {:else}
                     <CopyIcon class="size-3 shrink-0 opacity-50" />
                 {/if}

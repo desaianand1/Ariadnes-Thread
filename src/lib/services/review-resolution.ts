@@ -4,16 +4,25 @@ import type {
     ConflictEntry,
     UnresolvedDependency,
     ResolutionWarning,
-    SideClassification
+    SideClassification,
+    AlternativeProbe
 } from './types';
 import type { VersionType } from '$lib/api/types';
-import { getLoaderDisplayName, LOADER_DISPLAY_NAMES } from '$lib/utils/format';
+import { formatVersionNumber, getLoaderDisplayName, LOADER_DISPLAY_NAMES } from '$lib/utils/format';
+import { ADVISOR_MIN_IMPROVEMENT_PERCENT, isPluginLoader } from '$lib/config/constants';
+import { getLoaderCategory } from '$lib/config/constants';
 
 // --- Types ---
 
 export interface AutoResolvedItem {
-    type: 'fallback' | 'beta-version' | 'auto-excluded';
+    type:
+        | 'fallback'
+        | 'beta-version'
+        | 'auto-excluded'
+        | 'loader-independent'
+        | 'compatible-version-used';
     message: string;
+    reasonText: string;
     projectTitle: string;
     projectId: string;
     iconUrl?: string;
@@ -23,6 +32,14 @@ export interface AutoResolvedItem {
     loaders?: string[];
     versionType?: VersionType;
     resolvedLoader?: string;
+    /** For auto-excluded: the mod that conflicts with this one */
+    conflictModName?: string;
+    /** For compatible-version-used: the actual MC version the file was built for */
+    resolvedGameVersion?: string;
+    /** For compatible-version-used: the target MC version requested */
+    targetGameVersion?: string;
+    /** For loader-independent / compatible-version-used: the project type */
+    projectType?: string;
 }
 
 export interface AutoResolutionResult {
@@ -31,6 +48,8 @@ export interface AutoResolutionResult {
 }
 
 export type ResolutionState = 'allClear' | 'hasIssues' | 'noMods';
+
+export type ViewMode = 'simple' | 'detailed';
 
 export interface ConflictItem {
     projectA: { id: string; title: string; iconUrl?: string };
@@ -115,6 +134,61 @@ export function matchesModFilters(project: ResolvedProject, criteria: ModFilterC
     return true;
 }
 
+// --- Formatting ---
+
+/**
+ * Formats a technical resolution reason into a display-friendly string.
+ */
+export function formatTechnicalReason(reason: string): string {
+    return reason
+        .replace(
+            /No compatible version for (\w+) on (.+)/,
+            (_, l, v) => `No ${getLoaderDisplayName(l)} version for ${v}`
+        )
+        .replace(/^No compatible version for ([\d.]+)$/, (_, v) => `Not available for ${v}`)
+        .replace(/no compatible version/i, 'Not available')
+        .replace(
+            /using version built for ([\d.]+\S*) instead of ([\d.]+\S*)/i,
+            (_, actual, target) => `Using ${actual} build (target: ${target})`
+        );
+}
+
+/**
+ * Returns a plain-English explanation for why a mod is unavailable.
+ */
+export function getFriendlyIssueReason(
+    reason: string,
+    isNearMiss: boolean,
+    hasAdvisorSuggestion: boolean,
+    availableLoaders?: string[]
+): string {
+    const lower = reason.toLowerCase();
+
+    if (lower.includes('dependency') || lower.includes('required')) {
+        return "This mod needs another mod that isn't available for your setup";
+    }
+    if (
+        lower.includes('loader') ||
+        lower.includes('fabric') ||
+        lower.includes('forge') ||
+        lower.includes('quilt') ||
+        lower.includes('neoforge')
+    ) {
+        if (availableLoaders && availableLoaders.length > 0) {
+            const loaderNames = [...new Set(availableLoaders)].map(getLoaderDisplayName).join(', ');
+            return `This mod is available on ${loaderNames}`;
+        }
+        return 'This mod was made for a different mod loader';
+    }
+    if (isNearMiss && hasAdvisorSuggestion) {
+        return 'This mod is available on another Minecraft version — try switching above';
+    }
+    if (isNearMiss) {
+        return 'This mod is available on a different Minecraft version';
+    }
+    return "This mod hasn't been updated for this Minecraft version yet";
+}
+
 // --- Functions ---
 
 /**
@@ -125,7 +199,9 @@ export function computeAutoResolution(
     projects: ResolvedProject[],
     conflicts: ConflictEntry[],
     collectionProjectIds: Set<string>,
-    titleMap: Record<string, string>
+    titleMap: Record<string, string>,
+    gameVersion?: string,
+    loader?: string
 ): AutoResolutionResult {
     const items: AutoResolvedItem[] = [];
     const autoExcludedIds = new Set<string>();
@@ -140,6 +216,7 @@ export function computeAutoResolution(
             items.push({
                 type: 'fallback',
                 message: `${p.projectTitle}: resolved via ${getLoaderDisplayName(p.resolvedLoader)} compatibility`,
+                reasonText: `Using ${getLoaderDisplayName(p.resolvedLoader)} version (cross-loader compatible)`,
                 projectTitle: p.projectTitle,
                 projectId: p.projectId,
                 iconUrl: p.iconUrl,
@@ -151,13 +228,49 @@ export function computeAutoResolution(
                 resolvedLoader: p.resolvedLoader
             });
         }
-    }
 
-    for (const p of projects) {
+        // Only flag plugins as loader-independent when the user selected a mod loader
+        if (p.projectType === 'plugin' && (!loader || !isPluginLoader(loader))) {
+            items.push({
+                type: 'loader-independent',
+                message: `${p.projectTitle}: plugin — works without a mod loader`,
+                reasonText: 'Plugin — works without a mod loader',
+                projectTitle: p.projectTitle,
+                projectId: p.projectId,
+                iconUrl: p.iconUrl,
+                versionNumber: p.versionNumber,
+                fileSize: p.fileSize,
+                side: p.side,
+                loaders: p.loaders,
+                versionType: p.versionType,
+                projectType: p.projectType
+            });
+        }
+
+        if (p.resolvedGameVersion && gameVersion && p.resolvedGameVersion !== gameVersion) {
+            items.push({
+                type: 'compatible-version-used',
+                message: `${p.projectTitle}: built for ${p.resolvedGameVersion}, not ${gameVersion}`,
+                reasonText: `Built for ${p.resolvedGameVersion}, not ${gameVersion} — minor differences possible`,
+                projectTitle: p.projectTitle,
+                projectId: p.projectId,
+                iconUrl: p.iconUrl,
+                versionNumber: p.versionNumber,
+                fileSize: p.fileSize,
+                side: p.side,
+                loaders: p.loaders,
+                versionType: p.versionType,
+                resolvedGameVersion: p.resolvedGameVersion,
+                targetGameVersion: gameVersion,
+                projectType: p.projectType
+            });
+        }
+
         if (p.versionType !== 'release') {
             items.push({
                 type: 'beta-version',
                 message: `${p.projectTitle}: using ${p.versionType} (no stable release available)`,
+                reasonText: `No stable release available — using ${p.versionType} ${formatVersionNumber(p.versionNumber)}`,
                 projectTitle: p.projectTitle,
                 projectId: p.projectId,
                 iconUrl: p.iconUrl,
@@ -183,9 +296,12 @@ export function computeAutoResolution(
         if (aInCollection && !bInCollection) {
             autoExcludedIds.add(conflict.conflictsWith);
             const proj = projectMap.get(conflict.conflictsWith);
+            const conflictName = titleMap[conflict.projectId] ?? conflict.projectId;
             items.push({
                 type: 'auto-excluded',
-                message: `${titleMap[conflict.conflictsWith] ?? conflict.conflictsWith}: auto-excluded (incompatible with ${titleMap[conflict.projectId] ?? conflict.projectId})`,
+                message: `${titleMap[conflict.conflictsWith] ?? conflict.conflictsWith}: auto-excluded (incompatible with ${conflictName})`,
+                reasonText: `Conflicts with ${conflictName} — automatically excluded`,
+                conflictModName: conflictName,
                 projectTitle: titleMap[conflict.conflictsWith] ?? conflict.conflictsWith,
                 projectId: conflict.conflictsWith,
                 iconUrl: proj?.iconUrl,
@@ -198,9 +314,12 @@ export function computeAutoResolution(
         } else if (!aInCollection && bInCollection) {
             autoExcludedIds.add(conflict.projectId);
             const proj = projectMap.get(conflict.projectId);
+            const conflictName = titleMap[conflict.conflictsWith] ?? conflict.conflictsWith;
             items.push({
                 type: 'auto-excluded',
-                message: `${titleMap[conflict.projectId] ?? conflict.projectId}: auto-excluded (incompatible with ${titleMap[conflict.conflictsWith] ?? conflict.conflictsWith})`,
+                message: `${titleMap[conflict.projectId] ?? conflict.projectId}: auto-excluded (incompatible with ${conflictName})`,
+                reasonText: `Conflicts with ${conflictName} — automatically excluded`,
+                conflictModName: conflictName,
                 projectTitle: titleMap[conflict.projectId] ?? conflict.projectId,
                 projectId: conflict.projectId,
                 iconUrl: proj?.iconUrl,
@@ -418,4 +537,146 @@ export function buildWarningsMap(warnings: ResolutionWarning[]): Map<string, Res
  */
 export function getConflictProjectIds(conflicts: ConflictEntry[]): Set<string> {
     return new Set(conflicts.flatMap((c) => [c.projectId, c.conflictsWith]));
+}
+
+// =============================================================================
+// Availability Grouping
+// =============================================================================
+
+export interface LoaderVersionGroup {
+    loader: string;
+    versions: string[];
+}
+
+/**
+ * Groups availability data by loader, deduplicates versions per loader,
+ * sorts loaders by category (popular first), versions descending within each.
+ */
+export function groupAvailabilityByLoader(
+    availableOn: Array<{ version: string; loader: string }>
+): LoaderVersionGroup[] {
+    if (availableOn.length === 0) return [];
+
+    // Group by loader, dedup versions
+    const grouped = new Map<string, Set<string>>();
+    for (const { loader, version } of availableOn) {
+        if (!grouped.has(loader)) grouped.set(loader, new Set());
+        grouped.get(loader)!.add(version);
+    }
+
+    // Convert to array and sort versions descending within each loader
+    const result: LoaderVersionGroup[] = [];
+    for (const [loader, versionSet] of grouped) {
+        const versions = [...versionSet].sort((a, b) => {
+            // Simple version comparison: split on dots, compare numerically
+            const aParts = a.split('.').map(Number);
+            const bParts = b.split('.').map(Number);
+            for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+                const diff = (bParts[i] ?? 0) - (aParts[i] ?? 0);
+                if (diff !== 0) return diff;
+            }
+            return 0;
+        });
+        result.push({ loader, versions });
+    }
+
+    // Sort loaders: popular > plugin > other, then alphabetical within category
+    const categoryOrder: Record<string, number> = { popular: 0, plugin: 1, other: 2 };
+    result.sort((a, b) => {
+        const aCat = categoryOrder[getLoaderCategory(a.loader)] ?? 2;
+        const bCat = categoryOrder[getLoaderCategory(b.loader)] ?? 2;
+        if (aCat !== bCat) return aCat - bCat;
+        return a.loader.localeCompare(b.loader);
+    });
+
+    return result;
+}
+
+// =============================================================================
+// Best Configuration Advisor Helpers
+// =============================================================================
+
+/**
+ * Whether the advisor callout should be shown based on the best alternative's
+ * net gain as a percentage of total mods.
+ */
+export function shouldShowAdvisor(
+    bestAlternative: AlternativeProbe | null,
+    totalMods: number
+): boolean {
+    if (!bestAlternative || totalMods === 0) return false;
+    return (bestAlternative.netGain / totalMods) * 100 >= ADVISOR_MIN_IMPROVEMENT_PERCENT;
+}
+
+// =============================================================================
+// Dependency Cascade Helpers
+// =============================================================================
+
+/**
+ * Find resolved mods that depend on the given project.
+ * Returns titles of mods that would be affected by excluding this project.
+ */
+export function getDependentMods(projectId: string, allProjects: ResolvedProject[]): string[] {
+    return allProjects.filter((p) => p.dependencyOf === projectId).map((p) => p.projectTitle);
+}
+
+// =============================================================================
+// Donut Chart Helpers
+// =============================================================================
+
+export interface DonutSegment {
+    category: string;
+    count: number;
+    color: string;
+}
+
+/**
+ * Builds the donut chart segment array, filtering out zero-count segments.
+ */
+export function computeDonutSegments(
+    collectionModCount: number,
+    depModCount: number,
+    autoFixedCount: number,
+    unresolvedCount: number
+): DonutSegment[] {
+    const segments: DonutSegment[] = [];
+    const directResolved = collectionModCount - autoFixedCount;
+
+    if (directResolved > 0) {
+        segments.push({
+            category: 'resolved',
+            count: directResolved,
+            color: 'var(--color-resolved)'
+        });
+    }
+    if (depModCount > 0) {
+        segments.push({
+            category: 'dependencies',
+            count: depModCount,
+            color: 'var(--color-dependencies)'
+        });
+    }
+    if (autoFixedCount > 0) {
+        segments.push({
+            category: 'autofixed',
+            count: autoFixedCount,
+            color: 'var(--color-autofixed)'
+        });
+    }
+    if (unresolvedCount > 0) {
+        segments.push({
+            category: 'unavailable',
+            count: unresolvedCount,
+            color: 'var(--color-unavailable)'
+        });
+    }
+    return segments;
+}
+
+/**
+ * Computes resolution percentage with zero-denominator safety.
+ */
+export function computeResolutionPercentage(totalReady: number, totalAttempted: number): number {
+    if (totalAttempted === 0) return 0;
+    return Math.round((totalReady / totalAttempted) * 100);
 }

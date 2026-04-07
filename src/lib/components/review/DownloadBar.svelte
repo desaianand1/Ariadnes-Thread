@@ -1,11 +1,12 @@
 <script lang="ts">
     import type { SideStats } from '$lib/services/review-resolution';
     import { Button } from '$lib/components/ui/button';
-    import { SIDE_ICONS } from '$lib/utils/colors';
     import { formatBytes } from '$lib/utils/format';
     import { fly } from 'svelte/transition';
     import { safeTransition } from '$lib/utils/motion';
+    import * as Tooltip from '$lib/components/ui/tooltip';
     import DownloadIcon from '@lucide/svelte/icons/download';
+    import ShareIcon from '@lucide/svelte/icons/share-2';
     import PackageIcon from '@lucide/svelte/icons/package';
 
     interface Props {
@@ -13,8 +14,9 @@
         sideStats: { client: SideStats; server: SideStats; total: SideStats };
         hasClientMods: boolean;
         hasServerMods: boolean;
-        unresolvedCount: number;
+        unavailableCount: number;
         onStartDownload: (side: 'client' | 'server') => void;
+        onShare?: () => void;
     }
 
     let {
@@ -22,8 +24,9 @@
         sideStats,
         hasClientMods,
         hasServerMods,
-        unresolvedCount,
-        onStartDownload
+        unavailableCount,
+        onStartDownload,
+        onShare
     }: Props = $props();
 </script>
 
@@ -37,13 +40,13 @@
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
                 <PackageIcon class="size-4" />
                 <span>{formatBytes(sideStats.total.downloadSize)} total</span>
-                {#if unresolvedCount > 0}
+                {#if unavailableCount > 0}
                     <span class="text-muted-foreground/60">&middot;</span>
-                    <span class="text-muted-foreground/70">{unresolvedCount} unavailable</span>
+                    <span class="text-muted-foreground/70">{unavailableCount} unavailable</span>
                 {/if}
             </div>
 
-            <!-- Right: download buttons — always emerald -->
+            <!-- Right: download buttons + share -->
             <div class="flex flex-wrap items-center gap-2">
                 {#if hasClientMods}
                     <Button
@@ -53,11 +56,10 @@
                     >
                         <span class="flex items-center gap-1.5">
                             <DownloadIcon class="size-3.5" />
-                            <SIDE_ICONS.client class="size-3.5" />
-                            {hasServerMods ? 'Download Client Mods' : 'Download Mods'}
+                            Download Mods
                         </span>
                         <span class="text-[10px] font-normal opacity-70">
-                            For MC Launchers &middot; {sideStats.client.count} mods &middot; {formatBytes(
+                            {sideStats.client.count} mods &middot; {formatBytes(
                                 sideStats.client.downloadSize
                             )}
                         </span>
@@ -73,15 +75,34 @@
                     >
                         <span class="flex items-center gap-1.5">
                             <DownloadIcon class="size-3.5" />
-                            <SIDE_ICONS.server class="size-3.5" />
                             Download Server Mods
                         </span>
                         <span class="text-[10px] font-normal opacity-70">
-                            For Servers &middot; {sideStats.server.count} mods &middot; {formatBytes(
+                            {sideStats.server.count} mods &middot; {formatBytes(
                                 sideStats.server.downloadSize
                             )}
                         </span>
                     </Button>
+                {/if}
+
+                {#if onShare}
+                    <Tooltip.Root>
+                        <Tooltip.Trigger>
+                            {#snippet child({ props })}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    class="px-2.5"
+                                    {...props}
+                                    onclick={onShare}
+                                >
+                                    <ShareIcon class="size-3.5" />
+                                    <span class="sr-only">Share</span>
+                                </Button>
+                            {/snippet}
+                        </Tooltip.Trigger>
+                        <Tooltip.Content>Share</Tooltip.Content>
+                    </Tooltip.Root>
                 {/if}
             </div>
         </div>

@@ -1,6 +1,6 @@
 <script lang="ts">
     import './layout.css';
-    import { ModeWatcher } from 'mode-watcher';
+    import { ModeWatcher, userPrefersMode } from 'mode-watcher';
     import * as Tooltip from '$lib/components/ui/tooltip';
     import { Toaster } from '$lib/components/ui/sonner';
     import Header from '$lib/components/layout/Header.svelte';
@@ -11,7 +11,7 @@
 </script>
 
 <ModeWatcher />
-<Toaster />
+<Toaster pauseWhenPageIsHidden richColors theme={userPrefersMode.current} />
 
 <Tooltip.Provider>
     <div class="flex min-h-screen flex-col">

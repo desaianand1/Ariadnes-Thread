@@ -1,5 +1,6 @@
 <script lang="ts">
     import { ResponsiveModal } from '$lib/components/ui/responsive-modal';
+    import * as ScrollArea from '$lib/components/ui/scroll-area';
     import { Button } from '$lib/components/ui/button';
     import { Input } from '$lib/components/ui/input';
     import { Textarea } from '$lib/components/ui/textarea';
@@ -7,14 +8,20 @@
     import { Turnstile } from '$lib/components/ui/turnstile';
     import { toast } from 'svelte-sonner';
     import { browser } from '$app/environment';
-    import { siteConfig } from '$lib/config/site';
+    import { mode } from 'mode-watcher';
+    import { TOAST_DURATION } from '$lib/config/constants';
     import { getLoaderDisplayName } from '$lib/utils/format';
+    import { copyToClipboard } from '$lib/utils/clipboard';
+    import { scale } from 'svelte/transition';
+    import { safeTransition } from '$lib/utils/motion';
     import CopyIcon from '@lucide/svelte/icons/copy';
     import CheckIcon from '@lucide/svelte/icons/check';
     import SendIcon from '@lucide/svelte/icons/send';
     import ShareIcon from '@lucide/svelte/icons/share';
     import DownloadIcon from '@lucide/svelte/icons/download';
     import QrCodeIcon from '@lucide/svelte/icons/qr-code';
+    import LinkIcon from '@lucide/svelte/icons/link';
+    import MailIcon from '@lucide/svelte/icons/mail';
     import { SiDiscord } from '@icons-pack/svelte-simple-icons';
 
     interface Props {
@@ -56,20 +63,60 @@
         `**${collectionNames}** — ${context.modCount} mods for Minecraft ${context.gameVersion} on ${getLoaderDisplayName(context.loader)}\n${pageUrl}`
     );
 
+    // Reset QR state when modal closes so it regenerates on reopen
+    $effect(() => {
+        if (!open) {
+            qrGenerated = false;
+        }
+    });
+
     $effect(() => {
         if (open && qrContainer && browser) {
             generateQr();
         }
     });
 
+    /**
+     * Resolve a CSS variable from :root to a hex string the QR library can use.
+     * oklch/hsl values aren't valid canvas colors, so we render a temporary
+     * 1x1 element, read its computed color, and convert the rgb() result.
+     */
+    function resolveCssColor(varName: string, fallback: string): string {
+        if (!browser) return fallback;
+        const probe = document.createElement('div');
+        probe.style.color = `var(${varName})`;
+        probe.style.position = 'fixed';
+        probe.style.opacity = '0';
+        document.body.appendChild(probe);
+        const rgb = getComputedStyle(probe).color;
+        document.body.removeChild(probe);
+        const match = rgb.match(/(\d+),\s*(\d+),\s*(\d+)/);
+        if (!match) return fallback;
+        const hex =
+            '#' +
+            [match[1], match[2], match[3]]
+                .map((c) => parseInt(c, 10).toString(16).padStart(2, '0'))
+                .join('');
+        return hex;
+    }
+
+    function getQrColors(): { dark: string; light: string } {
+        const isDark = mode.current === 'dark';
+        return {
+            dark: resolveCssColor('--primary', isDark ? '#e9e5f5' : '#3b1d8e'),
+            light: resolveCssColor('--background', isDark ? '#18181b' : '#ffffff')
+        };
+    }
+
     async function generateQr() {
         if (qrGenerated || !qrContainer) return;
         try {
             const QRCode = (await import('qrcode')).default;
+            const colors = getQrColors();
             const canvas = await QRCode.toCanvas(pageUrl, {
                 width: 200,
                 margin: 2,
-                color: { dark: siteConfig.themeColor.light, light: '#ffffff' }
+                color: colors
             });
             // eslint-disable-next-line svelte/no-dom-manipulating -- QR canvas is generated outside Svelte's reactivity
             qrContainer.innerHTML = '';
@@ -96,14 +143,10 @@
     }
 
     async function copyLink() {
-        try {
-            await navigator.clipboard.writeText(pageUrl);
-            copied = true;
-            toast.success('Link copied to clipboard');
-            setTimeout(() => (copied = false), 2000);
-        } catch {
-            toast.error('Failed to copy link');
-        }
+        await copyToClipboard(pageUrl);
+        copied = true;
+        toast.success('Link copied to clipboard', { duration: TOAST_DURATION.SUCCESS });
+        setTimeout(() => (copied = false), 2000);
     }
 
     async function webShare() {
@@ -121,14 +164,10 @@
     }
 
     async function copyDiscord() {
-        try {
-            await navigator.clipboard.writeText(discordMessage);
-            copiedDiscord = true;
-            toast.success('Copied for Discord');
-            setTimeout(() => (copiedDiscord = false), 2000);
-        } catch {
-            toast.error('Failed to copy');
-        }
+        await copyToClipboard(discordMessage);
+        copiedDiscord = true;
+        toast.success('Copied for Discord', { duration: TOAST_DURATION.SUCCESS });
+        setTimeout(() => (copiedDiscord = false), 2000);
     }
 
     async function sendEmail(e: SubmitEvent) {
@@ -178,127 +217,185 @@
     }
 </script>
 
-<ResponsiveModal bind:open onClose={() => (open = false)}>
+<ResponsiveModal bind:open onClose={() => (open = false)} dialogClass="sm:max-w-lg">
     {#snippet title()}Share Collection{/snippet}
     {#snippet description()}Share this mod collection with others{/snippet}
 
-    <div class="space-y-6">
-        <!-- Copy Link -->
-        <div class="space-y-2">
-            <Label>Share Link</Label>
-            <div class="flex gap-2">
-                <Input value={pageUrl} readonly class="flex-1 text-sm" />
-                <Button variant="outline" size="icon" onclick={copyLink}>
-                    {#if copied}
-                        <CheckIcon class="size-4 text-green-500" />
-                    {:else}
-                        <CopyIcon class="size-4" />
-                    {/if}
-                </Button>
-            </div>
-        </div>
+    <ScrollArea.Root class="max-h-[60vh]">
+        <div class="space-y-5 pr-1">
+            <!-- Quick Share section -->
+            <div class="space-y-3">
+                <h3
+                    class="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                >
+                    <LinkIcon class="size-3" />
+                    Quick Share
+                </h3>
 
-        <!-- Web Share API (mobile/supported browsers) -->
-        {#if webShareSupported}
-            <Button variant="outline" class="w-full" onclick={webShare}>
-                <ShareIcon class="mr-1.5 size-4" />
-                Share via...
-            </Button>
-        {/if}
+                <!-- Copy Link -->
+                <div class="flex min-w-0 gap-2">
+                    <div
+                        class="min-w-0 flex-1 overflow-hidden rounded-md border bg-muted/30 px-3 py-2"
+                    >
+                        <code class="block truncate text-sm text-muted-foreground">{pageUrl}</code>
+                    </div>
+                    <Button variant="outline" size="icon" class="shrink-0" onclick={copyLink}>
+                        {#if copied}
+                            <span in:scale={safeTransition({ duration: 200, start: 0.5 })}>
+                                <CheckIcon class="size-4 text-emerald-500" />
+                            </span>
+                        {:else}
+                            <CopyIcon class="size-4" />
+                        {/if}
+                    </Button>
+                </div>
 
-        <!-- QR Code -->
-        <div class="space-y-2">
-            <Label class="flex items-center gap-1.5">
-                <QrCodeIcon class="size-3.5" />
-                QR Code
-            </Label>
-            <div class="flex flex-col items-center gap-3 rounded-md border p-4">
-                <div bind:this={qrContainer} class="flex items-center justify-center"></div>
-                {#if qrGenerated}
-                    <Button variant="outline" size="sm" onclick={downloadQr}>
-                        <DownloadIcon class="mr-1.5 size-3.5" />
-                        Download QR
+                <!-- Web Share API (mobile/supported browsers) -->
+                {#if webShareSupported}
+                    <Button variant="outline" class="w-full" onclick={webShare}>
+                        <ShareIcon class="mr-1.5 size-4" />
+                        Share via...
                     </Button>
                 {/if}
             </div>
-        </div>
 
-        <!-- Copy for Discord -->
-        <div class="space-y-2">
-            <Label>Copy for Discord</Label>
-            <div class="flex gap-2">
-                <Input value={discordMessage} readonly class="flex-1 text-sm" />
-                <Button variant="outline" size="icon" onclick={copyDiscord}>
-                    {#if copiedDiscord}
-                        <CheckIcon class="size-4 text-green-500" />
-                    {:else}
-                        <SiDiscord class="size-4" />
-                    {/if}
-                </Button>
-            </div>
-        </div>
-
-        <!-- Email Form -->
-        {#if emailEnabled}
             <hr class="border-border" />
 
-            <form onsubmit={sendEmail} class="space-y-4">
-                <div class="absolute -left-[9999px]" aria-hidden="true">
-                    <input name="website" tabindex={-1} autocomplete="off" bind:value={honeypot} />
-                </div>
-
-                <div class="space-y-2">
-                    <Label for="curator-name">Your Name</Label>
-                    <Input
-                        id="curator-name"
-                        bind:value={curatorName}
-                        placeholder="Your name"
-                        required
-                        maxlength={100}
-                    />
-                </div>
-
-                <div class="space-y-2">
-                    <Label for="recipient-email">Recipient Email</Label>
-                    <Input
-                        id="recipient-email"
-                        type="email"
-                        bind:value={recipientEmail}
-                        placeholder="friend@example.com"
-                        required
-                        maxlength={320}
-                    />
-                </div>
-
-                <div class="space-y-2">
-                    <Label for="share-message">Personal Message (optional)</Label>
+            <!-- Social section -->
+            <div class="space-y-3">
+                <h3
+                    class="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                >
+                    <SiDiscord class="size-3 text-discord" />
+                    Discord
+                </h3>
+                <div class="flex min-w-0 gap-2">
                     <Textarea
-                        id="share-message"
-                        bind:value={message}
-                        placeholder="Check out these mods!"
-                        maxlength={1000}
-                        rows={3}
+                        value={discordMessage}
+                        readonly
+                        rows={2}
+                        class="min-w-0 flex-1 resize-none text-sm"
                     />
-                    <p class="text-right text-xs text-muted-foreground">
-                        {message.length}/1000
-                    </p>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        class="shrink-0 self-start"
+                        onclick={copyDiscord}
+                    >
+                        {#if copiedDiscord}
+                            <span in:scale={safeTransition({ duration: 200, start: 0.5 })}>
+                                <CheckIcon class="size-4 text-emerald-500" />
+                            </span>
+                        {:else}
+                            <CopyIcon class="size-4" />
+                        {/if}
+                    </Button>
                 </div>
+            </div>
 
-                {#if turnstileSiteKey}
-                    <Turnstile
-                        bind:this={turnstileRef}
-                        siteKey={turnstileSiteKey}
-                        onVerify={(token) => (turnstileToken = token)}
-                        onExpire={() => (turnstileToken = '')}
-                        onError={() => (turnstileToken = '')}
-                    />
-                {/if}
+            <hr class="border-border" />
 
-                <Button type="submit" class="w-full" disabled={sending || !turnstileReady}>
-                    <SendIcon class="mr-1.5 size-3.5" />
-                    {sending ? 'Sending...' : 'Send Email'}
-                </Button>
-            </form>
-        {/if}
-    </div>
+            <!-- QR Code -->
+            <div class="space-y-3">
+                <h3
+                    class="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                >
+                    <QrCodeIcon class="size-3" />
+                    QR Code
+                </h3>
+                <div class="flex flex-col items-center gap-3 rounded-md border p-4">
+                    <div bind:this={qrContainer} class="flex items-center justify-center">
+                        {#if !qrGenerated}
+                            <div class="flex size-[200px] items-center justify-center">
+                                <QrCodeIcon class="size-8 animate-pulse text-muted-foreground/30" />
+                            </div>
+                        {/if}
+                    </div>
+                    {#if qrGenerated}
+                        <Button variant="outline" size="sm" onclick={downloadQr}>
+                            <DownloadIcon class="mr-1.5 size-3.5" />
+                            Download QR
+                        </Button>
+                    {/if}
+                </div>
+            </div>
+
+            <!-- Email Form -->
+            {#if emailEnabled}
+                <hr class="border-border" />
+
+                <div class="space-y-3">
+                    <h3
+                        class="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                    >
+                        <MailIcon class="size-3" />
+                        Send via Email
+                    </h3>
+
+                    <form onsubmit={sendEmail} class="space-y-4">
+                        <div class="absolute -left-[9999px]" aria-hidden="true">
+                            <input
+                                name="website"
+                                tabindex={-1}
+                                autocomplete="off"
+                                bind:value={honeypot}
+                            />
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="curator-name">Your Name</Label>
+                            <Input
+                                id="curator-name"
+                                bind:value={curatorName}
+                                placeholder="Your name"
+                                required
+                                maxlength={100}
+                            />
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="recipient-email">Recipient Email</Label>
+                            <Input
+                                id="recipient-email"
+                                type="email"
+                                bind:value={recipientEmail}
+                                placeholder="friend@example.com"
+                                required
+                                maxlength={320}
+                            />
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="share-message">Personal Message (optional)</Label>
+                            <Textarea
+                                id="share-message"
+                                bind:value={message}
+                                placeholder="Check out these mods!"
+                                maxlength={1000}
+                                rows={3}
+                            />
+                            <p class="text-right text-xs text-muted-foreground">
+                                {message.length}/1000
+                            </p>
+                        </div>
+
+                        {#if turnstileSiteKey}
+                            <Turnstile
+                                bind:this={turnstileRef}
+                                siteKey={turnstileSiteKey}
+                                onVerify={(token) => (turnstileToken = token)}
+                                onExpire={() => (turnstileToken = '')}
+                                onError={() => (turnstileToken = '')}
+                            />
+                        {/if}
+
+                        <Button type="submit" class="w-full" disabled={sending || !turnstileReady}>
+                            <SendIcon class="mr-1.5 size-3.5" />
+                            {sending ? 'Sending...' : 'Send Email'}
+                        </Button>
+                    </form>
+                </div>
+            {/if}
+        </div>
+    </ScrollArea.Root>
 </ResponsiveModal>

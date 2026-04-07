@@ -3,6 +3,7 @@
  */
 
 import type { KnownLoader } from '$lib/config/constants';
+import { RESOLUTION_PERCENTAGE_THRESHOLDS } from '$lib/config/constants';
 import MonitorIcon from '@lucide/svelte/icons/monitor';
 import ServerIcon from '@lucide/svelte/icons/server';
 import LayersIcon from '@lucide/svelte/icons/layers';
@@ -131,7 +132,7 @@ export const VERSION_TYPE_BADGE_CLASSES: Record<string, string> = {
 
 export const STATUS_COLORS = {
     compatible: 'bg-emerald-500',
-    warning: 'bg-yellow-500',
+    warning: 'bg-amber-500',
     conflict: 'bg-red-500'
 } as const;
 
@@ -158,6 +159,20 @@ export const SIDE_ICONS = {
     server: ServerIcon,
     both: LayersIcon
 } as const;
+
+/**
+ * Semantic color for the resolution percentage text in the donut chart.
+ * High (>=80%) → green, medium (>=50%) → amber, low (<50%) → red.
+ */
+export function getResolutionPercentageColor(pct: number): string {
+    if (pct >= RESOLUTION_PERCENTAGE_THRESHOLDS.HIGH) {
+        return 'fill-emerald-600 dark:fill-emerald-400';
+    }
+    if (pct >= RESOLUTION_PERCENTAGE_THRESHOLDS.MEDIUM) {
+        return 'fill-amber-600 dark:fill-amber-400';
+    }
+    return 'fill-red-600 dark:fill-red-400';
+}
 
 /**
  * Convert Modrinth decimal color to hex string

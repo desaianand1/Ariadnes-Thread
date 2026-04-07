@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { ResolvedProject, ResolutionWarning } from '$lib/services/types';
+    import type { ViewMode } from '$lib/services/review-resolution';
     import { deriveModStatus } from '$lib/services/review-resolution';
     import ModAvatar from './ModAvatar.svelte';
     import ExcludeConfirmDialog from './ExcludeConfirmDialog.svelte';
@@ -10,6 +11,7 @@
     import StatusIndicator from './StatusIndicator.svelte';
     import { formatBytes, formatVersionNumber } from '$lib/utils/format';
     import { cn } from '$lib/utils';
+    import * as Tooltip from '$lib/components/ui/tooltip';
     import EyeOffIcon from '@lucide/svelte/icons/eye-off';
     import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
     import FileIcon from '@lucide/svelte/icons/file';
@@ -21,6 +23,7 @@
         loader: string;
         collectionName?: string;
         isExcluded?: boolean;
+        viewMode?: ViewMode;
         onExclude?: (id: string) => void;
         onSelect?: (project: ResolvedProject) => void;
     }
@@ -32,6 +35,7 @@
         loader,
         collectionName,
         isExcluded = false,
+        viewMode = 'detailed',
         onExclude,
         onSelect
     }: Props = $props();
@@ -75,22 +79,27 @@
     <div class="min-w-0 flex-1">
         <!-- Row 1: title + badges -->
         <div class="flex items-center gap-2">
-            <span class={cn('truncate text-sm font-medium', isExcluded && 'line-through')}>
+            <span
+                class={cn('truncate text-sm font-semibold', isExcluded && 'line-through')}
+                title={project.projectTitle}
+            >
                 {project.projectTitle}
             </span>
             <div class="hidden shrink-0 items-center gap-1.5 sm:flex">
                 <SideBadge side={project.side} size="sm" />
-                <LoaderBadge loaderSlug={loader} size="sm" />
+                {#if viewMode === 'detailed'}
+                    <LoaderBadge loaderSlug={loader} size="sm" />
+                {/if}
             </div>
         </div>
         <!-- Row 2: description + metadata -->
         <div class="flex items-center gap-2 text-xs text-muted-foreground">
-            <span class="min-w-0 truncate">
+            <span class="min-w-0 truncate" title={project.projectDescription || undefined}>
                 {project.projectDescription || 'No description'}
             </span>
             {#if project.dependencyOf && collectionName}
                 <span class="hidden shrink-0 text-muted-foreground/70 sm:inline"
-                    >required by: {collectionName}</span
+                    >required by {collectionName}</span
                 >
             {:else if collectionName}
                 <span class="hidden shrink-0 sm:inline">from {collectionName}</span>
@@ -98,30 +107,42 @@
         </div>
     </div>
 
-    <!-- Right side metadata -->
-    <Badge
-        variant="outline"
-        class="hidden shrink-0 font-mono text-[10px] leading-tight md:inline-flex"
-    >
-        {formatVersionNumber(project.versionNumber)}
-    </Badge>
-    <span class="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground md:inline-flex">
-        <FileIcon class="size-3" />
-        {formatBytes(project.fileSize)}
-    </span>
+    <!-- Right side metadata (detailed mode only) -->
+    {#if viewMode === 'detailed'}
+        <Badge
+            variant="outline"
+            class="hidden shrink-0 font-mono text-[10px] leading-tight md:inline-flex"
+        >
+            {formatVersionNumber(project.versionNumber)}
+        </Badge>
+        <span
+            class="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground md:inline-flex"
+        >
+            <FileIcon class="size-3" />
+            {formatBytes(project.fileSize)}
+        </span>
+    {/if}
 
     <!-- Action button -->
     {#if onExclude}
         {#if isExcluded}
-            <Button
-                variant="ghost"
-                size="sm"
-                class="size-9 shrink-0 p-0 sm:size-7"
-                onclick={() => onExclude(project.projectId)}
-            >
-                <RotateCcwIcon class="size-3.5" />
-                <span class="sr-only">Restore</span>
-            </Button>
+            <Tooltip.Root>
+                <Tooltip.Trigger>
+                    {#snippet child({ props })}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            class="size-9 shrink-0 p-0 sm:size-7"
+                            {...props}
+                            onclick={() => onExclude(project.projectId)}
+                        >
+                            <RotateCcwIcon class="size-3.5" />
+                            <span class="sr-only">Restore</span>
+                        </Button>
+                    {/snippet}
+                </Tooltip.Trigger>
+                <Tooltip.Content>Restore</Tooltip.Content>
+            </Tooltip.Root>
         {:else}
             <ExcludeConfirmDialog
                 projectTitle={project.projectTitle}

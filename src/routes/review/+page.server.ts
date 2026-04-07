@@ -2,15 +2,35 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { createClientFromPlatform } from '$lib/api/client.server';
 import { reviewParamsSchema, parseReviewOptions } from '$lib/schemas/collection';
-import { resolveCollection } from '$lib/services/resolution.server';
+import {
+    resolveCollection,
+    createBatchedResolution,
+    mergeBatchResults
+} from '$lib/services/resolution.server';
+import { resolveDependencies } from '$lib/services/dependency.server';
+import { probeAlternatives } from '$lib/services/alternative-probe.server';
 import { decimalToHex } from '$lib/utils/colors';
-import { MAX_TOTAL_PROJECTS } from '$lib/config/constants';
+
+import {
+    MAX_TOTAL_PROJECTS,
+    ADVISOR_MIN_IMPROVEMENT_PERCENT,
+    ADVISOR_MIN_ABSOLUTE_GAIN,
+    PAGE_LOAD_TIMEOUT_MS,
+    LARGE_LOAD_TIMEOUT_MS,
+    MODRINTH_BATCH_SIZE,
+    RESOLUTION_MESSAGES,
+    VIEW_MODE_COOKIE,
+    LARGE_LOAD_THRESHOLD,
+    RESOLUTION_BATCH_SIZE
+} from '$lib/config/constants';
 import { getEnvConfig } from '$lib/config/env.server';
 import { env as publicEnv } from '$env/dynamic/public';
-import type { ModrinthCollection, ModrinthProject } from '$lib/api/types';
+import type { ModrinthCollection, ModrinthProject, ModrinthGameVersion } from '$lib/api/types';
 import type {
     CollectionGroup,
     ResolvedProject,
+    AlternativeProbe,
+    ModAvailability,
     ResolutionWarning,
     ConflictEntry,
     UnresolvedDependency,
@@ -34,8 +54,8 @@ async function fetchCollection(
     const projectIds = collection.projects;
     const projects: ModrinthProject[] = [];
 
-    for (let i = 0; i < projectIds.length; i += 100) {
-        const chunk = projectIds.slice(i, i + 100);
+    for (let i = 0; i < projectIds.length; i += MODRINTH_BATCH_SIZE) {
+        const chunk = projectIds.slice(i, i + MODRINTH_BATCH_SIZE);
         const batch = await client.requestVersion<ModrinthProject[]>('projects', 'v2', {
             queryParams: { ids: JSON.stringify(chunk) }
         });
@@ -47,10 +67,12 @@ async function fetchCollection(
 
 function buildEmptyResponse(
     reviewOptions: ReturnType<typeof parseReviewOptions>,
-    loadError: string
+    loadError: string,
+    initialViewMode: 'simple' | 'detailed' = 'detailed'
 ) {
     const envConfig = getEnvConfig();
     return {
+        isLargeLoad: false as const,
         loadError,
         collections: [] as CollectionGroup[],
         dependencies: [] as ResolvedProject[],
@@ -67,7 +89,16 @@ function buildEmptyResponse(
             totalDownloadSize: 0
         } satisfies ResolutionStats,
         projectTitleMap: {} as Record<string, string>,
+        advisorData: Promise.resolve({
+            alternatives: [] as AlternativeProbe[],
+            modAvailability: {} as Record<string, ModAvailability>
+        }),
+        unresolvedMetadata: {} as Record<
+            string,
+            { updated: string; description: string; projectType?: string }
+        >,
         context: {
+            loadId: crypto.randomUUID(),
             gameVersion: reviewOptions.gameVersion,
             loader: reviewOptions.loader,
             collectionIds: reviewOptions.collectionIds,
@@ -77,12 +108,16 @@ function buildEmptyResponse(
             concurrentDownloads: reviewOptions.concurrentDownloads,
             retryCount: reviewOptions.retryCount
         },
+        initialViewMode,
         emailEnabled: envConfig.ENABLE_EMAIL_SHARING && !!envConfig.RESEND_API_KEY,
         turnstileSiteKey: publicEnv.PUBLIC_TURNSTILE_SITE_KEY ?? ''
     };
 }
 
-export const load: PageServerLoad = async ({ url, platform }) => {
+export const load: PageServerLoad = async ({ url, platform, cookies }) => {
+    const viewModeCookie = cookies.get(VIEW_MODE_COOKIE);
+    const initialViewMode = viewModeCookie === 'simple' ? 'simple' : 'detailed';
+
     const parseResult = reviewParamsSchema.safeParse(Object.fromEntries(url.searchParams));
     if (!parseResult.success) {
         error(400, 'Invalid review parameters');
@@ -103,16 +138,19 @@ export const load: PageServerLoad = async ({ url, platform }) => {
 
     const client = createClientFromPlatform(platform);
 
-    const TIMEOUT_MS = 25_000;
+    const TIMEOUT_MS = PAGE_LOAD_TIMEOUT_MS;
     let timeoutId: ReturnType<typeof setTimeout>;
     const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error('Request timed out')), TIMEOUT_MS);
     });
 
-    // Pre-flight project count check — fetch collections first, then validate total
-    const prefetchResults = await Promise.allSettled(
-        reviewOptions.collectionIds.map((id) => fetchCollection(client, id))
-    );
+    // Fetch game versions (for advisor probes) in parallel with collection prefetch
+    const [prefetchResults, gameVersionsResult] = await Promise.all([
+        Promise.allSettled(reviewOptions.collectionIds.map((id) => fetchCollection(client, id))),
+        client
+            .requestVersion<ModrinthGameVersion[]>('tag/game_version', 'v2')
+            .catch(() => [] as ModrinthGameVersion[])
+    ]);
 
     const totalProjects = prefetchResults.reduce((sum, r) => {
         if (r.status === 'fulfilled') return sum + r.value.projects.length;
@@ -126,6 +164,23 @@ export const load: PageServerLoad = async ({ url, platform }) => {
         );
     }
 
+    const isLargeLoad = totalProjects > LARGE_LOAD_THRESHOLD;
+
+    // ─── Large load path: return metadata sync, stream batch promises ───
+    if (isLargeLoad) {
+        clearTimeout(timeoutId!);
+        return buildLargeLoadResponse(
+            reviewOptions,
+            resolutionOptions,
+            client,
+            prefetchResults,
+            gameVersionsResult,
+            totalProjects,
+            initialViewMode
+        );
+    }
+
+    // ─── Small load path: existing synchronous resolution with timeout ───
     let collectionResults: PromiseSettledResult<{
         collection: ModrinthCollection;
         result: Awaited<ReturnType<typeof resolveCollection>>;
@@ -135,14 +190,12 @@ export const load: PageServerLoad = async ({ url, platform }) => {
 
     const resolutionPromise = Promise.allSettled(
         reviewOptions.collectionIds.map(async (id, idx) => {
-            // Reuse prefetched data to avoid duplicate API calls
             const prefetched = prefetchResults[idx];
             const { collection, projects } =
                 prefetched.status === 'fulfilled'
                     ? prefetched.value
                     : await fetchCollection(client, id);
 
-            // Filter out modpacks
             const modpacks = projects.filter((p) => p.project_type === 'modpack');
             const filteredProjects = projects.filter((p) => p.project_type !== 'modpack');
 
@@ -166,20 +219,18 @@ export const load: PageServerLoad = async ({ url, platform }) => {
     try {
         collectionResults = await Promise.race([resolutionPromise, timeoutPromise]);
     } catch (e) {
-        // Swallow orphaned promise rejections so they don't crash the process
         resolutionPromise.catch(() => {});
 
         const message =
             e instanceof Error && e.message === 'Request timed out'
-                ? 'The request took too long. Try with fewer collections or try again later.'
-                : 'Failed to resolve collections. Please try again.';
+                ? RESOLUTION_MESSAGES.TIMEOUT
+                : RESOLUTION_MESSAGES.GENERIC;
 
-        return buildEmptyResponse(reviewOptions, message);
+        return buildEmptyResponse(reviewOptions, message, initialViewMode);
     } finally {
         clearTimeout(timeoutId!);
     }
 
-    // Check if all collections failed
     const successfulResults = collectionResults.filter(
         (
             r
@@ -192,22 +243,402 @@ export const load: PageServerLoad = async ({ url, platform }) => {
     );
 
     if (successfulResults.length === 0) {
-        return buildEmptyResponse(
-            reviewOptions,
-            'Could not fetch any collections. The Modrinth API may be temporarily unavailable.'
-        );
+        return buildEmptyResponse(reviewOptions, RESOLUTION_MESSAGES.ALL_FAILED, initialViewMode);
     }
 
     try {
-        return buildSuccessResponse(reviewOptions, client, collectionResults, successfulResults);
+        return buildSuccessResponse(
+            reviewOptions,
+            client,
+            collectionResults,
+            successfulResults,
+            gameVersionsResult,
+            initialViewMode
+        );
     } catch (e) {
         console.error('Post-resolution processing failed:', e);
-        return buildEmptyResponse(
-            reviewOptions,
-            'An unexpected error occurred while processing results. Please try again.'
-        );
+        return buildEmptyResponse(reviewOptions, RESOLUTION_MESSAGES.GENERIC, initialViewMode);
     }
 };
+
+// =============================================================================
+// Shared Helpers
+// =============================================================================
+
+interface CollectionMeta {
+    id: string;
+    name: string;
+    iconUrl?: string;
+    color?: number;
+    projectCount: number;
+    projectIds: Set<string>;
+}
+
+/**
+ * Deduplicates resolved projects across collections. First collection claims
+ * each project; subsequent collections get cross-reference annotations.
+ */
+function buildCollectionGroups(
+    collectionMetaList: CollectionMeta[],
+    allResolved: ResolvedProject[]
+): CollectionGroup[] {
+    const claimedProjects = new Map<string, { collectionName: string; collectionIndex: number }>();
+    const collections: CollectionGroup[] = [];
+
+    for (const meta of collectionMetaList) {
+        const resolvedInCollection = allResolved.filter((r) => meta.projectIds.has(r.projectId));
+
+        const alsoInMap: Record<string, string[]> = {};
+        const dedupedResolved: ResolvedProject[] = [];
+
+        for (const project of resolvedInCollection) {
+            const existing = claimedProjects.get(project.projectId);
+            if (existing) {
+                if (!alsoInMap[project.projectId]) alsoInMap[project.projectId] = [];
+                const originalGroup = collections[existing.collectionIndex];
+                if (originalGroup) {
+                    if (!originalGroup.alsoInMap[project.projectId])
+                        originalGroup.alsoInMap[project.projectId] = [];
+                    originalGroup.alsoInMap[project.projectId].push(meta.name);
+                }
+            } else {
+                claimedProjects.set(project.projectId, {
+                    collectionName: meta.name,
+                    collectionIndex: collections.length
+                });
+                dedupedResolved.push(project);
+            }
+        }
+
+        collections.push({
+            id: meta.id,
+            name: meta.name,
+            iconUrl: meta.iconUrl,
+            color: decimalToHex(meta.color),
+            totalProjectCount: meta.projectCount,
+            resolved: dedupedResolved,
+            alsoInMap
+        });
+    }
+
+    return collections;
+}
+
+/**
+ * Fetches metadata for unresolved projects (title, description, icon, update
+ * timestamp) and backfills both the unresolved entries and the title map.
+ */
+async function fetchUnresolvedMetadata(
+    client: import('$lib/api/client').ModrinthClient,
+    allUnresolved: UnresolvedDependency[],
+    projectTitleMap: Record<string, string>
+): Promise<Record<string, { updated: string; description: string; projectType?: string }>> {
+    const unresolvedProjectIds = [...new Set(allUnresolved.map((u) => u.projectId))];
+    const metadata: Record<string, { updated: string; description: string; projectType?: string }> =
+        {};
+
+    if (unresolvedProjectIds.length === 0) return metadata;
+
+    try {
+        const fetched = await client.requestVersion<ModrinthProject[]>('projects', 'v2', {
+            queryParams: { ids: JSON.stringify(unresolvedProjectIds) }
+        });
+        for (const p of fetched) {
+            if (!projectTitleMap[p.id]) projectTitleMap[p.id] = p.title;
+            for (const u of allUnresolved) {
+                if (u.projectId === p.id) {
+                    u.projectTitle ??= p.title;
+                    u.projectDescription ??= p.description;
+                    u.projectIconUrl ??= p.icon_url;
+                }
+            }
+            metadata[p.id] = {
+                updated: p.updated,
+                description: p.description,
+                projectType: p.project_type
+            };
+        }
+    } catch {
+        // Non-critical — fall back to raw IDs
+    }
+
+    return metadata;
+}
+
+// =============================================================================
+// Large Load Response (batched streaming)
+// =============================================================================
+
+interface LoadStep {
+    text: string;
+}
+
+function computeLoadSteps(totalProjects: number, batchCount: number): LoadStep[] {
+    const steps: LoadStep[] = [{ text: `Loading ${totalProjects} mods` }];
+    for (let i = 1; i <= batchCount; i++) {
+        steps.push({ text: `Checking mod batch (${i} of ${batchCount})` });
+    }
+    steps.push({ text: 'Finding required extras' });
+    steps.push({ text: 'Looking for a better setup' });
+    return steps;
+}
+
+function buildLargeLoadResponse(
+    reviewOptions: ReturnType<typeof parseReviewOptions>,
+    resolutionOptions: Parameters<typeof resolveCollection>[2],
+    client: import('$lib/api/client').ModrinthClient,
+    prefetchResults: PromiseSettledResult<CollectionFetchResult>[],
+    allGameVersions: ModrinthGameVersion[],
+    totalProjects: number,
+    initialViewMode: 'simple' | 'detailed'
+) {
+    const envConfig = getEnvConfig();
+
+    // Extract collection metadata and all projects from prefetch
+    const collectionMeta: {
+        name: string;
+        iconUrl?: string;
+        projectCount: number;
+        collection: ModrinthCollection;
+        projects: ModrinthProject[];
+    }[] = [];
+    const allModpackWarnings: ResolutionWarning[] = [];
+    const allProjectsFlat: ModrinthProject[] = [];
+
+    for (const r of prefetchResults) {
+        if (r.status !== 'fulfilled') continue;
+        const { collection, projects } = r.value;
+        const modpacks = projects.filter((p) => p.project_type === 'modpack');
+        const filtered = projects.filter((p) => p.project_type !== 'modpack');
+
+        allModpackWarnings.push(
+            ...modpacks.map((p) => ({
+                type: 'no-compatible-version' as const,
+                projectId: p.id,
+                message: `${p.title} is a modpack and was skipped`
+            }))
+        );
+
+        collectionMeta.push({
+            name: collection.name,
+            iconUrl: collection.icon_url,
+            projectCount: projects.length,
+            collection,
+            projects: filtered
+        });
+        allProjectsFlat.push(...filtered);
+    }
+
+    // Dedup projects across collections (first occurrence wins)
+    const seen = new Set<string>();
+    const dedupedProjects: ModrinthProject[] = [];
+    for (const p of allProjectsFlat) {
+        if (!seen.has(p.id)) {
+            seen.add(p.id);
+            dedupedProjects.push(p);
+        }
+    }
+
+    const { batchPromises, allBatches } = createBatchedResolution(
+        client,
+        dedupedProjects,
+        resolutionOptions,
+        RESOLUTION_BATCH_SIZE
+    );
+
+    const batchCount = batchPromises.length;
+    const loadSteps = computeLoadSteps(totalProjects, batchCount);
+
+    // Noop catch on each batch promise — prevents SvelteKit "unhandled promise rejection"
+    // crash if a batch rejects before the client hydrates and attaches its own handlers
+    for (const bp of batchPromises) {
+        bp.catch(() => {});
+    }
+
+    const largeLoadTimeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Large load timed out')), LARGE_LOAD_TIMEOUT_MS);
+    });
+
+    // Final assembly: merges all batches, runs dependency resolution, builds full result
+    const resolutionData = Promise.race([allBatches, largeLoadTimeout]).then(
+        async (batchResults) => {
+            const merged = mergeBatchResults(batchResults);
+
+            // Run dependency resolution on the merged results
+            const depResult = resolutionOptions.includeDependencies
+                ? await resolveDependencies(client, merged.resolved, resolutionOptions)
+                : {
+                      resolved: [] as ResolvedProject[],
+                      conflicts: [] as ConflictEntry[],
+                      warnings: [] as ResolutionWarning[],
+                      unresolved: [] as UnresolvedDependency[]
+                  };
+
+            const mainIds = new Set(merged.resolved.map((r) => r.projectId));
+            const dedupedDeps = depResult.resolved.filter((d) => !mainIds.has(d.projectId));
+
+            const collections = buildCollectionGroups(
+                collectionMeta.map((meta) => ({
+                    id: meta.collection.id,
+                    name: meta.name,
+                    iconUrl: meta.iconUrl,
+                    color: meta.collection.color,
+                    projectCount: meta.projectCount,
+                    projectIds: new Set(meta.projects.map((p) => p.id))
+                })),
+                merged.resolved
+            );
+
+            const allWarnings = [...allModpackWarnings, ...merged.warnings, ...depResult.warnings];
+            const allUnresolved = [...merged.unresolved, ...depResult.unresolved];
+
+            // Add warnings for failed collections
+            for (let i = 0; i < prefetchResults.length; i++) {
+                if (prefetchResults[i].status === 'rejected') {
+                    allWarnings.push({
+                        type: 'no-compatible-version',
+                        projectId: reviewOptions.collectionIds[i],
+                        message: `Failed to fetch collection ${reviewOptions.collectionIds[i]}: ${String((prefetchResults[i] as PromiseRejectedResult).reason)}`
+                    });
+                }
+            }
+
+            // Build title map
+            const projectTitleMap: Record<string, string> = {};
+            for (const g of collections) {
+                for (const p of g.resolved) projectTitleMap[p.projectId] = p.projectTitle;
+            }
+            for (const d of dedupedDeps) projectTitleMap[d.projectId] = d.projectTitle;
+            for (const u of allUnresolved) {
+                if (u.projectTitle && !projectTitleMap[u.projectId])
+                    projectTitleMap[u.projectId] = u.projectTitle;
+            }
+
+            const unresolvedMetadata = await fetchUnresolvedMetadata(
+                client,
+                allUnresolved,
+                projectTitleMap
+            );
+
+            const allResolved = collections.flatMap((g) => g.resolved);
+            const stats: ResolutionStats = {
+                totalProjects: collections.reduce((sum, g) => sum + g.totalProjectCount, 0),
+                resolvedCount: allResolved.length,
+                unresolvedCount: allUnresolved.length,
+                dependencyCount: dedupedDeps.length,
+                conflictCount: depResult.conflicts.length,
+                warningCount: allWarnings.length,
+                totalDownloadSize:
+                    allResolved.reduce((sum, r) => sum + r.fileSize, 0) +
+                    dedupedDeps.reduce((sum, r) => sum + r.fileSize, 0)
+            };
+
+            return {
+                collections,
+                dependencies: dedupedDeps,
+                conflicts: depResult.conflicts,
+                warnings: allWarnings,
+                unresolved: allUnresolved,
+                stats,
+                projectTitleMap,
+                unresolvedMetadata
+            };
+        }
+    );
+
+    // Advisor: streams after resolution completes
+    const advisorData = resolutionData
+        .then(async (result) => {
+            const allResolved = result.collections.flatMap((g) => g.resolved);
+            const unresolvedProjectIds = [...new Set(result.unresolved.map((u) => u.projectId))];
+            const totalForThreshold = allResolved.length + unresolvedProjectIds.length;
+
+            if (unresolvedProjectIds.length === 0 || allGameVersions.length === 0) {
+                return {
+                    alternatives: [] as AlternativeProbe[],
+                    modAvailability: {} as Record<string, ModAvailability>
+                };
+            }
+
+            // Build projectTypes map for accurate histogram scanning
+            const projectTypes = new Map<string, string>();
+            for (const p of allResolved) projectTypes.set(p.projectId, p.projectType);
+            if (result.unresolvedMetadata) {
+                for (const [id, meta] of Object.entries(result.unresolvedMetadata)) {
+                    if (meta.projectType) projectTypes.set(id, meta.projectType);
+                }
+            }
+
+            const probeResult = await probeAlternatives(
+                client,
+                allResolved,
+                unresolvedProjectIds,
+                reviewOptions.gameVersion,
+                reviewOptions.loader,
+                allGameVersions,
+                reviewOptions.excludedConfigs.length > 0
+                    ? reviewOptions.excludedConfigs
+                    : undefined,
+                projectTypes
+            );
+
+            return {
+                alternatives: probeResult.alternatives.filter(
+                    (a) =>
+                        totalForThreshold > 0 &&
+                        (a.netGain >= ADVISOR_MIN_ABSOLUTE_GAIN ||
+                            (a.netGain / totalForThreshold) * 100 >=
+                                ADVISOR_MIN_IMPROVEMENT_PERCENT)
+                ),
+                modAvailability: probeResult.modAvailability
+            };
+        })
+        .catch(() => ({
+            alternatives: [] as AlternativeProbe[],
+            modAvailability: {} as Record<string, ModAvailability>
+        }));
+
+    // Prevent SvelteKit crash if streamed promises reject before hydration
+    resolutionData.catch(() => {});
+
+    return {
+        isLargeLoad: true as const,
+        loadSteps,
+        collectionMeta: collectionMeta.map((m) => ({
+            name: m.name,
+            iconUrl: m.iconUrl,
+            projectCount: m.projectCount
+        })),
+        context: {
+            loadId: crypto.randomUUID(),
+            gameVersion: reviewOptions.gameVersion,
+            loader: reviewOptions.loader,
+            collectionIds: reviewOptions.collectionIds,
+            excludedProjectIds: Array.from(reviewOptions.excludedProjectIds)
+        },
+        downloadSettings: {
+            concurrentDownloads: reviewOptions.concurrentDownloads,
+            retryCount: reviewOptions.retryCount
+        },
+        initialViewMode,
+
+        // Per-batch promises — each streams independently for real progress
+        batchProgress: batchPromises,
+
+        // Final assembled result — streams when all batches + deps complete
+        resolutionData,
+
+        // Advisor — streams after resolution completes
+        advisorData,
+
+        emailEnabled: envConfig.ENABLE_EMAIL_SHARING && !!envConfig.RESEND_API_KEY,
+        turnstileSiteKey: publicEnv.PUBLIC_TURNSTILE_SITE_KEY ?? ''
+    };
+}
+
+// =============================================================================
+// Small Load Success Response
+// =============================================================================
 
 async function buildSuccessResponse(
     reviewOptions: ReturnType<typeof parseReviewOptions>,
@@ -223,11 +654,10 @@ async function buildSuccessResponse(
         result: Awaited<ReturnType<typeof resolveCollection>>;
         modpackWarnings: ResolutionWarning[];
         totalProjectCount: number;
-    }>[]
+    }>[],
+    allGameVersions: ModrinthGameVersion[],
+    initialViewMode: 'simple' | 'detailed' = 'detailed'
 ) {
-    // Cross-collection dedup: first collection claims each project
-    const claimedProjects = new Map<string, { collectionName: string; collectionIndex: number }>();
-    const collections: CollectionGroup[] = [];
     const allDependencies: ResolvedProject[] = [];
     const allConflicts: ConflictEntry[] = [];
     const allWarnings: ResolutionWarning[] = [];
@@ -245,62 +675,42 @@ async function buildSuccessResponse(
         }
     }
 
-    for (let i = 0; i < successfulResults.length; i++) {
-        const { collection, result, modpackWarnings, totalProjectCount } =
-            successfulResults[i].value;
+    // Collect all resolved projects + metadata for buildCollectionGroups
+    const collectionMetaList: CollectionMeta[] = [];
+    const allResolvedByCollection: ResolvedProject[] = [];
+
+    for (const sr of successfulResults) {
+        const { collection, result, modpackWarnings, totalProjectCount } = sr.value;
 
         allWarnings.push(...modpackWarnings);
         allWarnings.push(...result.warnings);
         allConflicts.push(...result.conflicts);
         allUnresolved.push(...result.unresolved);
 
-        // Dedup resolved projects across collections
-        const alsoInMap: Record<string, string[]> = {};
-        const dedupedResolved: ResolvedProject[] = [];
-
-        for (const project of result.resolved) {
-            const existing = claimedProjects.get(project.projectId);
-            if (existing) {
-                // Already claimed by another collection — record cross-reference
-                if (!alsoInMap[project.projectId]) {
-                    alsoInMap[project.projectId] = [];
-                }
-                // Also annotate the original collection's group
-                const originalGroup = collections[existing.collectionIndex];
-                if (originalGroup) {
-                    if (!originalGroup.alsoInMap[project.projectId]) {
-                        originalGroup.alsoInMap[project.projectId] = [];
-                    }
-                    originalGroup.alsoInMap[project.projectId].push(collection.name);
-                }
-            } else {
-                claimedProjects.set(project.projectId, {
-                    collectionName: collection.name,
-                    collectionIndex: collections.length
-                });
-                dedupedResolved.push(project);
-            }
-        }
-
-        collections.push({
+        collectionMetaList.push({
             id: collection.id,
             name: collection.name,
             iconUrl: collection.icon_url,
-            color: decimalToHex(collection.color),
-            totalProjectCount,
-            resolved: dedupedResolved,
-            alsoInMap
+            color: collection.color,
+            projectCount: totalProjectCount,
+            projectIds: new Set(result.resolved.map((r) => r.projectId))
         });
+        allResolvedByCollection.push(...result.resolved);
 
-        // Dedup dependencies: skip if already claimed by any collection's resolved set
-        for (const dep of result.dependencies) {
-            if (!claimedProjects.has(dep.projectId)) {
-                claimedProjects.set(dep.projectId, {
-                    collectionName: '_dependencies',
-                    collectionIndex: -1
-                });
-                allDependencies.push(dep);
-            }
+        // Collect deps for dedup below
+        allDependencies.push(...result.dependencies);
+    }
+
+    const collections = buildCollectionGroups(collectionMetaList, allResolvedByCollection);
+
+    // Dedup dependencies: keep only those not claimed by any collection's resolved set
+    const claimedIds = new Set(collections.flatMap((g) => g.resolved.map((r) => r.projectId)));
+    const seenDeps = new Set<string>();
+    const dedupedDependencies: ResolvedProject[] = [];
+    for (const dep of allDependencies) {
+        if (!claimedIds.has(dep.projectId) && !seenDeps.has(dep.projectId)) {
+            seenDeps.add(dep.projectId);
+            dedupedDependencies.push(dep);
         }
     }
 
@@ -311,7 +721,7 @@ async function buildSuccessResponse(
             projectTitleMap[p.projectId] = p.projectTitle;
         }
     }
-    for (const dep of allDependencies) {
+    for (const dep of dedupedDependencies) {
         projectTitleMap[dep.projectId] = dep.projectTitle;
     }
     for (const u of allUnresolved) {
@@ -320,36 +730,11 @@ async function buildSuccessResponse(
         }
     }
 
-    // Batch-fetch metadata for unresolved deps still missing titles/icons
-    const missingIds = allUnresolved
-        .filter((u) => !projectTitleMap[u.projectId] || !u.projectTitle)
-        .map((u) => u.projectId);
-    const uniqueMissingIds = [...new Set(missingIds)];
-
-    if (uniqueMissingIds.length > 0) {
-        try {
-            const missingProjects = await client.requestVersion<ModrinthProject[]>(
-                'projects',
-                'v2',
-                { queryParams: { ids: JSON.stringify(uniqueMissingIds) } }
-            );
-            for (const p of missingProjects) {
-                if (!projectTitleMap[p.id]) {
-                    projectTitleMap[p.id] = p.title;
-                }
-                // Backfill unresolved entries with fetched metadata
-                for (const u of allUnresolved) {
-                    if (u.projectId === p.id) {
-                        u.projectTitle ??= p.title;
-                        u.projectDescription ??= p.description;
-                        u.projectIconUrl ??= p.icon_url;
-                    }
-                }
-            }
-        } catch {
-            // Non-critical — fall back to raw IDs
-        }
-    }
+    const unresolvedMetadata = await fetchUnresolvedMetadata(
+        client,
+        allUnresolved,
+        projectTitleMap
+    );
 
     // Aggregate stats
     const allResolved = collections.flatMap((g) => g.resolved);
@@ -357,26 +742,77 @@ async function buildSuccessResponse(
         totalProjects: collections.reduce((sum, g) => sum + g.totalProjectCount, 0),
         resolvedCount: allResolved.length,
         unresolvedCount: allUnresolved.length,
-        dependencyCount: allDependencies.length,
+        dependencyCount: dedupedDependencies.length,
         conflictCount: allConflicts.length,
         warningCount: allWarnings.length,
         totalDownloadSize:
             allResolved.reduce((sum, r) => sum + r.fileSize, 0) +
-            allDependencies.reduce((sum, r) => sum + r.fileSize, 0)
+            dedupedDependencies.reduce((sum, r) => sum + r.fileSize, 0)
     };
 
     const envConfig = getEnvConfig();
 
+    // Build projectTypes map for accurate histogram scanning
+    const projectTypes = new Map<string, string>();
+    for (const p of allResolved) projectTypes.set(p.projectId, p.projectType);
+    for (const [id, meta] of Object.entries(unresolvedMetadata)) {
+        if (meta.projectType) projectTypes.set(id, meta.projectType);
+    }
+
+    // Advisor probe: return as unawaited promise for SvelteKit streaming.
+    // Page renders immediately with all non-probe data; advisor fills in when ready.
+    const unresolvedIds = [...new Set(allUnresolved.map((u) => u.projectId))];
+    const totalForThreshold = allResolved.length + unresolvedIds.length;
+    const advisorData: Promise<{
+        alternatives: AlternativeProbe[];
+        modAvailability: Record<string, ModAvailability>;
+    }> =
+        unresolvedIds.length > 0 && allGameVersions.length > 0
+            ? probeAlternatives(
+                  client,
+                  allResolved,
+                  unresolvedIds,
+                  reviewOptions.gameVersion,
+                  reviewOptions.loader,
+                  allGameVersions,
+                  reviewOptions.excludedConfigs.length > 0
+                      ? reviewOptions.excludedConfigs
+                      : undefined,
+                  projectTypes
+              )
+                  .then((result) => ({
+                      alternatives: result.alternatives.filter(
+                          (a) =>
+                              totalForThreshold > 0 &&
+                              (a.netGain >= ADVISOR_MIN_ABSOLUTE_GAIN ||
+                                  (a.netGain / totalForThreshold) * 100 >=
+                                      ADVISOR_MIN_IMPROVEMENT_PERCENT)
+                      ),
+                      modAvailability: result.modAvailability
+                  }))
+                  .catch(() => ({
+                      alternatives: [] as AlternativeProbe[],
+                      modAvailability: {} as Record<string, ModAvailability>
+                  }))
+            : Promise.resolve({
+                  alternatives: [] as AlternativeProbe[],
+                  modAvailability: {} as Record<string, ModAvailability>
+              });
+
     return {
+        isLargeLoad: false as const,
         loadError: undefined as string | undefined,
         collections,
-        dependencies: allDependencies,
+        dependencies: dedupedDependencies,
         conflicts: allConflicts,
         warnings: allWarnings,
         unresolved: allUnresolved,
         stats,
         projectTitleMap,
+        advisorData,
+        unresolvedMetadata,
         context: {
+            loadId: crypto.randomUUID(),
             gameVersion: reviewOptions.gameVersion,
             loader: reviewOptions.loader,
             collectionIds: reviewOptions.collectionIds,
@@ -386,6 +822,7 @@ async function buildSuccessResponse(
             concurrentDownloads: reviewOptions.concurrentDownloads,
             retryCount: reviewOptions.retryCount
         },
+        initialViewMode,
         emailEnabled: envConfig.ENABLE_EMAIL_SHARING && !!envConfig.RESEND_API_KEY,
         turnstileSiteKey: publicEnv.PUBLIC_TURNSTILE_SITE_KEY ?? ''
     };

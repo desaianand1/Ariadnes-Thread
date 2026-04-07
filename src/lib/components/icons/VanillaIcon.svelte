@@ -1,9 +1,10 @@
 <script lang="ts">
     interface Props {
         class?: string;
+        inactive?: boolean;
     }
 
-    let { class: className = '' }: Props = $props();
+    let { class: className = '', inactive = false }: Props = $props();
 </script>
 
 <svg
@@ -12,9 +13,10 @@
     class={className}
     aria-hidden="true"
 >
-    <path d="M0 0h160.073v160.073H0z" fill="#3eae30" />
+    <path d="M0 0h160.073v160.073H0z" fill={inactive ? 'currentColor' : '#3eae30'} />
     <path
         d="M51.594 121.802h14.173v-14.173h28.915v13.985h14.552V78.619H94.966V35.624h28.821v28.821H37.041v-28.82h28.916v43.089H51.594Z"
         fill="currentColor"
+        opacity={inactive ? 0.6 : 1}
     />
 </svg>

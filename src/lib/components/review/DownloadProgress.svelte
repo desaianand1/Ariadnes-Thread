@@ -1,6 +1,5 @@
 <script lang="ts">
     import type { DownloadState } from '$lib/state/download.svelte';
-    import type { Component } from 'svelte';
     import DownloadRow from './DownloadRow.svelte';
     import CopyablePath from './CopyablePath.svelte';
     import { slide, fly } from 'svelte/transition';
@@ -23,7 +22,7 @@
     import DownloadIcon from '@lucide/svelte/icons/download';
     import CheckCircleIcon from '@lucide/svelte/icons/circle-check';
     import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
-    import ScrollIcon from '@lucide/svelte/icons/scroll';
+    import BookOpenIcon from '@lucide/svelte/icons/book-open';
     import LoaderIcon from '@lucide/svelte/icons/loader';
     import ShareIcon from '@lucide/svelte/icons/share-2';
     import ServerIcon from '@lucide/svelte/icons/server';
@@ -54,13 +53,7 @@
         shareUrl = ''
     }: Props = $props();
 
-    const GUIDE_ICONS: Record<string, Component<{ class?: string }>> = {
-        vanilla: VanillaIcon,
-        prism: PrismLauncherIcon,
-        curseforge: SiCurseforge,
-        'modrinth-app': SiModrinth,
-        gdlauncher: GdLauncherIcon
-    };
+    let activeGuide = $state('vanilla');
 
     let completedCount = $derived(dlState.files.filter((f) => f.status === 'complete').length);
     let totalCount = $derived(dlState.files.length);
@@ -102,6 +95,31 @@
     let showZipping = $derived(
         isZipping() && !showVerifying && dlState.phase !== 'complete' && dlState.phase !== 'error'
     );
+
+    /**
+     * Split text on backtick pairs so directory mentions like `/mods`
+     * render as inline code without requiring {@html}.
+     */
+    function parseInlineCode(input: string): { text: string; isCode: boolean }[] {
+        const parts: { text: string; isCode: boolean }[] = [];
+        const regex = /`([^`]+)`/g;
+        let lastIndex = 0;
+        let match: RegExpExecArray | null;
+
+        while ((match = regex.exec(input)) !== null) {
+            if (match.index > lastIndex) {
+                parts.push({ text: input.slice(lastIndex, match.index), isCode: false });
+            }
+            parts.push({ text: match[1], isCode: true });
+            lastIndex = regex.lastIndex;
+        }
+
+        if (lastIndex < input.length) {
+            parts.push({ text: input.slice(lastIndex), isCode: false });
+        }
+
+        return parts;
+    }
 </script>
 
 <div class="space-y-4">
@@ -192,11 +210,6 @@
                     </Button>
                 </p>
 
-                <!-- Mini-progress for other-side download -->
-                {#if dlState.isMiniProgress && dlState.phase !== 'complete'}
-                    <!-- This won't render here since phase is 'complete', handled below -->
-                {/if}
-
                 <!-- "Download Other Side" CTA -->
                 {#if onDownloadOtherSide}
                     <div
@@ -243,18 +256,49 @@
             <!-- Installation Guide -->
             <div>
                 <span class="mb-3 inline-flex items-center gap-1.5">
-                    <ScrollIcon class="size-4" />
-                    <h3 class="text-sm font-medium">Installation Guide</h3>
+                    <BookOpenIcon class="size-4" />
+                    <h3 class="text-sm font-medium">How to Install</h3>
                 </span>
 
-                <Tabs.Root value="vanilla">
+                <Tabs.Root bind:value={activeGuide}>
                     <div class="scrollbar-thin overflow-x-auto">
                         <Tabs.List class="flex-nowrap">
                             {#each LAUNCHER_GUIDES as guide (guide.id)}
+                                {@const isActive = activeGuide === guide.id}
                                 <Tabs.Trigger value={guide.id} class="shrink-0 gap-1.5 text-xs">
-                                    {#if GUIDE_ICONS[guide.id]}
-                                        {@const Icon = GUIDE_ICONS[guide.id]}
-                                        <Icon class="size-3.5" />
+                                    {#if guide.id === 'vanilla'}
+                                        <VanillaIcon
+                                            class="size-3.5 {isActive
+                                                ? ''
+                                                : 'text-muted-foreground'}"
+                                            inactive={!isActive}
+                                        />
+                                    {:else if guide.id === 'prism'}
+                                        <PrismLauncherIcon
+                                            class="size-3.5 {isActive
+                                                ? ''
+                                                : 'text-muted-foreground'}"
+                                            inactive={!isActive}
+                                        />
+                                    {:else if guide.id === 'curseforge'}
+                                        <SiCurseforge
+                                            class="size-3.5 {isActive
+                                                ? 'text-curseforge'
+                                                : 'text-muted-foreground'}"
+                                        />
+                                    {:else if guide.id === 'modrinth-app'}
+                                        <SiModrinth
+                                            class="size-3.5 {isActive
+                                                ? 'text-modrinth'
+                                                : 'text-muted-foreground'}"
+                                        />
+                                    {:else if guide.id === 'gdlauncher'}
+                                        <GdLauncherIcon
+                                            class="size-3.5 {isActive
+                                                ? ''
+                                                : 'text-muted-foreground'}"
+                                            inactive={!isActive}
+                                        />
                                     {/if}
                                     {guide.name}
                                 </Tabs.Trigger>
@@ -266,16 +310,52 @@
                         <Tabs.Content value={guide.id} class="pt-3">
                             <ol class="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
                                 {#each guide.steps as step, i (i)}
-                                    <li>
-                                        {#if step.type === 'path'}
-                                            {step.prefix}
-                                            <div class="mt-1">
-                                                <CopyablePath value={step.paths[userOS]} />
-                                            </div>
-                                        {:else}
-                                            {step.text}
-                                        {/if}
-                                    </li>
+                                    {#if step.type === 'tip'}
+                                        <li class="-ml-5 list-none pl-0">
+                                            <p class="text-xs text-muted-foreground italic">
+                                                <span class="font-medium">Tip:</span>
+                                                {#each parseInlineCode(step.text) as segment, i (i + segment.text)}
+                                                    {#if segment.isCode}
+                                                        <code
+                                                            class="rounded bg-muted px-1 py-0.5 font-mono text-xs"
+                                                            >{segment.text}</code
+                                                        >
+                                                    {:else}
+                                                        {segment.text}
+                                                    {/if}
+                                                {/each}
+                                            </p>
+                                        </li>
+                                    {:else}
+                                        <li>
+                                            {#if step.type === 'path'}
+                                                {#each parseInlineCode(step.prefix) as segment, i (i + segment.text)}
+                                                    {#if segment.isCode}
+                                                        <code
+                                                            class="rounded bg-muted px-1 py-0.5 font-mono text-xs"
+                                                            >{segment.text}</code
+                                                        >
+                                                    {:else}
+                                                        {segment.text}
+                                                    {/if}
+                                                {/each}
+                                                <div class="mt-1">
+                                                    <CopyablePath value={step.paths[userOS]} />
+                                                </div>
+                                            {:else}
+                                                {#each parseInlineCode(step.text) as segment (i + segment.text)}
+                                                    {#if segment.isCode}
+                                                        <code
+                                                            class="rounded bg-muted px-1 py-0.5 font-mono text-xs"
+                                                            >{segment.text}</code
+                                                        >
+                                                    {:else}
+                                                        {segment.text}
+                                                    {/if}
+                                                {/each}
+                                            {/if}
+                                        </li>
+                                    {/if}
                                 {/each}
                             </ol>
                         </Tabs.Content>

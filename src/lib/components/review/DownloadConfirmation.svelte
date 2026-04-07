@@ -4,6 +4,7 @@
     import { Button } from '$lib/components/ui/button';
     import { formatBytes } from '$lib/utils/format';
     import DownloadIcon from '@lucide/svelte/icons/download';
+    import LoaderCircleIcon from '@lucide/svelte/icons/loader-circle';
     import MonitorIcon from '@lucide/svelte/icons/monitor';
     import ServerIcon from '@lucide/svelte/icons/server';
 
@@ -12,6 +13,8 @@
         side: 'client' | 'server';
         projects: ResolvedProject[];
         serverOnlyCount?: number;
+        advisorLoading?: boolean;
+        hasIssues?: boolean;
         onConfirm: () => void;
         onClose: () => void;
     }
@@ -21,6 +24,8 @@
         side,
         projects,
         serverOnlyCount = 0,
+        advisorLoading = false,
+        hasIssues = false,
         onConfirm,
         onClose
     }: Props = $props();
@@ -67,7 +72,9 @@
     {/snippet}
 
     {#snippet description()}
-        {side === 'client' ? 'For your .minecraft folder' : 'For dedicated servers'}
+        {side === 'client'
+            ? 'For your game — goes into your .minecraft folder'
+            : 'For your server — goes into the server directory'}
     {/snippet}
 
     <div class="space-y-4 py-4">
@@ -102,9 +109,23 @@
         {/if}
 
         <p class="text-sm text-muted-foreground">
-            After downloading, extract the ZIP contents into your game folder. Detailed instructions
-            will be shown after the download completes.
+            After downloading, unzip the file into your Minecraft folder. Step-by-step instructions
+            for your launcher will appear after the download finishes.
         </p>
+
+        {#if advisorLoading && hasIssues}
+            <div
+                class="flex items-start gap-2.5 rounded-md border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-800 dark:bg-blue-950/20"
+            >
+                <LoaderCircleIcon
+                    class="mt-0.5 size-4 shrink-0 animate-spin text-blue-600 dark:text-blue-400"
+                />
+                <p class="text-sm text-blue-700 dark:text-blue-300">
+                    We're checking if a different Minecraft version could include more of your mods.
+                    Feel free to download now, or wait a moment.
+                </p>
+            </div>
+        {/if}
     </div>
 
     {#snippet footer()}

@@ -4,7 +4,7 @@
  */
 
 import { getCachedData, setCachedData } from '$lib/utils/cache';
-import { STORAGE_KEYS, CACHE_TTL } from '$lib/config/constants';
+import { STORAGE_KEYS, CACHE_TTL, CURATED_POPULAR_VERSIONS } from '$lib/config/constants';
 import type { ModrinthGameVersion } from '$lib/api/types';
 import { SvelteDate, SvelteMap, SvelteSet } from 'svelte/reactivity';
 
@@ -92,19 +92,7 @@ export async function loadMinecraftVersions(): Promise<void> {
     }
 }
 
-/** Hand-picked versions that represent major community milestones */
-const CURATED_POPULAR_VERSIONS = new Set([
-    '1.21.1',
-    '1.20.1',
-    '1.19.2',
-    '1.18.2',
-    '1.16.5',
-    '1.12.2',
-    '1.10.2',
-    '1.8.9',
-    '1.7.10',
-    '1.6.4'
-]);
+const CURATED_POPULAR_SET = new Set(CURATED_POPULAR_VERSIONS);
 
 /**
  * Returns versions in three tiers:
@@ -128,7 +116,7 @@ export function getGroupedVersions(): {
         popularSet.add(latestRelease.value);
     }
 
-    for (const version of CURATED_POPULAR_VERSIONS) {
+    for (const version of CURATED_POPULAR_SET) {
         const item = versionsByValue.get(version);
         if (item && !popularSet.has(version)) {
             popular.push(item);

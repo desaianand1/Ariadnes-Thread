@@ -62,6 +62,7 @@ export interface DownloadState {
     abortController: AbortController | null;
     concurrentDownloads?: number;
     retryCount?: number;
+    sessionKey: string | null;
 }
 
 // =============================================================================
@@ -83,7 +84,8 @@ const INITIAL_STATE: DownloadState = {
     serverZipSize: 0,
     isMiniProgress: false,
     errorMessage: null,
-    abortController: null
+    abortController: null,
+    sessionKey: null
 };
 
 const state = $state<DownloadState>({ ...INITIAL_STATE });
@@ -139,10 +141,18 @@ export function getCacheSize(): number {
  * Filter projects by the target side and populate file progress entries.
  * Files already in downloadCache are excluded from the download queue.
  */
+/**
+ * Returns true when download state belongs to a different review session
+ * (different collections, version, or loader) and should be discarded.
+ */
+export function isStaleSession(currentKey: string): boolean {
+    return state.phase !== 'idle' && state.sessionKey !== null && state.sessionKey !== currentKey;
+}
+
 export function initDownload(
     projects: ResolvedProject[],
     side: 'client' | 'server',
-    settings?: { concurrentDownloads?: number; retryCount?: number }
+    settings?: { concurrentDownloads?: number; retryCount?: number; sessionKey?: string }
 ): void {
     const filtered = projects.filter((p) => p.side === side || p.side === 'both');
 
@@ -194,6 +204,7 @@ export function initDownload(
     state.errorMessage = null;
     state.concurrentDownloads = settings?.concurrentDownloads;
     state.retryCount = settings?.retryCount;
+    state.sessionKey = settings?.sessionKey ?? null;
     state.abortController = new AbortController();
     speedSamples = [];
 }

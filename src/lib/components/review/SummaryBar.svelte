@@ -1,19 +1,18 @@
 <script lang="ts">
     import type { DownloadPhase } from '$lib/state/download.svelte';
-    import { Badge } from '$lib/components/ui/badge';
     import { Button } from '$lib/components/ui/button';
     import { Progress } from '$lib/components/ui/progress';
-    import { Separator } from '$lib/components/ui/separator';
     import * as Tooltip from '$lib/components/ui/tooltip';
     import { formatSpeed, formatEta } from '$lib/utils/format';
+    import { STATUS_COLORS } from '$lib/utils/colors';
+    import { cn } from '$lib/utils';
     import ShareIcon from '@lucide/svelte/icons/share-2';
     import XIcon from '@lucide/svelte/icons/x';
     import LoaderBadge from './LoaderBadge.svelte';
 
     interface Props {
-        collectionModCount: number;
-        depModCount: number;
-        issueCount: number;
+        resolvedModCount: number;
+        unavailableCount: number;
         context: { gameVersion: string; loader: string };
         downloadPhase?: DownloadPhase;
         downloadProgress?: number;
@@ -27,9 +26,8 @@
     }
 
     let {
-        collectionModCount,
-        depModCount,
-        issueCount,
+        resolvedModCount,
+        unavailableCount,
         context,
         downloadPhase = 'idle',
         downloadProgress = 0,
@@ -42,7 +40,6 @@
         onClickIssues
     }: Props = $props();
 
-    // Full progress bar only during active download when NOT in mini-progress mode
     let showFullProgress = $derived(
         !isMiniProgress &&
             (downloadPhase === 'downloading' ||
@@ -80,50 +77,36 @@
                 Cancel
             </Button>
         {:else}
-            <!-- Status stats -->
-            <div class="flex flex-wrap items-center gap-1 text-sm">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    class="h-auto gap-1.5 px-1.5 py-0.5"
-                    aria-label="Scroll to {collectionModCount} mods"
+            <!-- Simplified stats -->
+            <div class="flex flex-wrap items-center gap-1.5 text-sm">
+                <button
+                    class="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 hover:bg-muted/50"
                     onclick={onClickMods}
                 >
-                    <span class="size-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
-                    {collectionModCount} mods
-                </Button>
+                    <span
+                        class={cn('size-2 rounded-full', STATUS_COLORS.compatible)}
+                        aria-hidden="true"
+                    ></span>
+                    <span>{resolvedModCount} mods ready</span>
+                </button>
 
-                {#if depModCount > 0}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        class="h-auto gap-1.5 px-1.5 py-0.5"
-                        aria-label="{depModCount} dependencies"
-                        onclick={onClickMods}
-                    >
-                        <span class="size-2 rounded-full bg-blue-500" aria-hidden="true"></span>
-                        {depModCount} deps
-                    </Button>
-                {/if}
-
-                {#if issueCount > 0}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        class="h-auto gap-1.5 px-1.5 py-0.5"
-                        aria-label="Scroll to {issueCount} issues"
+                {#if unavailableCount > 0}
+                    <span class="text-muted-foreground/40">&middot;</span>
+                    <button
+                        class="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 hover:bg-muted/50"
                         onclick={onClickIssues}
                     >
-                        <span class="size-2 rounded-full bg-amber-500" aria-hidden="true"></span>
-                        {issueCount} issues
-                    </Button>
+                        <span
+                            class={cn('size-2 rounded-full', STATUS_COLORS.warning)}
+                            aria-hidden="true"
+                        ></span>
+                        <span>{unavailableCount} unavailable</span>
+                    </button>
                 {/if}
-            </div>
 
-            <!-- Context badges -->
-            <Separator orientation="vertical" class="hidden h-5 sm:block" />
-            <div class="hidden items-center gap-2 sm:flex">
-                <Badge variant="outline">{context.gameVersion}</Badge>
+                <span class="text-muted-foreground/40">&middot;</span>
+                <span class="text-muted-foreground">MC {context.gameVersion}</span>
+                <span class="text-muted-foreground/40">&middot;</span>
                 <LoaderBadge loaderSlug={context.loader} size="sm" />
             </div>
 
@@ -133,7 +116,7 @@
                     <Tooltip.Root>
                         <Tooltip.Trigger>
                             {#snippet child({ props })}
-                                <Button variant="outline" size="sm" onclick={onShare} {...props}>
+                                <Button variant="outline" size="sm" {...props} onclick={onShare}>
                                     <ShareIcon class="size-3.5" />
                                     <span class="sr-only">Share</span>
                                 </Button>

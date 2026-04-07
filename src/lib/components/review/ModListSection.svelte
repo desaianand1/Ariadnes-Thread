@@ -1,7 +1,8 @@
 <script lang="ts">
-    import type { ResolvedProject, ResolutionWarning } from '$lib/services/types';
+    import type { ResolvedProject, ResolutionWarning, CollectionGroup } from '$lib/services/types';
     import type { ProjectType } from '$lib/api/types';
     import type { SideClassification } from '$lib/services/types';
+    import type { ViewMode } from '$lib/services/review-resolution';
     import {
         countByProjectType,
         matchesModFilters,
@@ -14,8 +15,11 @@
     import { Switch } from '$lib/components/ui/switch';
     import { Label } from '$lib/components/ui/label';
     import ModRow from './ModRow.svelte';
+    import ModAvatar from './ModAvatar.svelte';
     import { cn } from '$lib/utils';
     import { browser } from '$app/environment';
+    import { fade } from 'svelte/transition';
+    import { safeTransition } from '$lib/utils/motion';
     import { SIDE_LABELS, SIDE_ICONS } from '$lib/utils/colors';
     import SearchIcon from '@lucide/svelte/icons/search';
     import PackageIcon from '@lucide/svelte/icons/package';
@@ -25,7 +29,11 @@
     import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
     import SearchXIcon from '@lucide/svelte/icons/search-x';
     import AlertTriangleIcon from '@lucide/svelte/icons/triangle-alert';
+    import ListIcon from '@lucide/svelte/icons/list';
+    import LayoutListIcon from '@lucide/svelte/icons/layout-list';
     import * as Empty from '$lib/components/ui/empty';
+    import { SvelteMap } from 'svelte/reactivity';
+
     interface Props {
         projects: ResolvedProject[];
         dependencies: ResolvedProject[];
@@ -38,6 +46,9 @@
         collectionNames: Record<string, string>;
         showCollectionNames: boolean;
         onSelectProject: (project: ResolvedProject) => void;
+        collections?: CollectionGroup[];
+        viewMode?: ViewMode;
+        onViewModeChange?: (mode: ViewMode) => void;
     }
 
     let {
@@ -51,7 +62,10 @@
         onExclude,
         collectionNames,
         showCollectionNames,
-        onSelectProject
+        onSelectProject,
+        collections = [],
+        viewMode = 'detailed',
+        onViewModeChange
     }: Props = $props();
 
     let searchQuery = $state('');
@@ -101,6 +115,43 @@
             ? `All Mods (${projects.length})`
             : `${TYPE_CONFIG[typeFilter]?.label ?? typeFilter} (${typeCounts[typeFilter] ?? 0})`
     );
+
+    // Group projects by collection when multiple collections exist
+    let showCollectionGroups = $derived(collections.length > 1);
+    let collectionProjectMap = $derived.by(() => {
+        if (!showCollectionGroups) return null;
+        const map = new SvelteMap<
+            string,
+            { group: CollectionGroup; projects: ResolvedProject[] }
+        >();
+        for (const group of collections) {
+            const groupProjectIds = new Set(group.resolved.map((p) => p.projectId));
+            const groupProjects = projects.filter((p) => groupProjectIds.has(p.projectId));
+            if (groupProjects.length > 0) {
+                map.set(group.id, { group, projects: groupProjects });
+            }
+        }
+        return map;
+    });
+
+    let isFiltering = $derived(
+        searchQuery !== '' || typeFilter !== 'all' || sideFilter !== 'all' || showIssuesOnly
+    );
+
+    let collectionFilteredCounts = $derived.by(() => {
+        if (!showCollectionGroups || !collectionProjectMap) return new SvelteMap<string, number>();
+        const counts = new SvelteMap<string, number>();
+        for (const [id, entry] of collectionProjectMap) {
+            counts.set(id, entry.projects.filter(matchesFilters).length);
+        }
+        return counts;
+    });
+
+    function handleViewModeToggle(value: string | undefined) {
+        if (value === 'simple' || value === 'detailed') {
+            onViewModeChange?.(value);
+        }
+    }
 </script>
 
 <div class="space-y-4">
@@ -122,7 +173,7 @@
         {/if}
     </div>
 
-    <!-- Row 2: Type select + Side toggles + Issues switch -->
+    <!-- Row 2: Type select + Side toggles + Issues switch + View toggle -->
     <div class="flex flex-wrap items-center gap-3">
         {#if availableTypes.length > 1}
             <Select.Root type="single" bind:value={typeFilter}>
@@ -176,27 +227,107 @@
                 <span class="hidden sm:inline">Issues</span>
             </Label>
         </div>
+
+        <!-- View mode toggle -->
+        {#if onViewModeChange}
+            <div class="ml-auto">
+                <ToggleGroup.Root
+                    type="single"
+                    value={viewMode}
+                    onValueChange={handleViewModeToggle}
+                    variant="outline"
+                    size="sm"
+                >
+                    <ToggleGroup.Item value="simple" class="px-2" aria-label="Simple view">
+                        <ListIcon class="size-3.5" />
+                    </ToggleGroup.Item>
+                    <ToggleGroup.Item value="detailed" class="px-2" aria-label="Detailed view">
+                        <LayoutListIcon class="size-3.5" />
+                    </ToggleGroup.Item>
+                </ToggleGroup.Root>
+            </div>
+        {/if}
     </div>
 
     <!-- Project list -->
-    <div class="space-y-1">
-        {#each projects as project (project.projectId)}
-            <div class:hidden={!matchesFilters(project)}>
-                <ModRow
-                    {project}
-                    warnings={warningsByProject.get(project.projectId) ?? []}
-                    isConflict={conflictProjectIds.has(project.projectId)}
-                    {loader}
-                    collectionName={showCollectionNames
-                        ? collectionNames[project.projectId]
-                        : undefined}
-                    isExcluded={excludedIds.has(project.projectId)}
-                    {onExclude}
-                    onSelect={onSelectProject}
-                />
-            </div>
-        {/each}
-    </div>
+    {#key viewMode}
+        <div
+            in:fade={safeTransition({ duration: 150, delay: 50 })}
+            out:fade={safeTransition({ duration: 100 })}
+        >
+            {#if showCollectionGroups && collectionProjectMap}
+                <!-- Grouped by collection -->
+                {#each collections as group (group.id)}
+                    {@const entry = collectionProjectMap.get(group.id)}
+                    {#if entry && entry.projects.length > 0}
+                        {@const filteredCount =
+                            collectionFilteredCounts.get(group.id) ?? entry.projects.length}
+                        <!-- Collection header -->
+                        <div class="my-6 flex flex-col border-b pt-3 pb-2">
+                            <div class="flex items-center gap-2">
+                                <ModAvatar
+                                    iconUrl={group.iconUrl}
+                                    title={group.name}
+                                    size="sm"
+                                    rounding="rounded-md"
+                                />
+                                <span class="text-sm font-semibold">{group.name}</span>
+                                <span class="text-xs text-muted-foreground">
+                                    {#if isFiltering}
+                                        {filteredCount} of {entry.projects.length} mods
+                                    {:else}
+                                        {entry.projects.length} mods
+                                    {/if}
+                                </span>
+                            </div>
+                            {#if isFiltering && filteredCount === 0}
+                                <p class="mt-1 ml-8 text-xs text-muted-foreground/60">
+                                    No mods match current filters
+                                </p>
+                            {/if}
+                        </div>
+                        <div class="space-y-1">
+                            {#each entry.projects as project (project.projectId)}
+                                <div class:hidden={!matchesFilters(project)}>
+                                    <ModRow
+                                        {project}
+                                        {viewMode}
+                                        warnings={warningsByProject.get(project.projectId) ?? []}
+                                        isConflict={conflictProjectIds.has(project.projectId)}
+                                        {loader}
+                                        isExcluded={excludedIds.has(project.projectId)}
+                                        {onExclude}
+                                        onSelect={onSelectProject}
+                                    />
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                {/each}
+            {:else}
+                <!-- Flat list -->
+                <div class="space-y-1">
+                    {#each projects as project (project.projectId)}
+                        <div class:hidden={!matchesFilters(project)}>
+                            <ModRow
+                                {project}
+                                {viewMode}
+                                warnings={warningsByProject.get(project.projectId) ?? []}
+                                isConflict={conflictProjectIds.has(project.projectId)}
+                                {loader}
+                                collectionName={showCollectionNames
+                                    ? collectionNames[project.projectId]
+                                    : undefined}
+                                isExcluded={excludedIds.has(project.projectId)}
+                                {onExclude}
+                                onSelect={onSelectProject}
+                            />
+                        </div>
+                    {/each}
+                </div>
+            {/if}
+        </div>
+    {/key}
 
     {#if filteredProjects.length === 0 && (searchQuery || typeFilter !== 'all' || sideFilter !== 'all' || showIssuesOnly)}
         <Empty.Root class="text-muted-foreground">
@@ -219,7 +350,7 @@
                 >
                     <PackageIcon class="size-4 text-muted-foreground" />
                     <span class="flex-1 text-sm font-medium">
-                        Auto-resolved Dependencies ({filteredDeps.length})
+                        Dependencies ({filteredDeps.length})
                     </span>
                     <ChevronDownIcon
                         class={cn(
@@ -234,6 +365,7 @@
                             <div class:hidden={!matchesFilters(dep)}>
                                 <ModRow
                                     project={dep}
+                                    {viewMode}
                                     warnings={warningsByProject.get(dep.projectId) ?? []}
                                     isConflict={conflictProjectIds.has(dep.projectId)}
                                     {loader}

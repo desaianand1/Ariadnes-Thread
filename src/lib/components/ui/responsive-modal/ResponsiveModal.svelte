@@ -76,7 +76,7 @@
                     <Dialog.Description>{@render description()}</Dialog.Description>
                 {/if}
             </Dialog.Header>
-            <div class="px-0 pb-0">
+            <div class="min-w-0 px-0 pb-0">
                 {@render children()}
             </div>
             {#if footer}

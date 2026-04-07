@@ -61,11 +61,11 @@
                 <SiModrinth class="size-4 text-modrinth" />
                 <ShinyText
                     color="var(--color-muted-foreground)"
-                    shineColor="#1bd96a"
+                    shineColor="var(--color-modrinth)"
                     speed={3}
                     delay={1}
                 >
-                    Works with Modrinth collections
+                    For Modrinth collections
                 </ShinyText>
             </Badge>
         </a>
