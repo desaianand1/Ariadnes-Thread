@@ -62,7 +62,7 @@ export const handle: Handle = async ({ event, resolve }) => {
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' https://cdn.modrinth.com https://cdn-raw.modrinth.com https://www.bisecthosting.com data:",
             "font-src 'self'",
-            "connect-src 'self' https://api.modrinth.com https://cdn.modrinth.com https://cdn-raw.modrinth.com https://cloudflareinsights.com",
+            "connect-src 'self' https://api.modrinth.com https://cdn.modrinth.com https://cdn-raw.modrinth.com https://cloudflareinsights.com https://static.cloudflareinsights.com",
             "frame-ancestors 'none'",
             "base-uri 'self'",
             "form-action 'self'"
