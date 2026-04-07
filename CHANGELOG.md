@@ -1,3 +1,9 @@
+# [1.25.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.24.0...v1.25.0) (2026-04-07)
+
+### Features
+
+- **share:** add share route with hero and spotlight cards ([82f5a56](https://github.com/desaianand1/Ariadnes-Thread/commit/82f5a56463ae17f78d85a6e10c52a7da710f8779))
+
 # [1.24.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.23.0...v1.24.0) (2026-04-07)
 
 ### Features
