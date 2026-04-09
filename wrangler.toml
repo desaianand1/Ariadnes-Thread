@@ -22,6 +22,9 @@ directory = ".svelte-kit/cloudflare"
 # Public env vars (safe to commit):
 # - PUBLIC_TURNSTILE_SITE_KEY: Turnstile widget site key (required)
 
+[vars]
+LOG_LEVEL = "warn"
+
 [observability]
 enabled = true
 # Free tier: 200k log events/day. Each request = 1 invocation log + N console.* calls.
