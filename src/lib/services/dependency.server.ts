@@ -15,6 +15,17 @@ import type {
     UnresolvedDependency
 } from './types';
 
+// =============================================================================
+// Cache Provider (optional injection from DO for subrequest savings)
+// =============================================================================
+
+export interface DependencyCacheProvider {
+    lookupVersionObjects(ids: string[]): { hits: ModrinthVersion[]; misses: string[] };
+    storeVersionObjects(versions: ModrinthVersion[]): void;
+    lookupProjects(ids: string[]): { hits: ModrinthProject[]; misses: string[] };
+    storeProjects(projects: ModrinthProject[]): void;
+}
+
 /**
  * BFS dependency resolver. Processes all deps at each depth level
  * before descending, batching API calls where possible.
@@ -22,7 +33,8 @@ import type {
 export async function resolveDependencies(
     client: ModrinthClient,
     resolvedVersions: ResolvedProject[],
-    options: ResolutionOptions
+    options: ResolutionOptions,
+    cache?: DependencyCacheProvider
 ): Promise<DependencyResult> {
     const resolved: ResolvedProject[] = [];
     const conflicts: ConflictEntry[] = [];
@@ -35,7 +47,7 @@ export async function resolveDependencies(
     // We need the actual version objects to read their dependency lists.
     // Batch-fetch all initial versions.
     const versionIds = resolvedVersions.map((r) => r.versionId);
-    const initialVersions = await batchFetchVersions(client, versionIds);
+    const initialVersions = await batchFetchVersions(client, versionIds, cache);
 
     // Build initial queue from the dependencies of resolved versions
     let queue: DependencyNode[] = [];
@@ -107,11 +119,13 @@ export async function resolveDependencies(
         // Fetch pinned versions in batch
         const pinnedVersionIds = pinned.map((n) => n.versionId!);
         const pinnedVersions =
-            pinnedVersionIds.length > 0 ? await batchFetchVersions(client, pinnedVersionIds) : [];
+            pinnedVersionIds.length > 0
+                ? await batchFetchVersions(client, pinnedVersionIds, cache)
+                : [];
 
         // Fetch project info for all unique projects we haven't fetched yet
         const allProjectIds = uniqueNodes.map((n) => n.projectId);
-        const projects = await batchFetchProjects(client, allProjectIds);
+        const projects = await batchFetchProjects(client, allProjectIds, cache);
         const projectMap = new Map(projects.map((p) => [p.id, p]));
 
         // Process pinned deps
@@ -131,7 +145,7 @@ export async function resolveDependencies(
             (r) => r.versionId
         );
         const newVersions =
-            newVersionIds.length > 0 ? await batchFetchVersions(client, newVersionIds) : [];
+            newVersionIds.length > 0 ? await batchFetchVersions(client, newVersionIds, cache) : [];
 
         // Queue next level
         for (const version of newVersions) {
@@ -184,14 +198,25 @@ function deduplicateNodes(nodes: DependencyNode[], visited: Set<string>): Depend
     return result;
 }
 
-/** Batch-fetch versions by ID, chunking at 100 per request */
+/** Batch-fetch versions by ID, checking cache first when available */
 async function batchFetchVersions(
     client: ModrinthClient,
-    versionIds: string[]
+    versionIds: string[],
+    cache?: DependencyCacheProvider
 ): Promise<ModrinthVersion[]> {
     if (versionIds.length === 0) return [];
 
-    const chunks = chunkArray(versionIds, 100);
+    let toFetch = versionIds;
+    const cached: ModrinthVersion[] = [];
+
+    if (cache) {
+        const lookup = cache.lookupVersionObjects(versionIds);
+        cached.push(...lookup.hits);
+        toFetch = lookup.misses;
+        if (toFetch.length === 0) return cached;
+    }
+
+    const chunks = chunkArray(toFetch, 100);
     const results = await Promise.allSettled(
         chunks.map((chunk) =>
             client.requestVersion<ModrinthVersion[]>('versions', 'v2', {
@@ -200,28 +225,44 @@ async function batchFetchVersions(
         )
     );
 
-    const versions: ModrinthVersion[] = [];
+    const fetched: ModrinthVersion[] = [];
     for (let i = 0; i < results.length; i++) {
         const result = results[i];
         if (result.status === 'fulfilled') {
-            versions.push(...result.value);
+            fetched.push(...result.value);
         } else {
             console.warn(
                 `Failed to fetch version batch [${chunks[i].join(', ')}]: ${result.reason}`
             );
         }
     }
-    return versions;
+
+    if (cache && fetched.length > 0) {
+        cache.storeVersionObjects(fetched);
+    }
+
+    return [...cached, ...fetched];
 }
 
-/** Batch-fetch projects by ID, chunking at 100 per request */
+/** Batch-fetch projects by ID, checking cache first when available */
 async function batchFetchProjects(
     client: ModrinthClient,
-    projectIds: string[]
+    projectIds: string[],
+    cache?: DependencyCacheProvider
 ): Promise<ModrinthProject[]> {
     if (projectIds.length === 0) return [];
 
-    const chunks = chunkArray(projectIds, 100);
+    let toFetch = projectIds;
+    const cached: ModrinthProject[] = [];
+
+    if (cache) {
+        const lookup = cache.lookupProjects(projectIds);
+        cached.push(...lookup.hits);
+        toFetch = lookup.misses;
+        if (toFetch.length === 0) return cached;
+    }
+
+    const chunks = chunkArray(toFetch, 100);
     const results = await Promise.allSettled(
         chunks.map((chunk) =>
             client.requestVersion<ModrinthProject[]>('projects', 'v2', {
@@ -230,18 +271,23 @@ async function batchFetchProjects(
         )
     );
 
-    const projects: ModrinthProject[] = [];
+    const fetched: ModrinthProject[] = [];
     for (let i = 0; i < results.length; i++) {
         const result = results[i];
         if (result.status === 'fulfilled') {
-            projects.push(...result.value);
+            fetched.push(...result.value);
         } else {
             console.warn(
                 `Failed to fetch project batch [${chunks[i].join(', ')}]: ${result.reason}`
             );
         }
     }
-    return projects;
+
+    if (cache && fetched.length > 0) {
+        cache.storeProjects(fetched);
+    }
+
+    return [...cached, ...fetched];
 }
 
 function processPinnedDeps(

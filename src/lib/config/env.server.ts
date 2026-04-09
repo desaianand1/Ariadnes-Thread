@@ -105,7 +105,8 @@ export function getEnvConfigFromPlatform(
     const result = envSchema.safeParse(platformEnv);
 
     if (!result.success) {
-        console.warn('Platform env validation failed, falling back to default env');
+        console.error('Platform env validation failed:', JSON.stringify(result.error.format()));
+        console.warn('Falling back to default env config');
         return getEnvConfig();
     }
 

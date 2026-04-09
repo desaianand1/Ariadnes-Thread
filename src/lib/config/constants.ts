@@ -461,3 +461,44 @@ export const BOT_SCORE_THRESHOLD = 3;
  * Modrinth attribution URL
  */
 export const MODRINTH_ATTRIBUTION_URL = 'https://modrinth.com';
+
+// =============================================================================
+// Durable Object Resolution Cache
+// =============================================================================
+
+/** Version resolution + version objects: 12 hours */
+export const CACHE_TTL_VERSION = 43200;
+
+/** Project metadata: 24 hours */
+export const CACHE_TTL_PROJECT = 86400;
+
+/** Version object data: 12 hours */
+export const CACHE_TTL_VERSION_OBJECT = 43200;
+
+/** Game version / loader tags: 7 days */
+export const CACHE_TTL_TAG = 604800;
+
+/** Stale-while-error hard limit: 7 days */
+export const CACHE_TTL_HARD = 604800;
+
+/** Daily alarm interval for expired-entry cleanup */
+export const CACHE_ALARM_INTERVAL_MS = 86_400_000;
+
+/** In-memory hot cache size cap inside the DO */
+export const HOT_CACHE_MAX_ENTRIES = 2000;
+
+/** Worker-side timeout for a single DO RPC call */
+export const DO_RESOLVE_TIMEOUT_MS = 30_000;
+
+/** Worker-side timeout for advisor DO RPC — 5s above ADVISOR_PROBE_TIMEOUT_MS so
+ *  the advisor's internal AbortController fires first for clean shutdown */
+export const DO_ADVISOR_TIMEOUT_MS = 125_000;
+
+/** Max entries per re-validation batch in alarm handler */
+export const CACHE_REVALIDATION_BATCH_SIZE = 100;
+
+/** Max total entries to re-validate per alarm cycle */
+export const CACHE_REVALIDATION_MAX_ENTRIES = 500;
+
+/** Defense-in-depth: max projects accepted per single DO RPC call */
+export const DO_MAX_PROJECTS_PER_REQUEST = 1000;

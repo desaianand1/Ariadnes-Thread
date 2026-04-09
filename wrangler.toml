@@ -17,6 +17,18 @@ directory = ".svelte-kit/cloudflare"
 # Public env vars (safe to commit):
 # - PUBLIC_TURNSTILE_SITE_KEY: Turnstile widget site key (required)
 
+[observability]
+enabled = true
+
+[durable_objects]
+bindings = [
+    { name = "RESOLUTION_CACHE", class_name = "ResolutionCache" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ResolutionCache"]
+
 [env.preview.vars]
 MODRINTH_USER_AGENT = "AriadnesThread/preview"
 PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"

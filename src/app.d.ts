@@ -1,4 +1,5 @@
 /// <reference types="@sveltejs/adapter-cloudflare" />
+/// <reference types="@cloudflare/workers-types" />
 
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
@@ -60,6 +61,11 @@ declare global {
 
                 // Cloudflare Turnstile
                 TURNSTILE_SECRET_KEY?: string;
+
+                // Durable Objects
+                RESOLUTION_CACHE?: DurableObjectNamespace<
+                    import('$lib/server/resolution-cache-do').ResolutionCache
+                >;
             };
             context: {
                 waitUntil(promise: Promise<unknown>): void;
