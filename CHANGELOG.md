@@ -1,3 +1,14 @@
+# [1.26.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.25.3...v1.26.0) (2026-04-09)
+
+### Bug Fixes
+
+- **download:** prevent mod details UI from being visible when mini download view is active ([634a76b](https://github.com/desaianand1/Ariadnes-Thread/commit/634a76b6c2932ee331b536c85c97428696ce755b))
+
+### Features
+
+- add Durable Objects resolution cache with SQLite storage ([1a4c575](https://github.com/desaianand1/Ariadnes-Thread/commit/1a4c575f967f96ca8de42b9fd2ecba63a561dba2))
+- integrate resolution cache into review pipeline ([d4d53ca](https://github.com/desaianand1/Ariadnes-Thread/commit/d4d53cace4f49d2abfe8cd29caf3489571eb9470))
+
 ## [1.25.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.25.2...v1.25.3) (2026-04-07)
 
 ### Bug Fixes
