@@ -1,3 +1,9 @@
+## [1.26.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.26.0...v1.26.1) (2026-04-09)
+
+### Bug Fixes
+
+- **deploy:** resolve env symbol collision and harden wrangler config ([81e2235](https://github.com/desaianand1/Ariadnes-Thread/commit/81e2235ba00a0522f5b0e4226e445bbdd01f5924))
+
 # [1.26.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.25.3...v1.26.0) (2026-04-09)
 
 ### Bug Fixes
