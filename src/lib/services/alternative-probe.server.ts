@@ -26,6 +26,7 @@ import {
 } from '$lib/config/constants';
 import { chunkArray } from '$lib/utils/array';
 import { buildLoaderList } from './loader-utils';
+import { logger, serializeError } from '$lib/server/logger';
 
 // =============================================================================
 // Histogram Types
@@ -465,7 +466,10 @@ async function checkGains(
             if (result.status === 'fulfilled') {
                 gains.set(result.value.projectId, result.value.hasVersion);
             } else {
-                console.warn(`Gain check failed for ${chunk[j]}:`, result.reason);
+                logger.warn('advisor_gain_check_failed', {
+                    projectId: chunk[j],
+                    ...serializeError(result.reason)
+                });
             }
         }
     }
@@ -507,9 +511,10 @@ export async function probeAlternatives(
     const hashToProjectId = new Map<string, string>();
     for (const project of resolvedProjects) {
         if (hashToProjectId.has(project.fileHashes.sha1)) {
-            console.warn(
-                `Duplicate SHA1 hash for projects: ${hashToProjectId.get(project.fileHashes.sha1)} and ${project.projectId}`
-            );
+            logger.warn('advisor_duplicate_sha1', {
+                existingProjectId: hashToProjectId.get(project.fileHashes.sha1),
+                duplicateProjectId: project.projectId
+            });
         }
         hashToProjectId.set(project.fileHashes.sha1, project.projectId);
     }
@@ -593,8 +598,8 @@ export async function probeAlternatives(
             // Fallback: positional probing
             probeVersions = getPositionalProbeVersions(currentVersion, allGameVersions);
         }
-    } catch {
-        // Histogram scan failed entirely — fallback to positional
+    } catch (err) {
+        logger.warn('advisor_histogram_failed', serializeError(err));
         probeVersions = getPositionalProbeVersions(currentVersion, allGameVersions);
     }
 
@@ -690,10 +695,11 @@ export async function probeAlternatives(
                         break;
                     }
                 } catch (err) {
-                    console.warn(
-                        `Advisor probe failed for ${config.version}/${config.loader}:`,
-                        err
-                    );
+                    logger.warn('advisor_probe_config_failed', {
+                        version: config.version,
+                        loader: config.loader,
+                        ...serializeError(err)
+                    });
                 }
             }
         } else {
@@ -743,22 +749,26 @@ export async function probeAlternatives(
 
                     if (percentage > bestPercentage) bestPercentage = percentage;
                 } catch (err) {
-                    console.warn(
-                        `Advisor probe failed for ${config.version}/${config.loader}:`,
-                        err
-                    );
+                    logger.warn('advisor_probe_config_failed', {
+                        version: config.version,
+                        loader: config.loader,
+                        ...serializeError(err)
+                    });
                 }
             }
         }
 
         if (controller.signal.aborted && completed.length < probeMatrix.length) {
-            console.warn(
-                `Advisor probe timed out: ${completed.length}/${probeMatrix.length} probes completed`
-            );
+            logger.warn('advisor_probe_timeout', {
+                completedProbes: completed.length,
+                totalProbes: probeMatrix.length,
+                timeoutMs: ADVISOR_PROBE_TIMEOUT_MS
+            });
         }
 
         alternatives = completed.filter((a) => a.netGain > 0).sort((a, b) => b.netGain - a.netGain);
-    } catch {
+    } catch (err) {
+        logger.warn('advisor_probe_phase_failed', serializeError(err));
         alternatives = [];
     } finally {
         clearTimeout(timeoutId);
