@@ -4,6 +4,7 @@
     import { Progress } from '$lib/components/ui/progress';
     import * as Tooltip from '$lib/components/ui/tooltip';
     import { formatSpeed, formatEta } from '$lib/utils/format';
+    import { useStableValue } from '$lib/utils/stable-value.svelte';
     import { STATUS_COLORS } from '$lib/utils/colors';
     import { cn } from '$lib/utils';
     import ShareIcon from '@lucide/svelte/icons/share-2';
@@ -47,6 +48,9 @@
                 downloadPhase === 'zipping')
     );
 
+    const stableSpeed = useStableValue(() => formatSpeed(downloadSpeed), 1000);
+    const stableEta = useStableValue(() => formatEta(downloadEta), 1000);
+
     let showShareButton = $derived(downloadPhase === 'idle' || downloadPhase === 'complete');
 </script>
 
@@ -67,8 +71,10 @@
                     {downloadProgress}%
                 </span>
                 {#if downloadPhase === 'downloading'}
-                    <span class="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-                        {formatSpeed(downloadSpeed)} · ETA {formatEta(downloadEta)}
+                    <span
+                        class="hidden shrink-0 text-xs text-muted-foreground tabular-nums sm:inline"
+                    >
+                        {stableSpeed()} · ETA {stableEta()}
                     </span>
                 {/if}
             </div>
