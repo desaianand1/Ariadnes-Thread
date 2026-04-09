@@ -13,7 +13,7 @@
 <ModeWatcher />
 <Toaster pauseWhenPageIsHidden richColors theme={userPrefersMode.current} />
 
-<Tooltip.Provider>
+<Tooltip.Provider delayDuration={500}>
     <div class="flex min-h-screen flex-col">
         <LoadingBar />
         <Header />
