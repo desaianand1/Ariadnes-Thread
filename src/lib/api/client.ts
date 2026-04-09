@@ -6,6 +6,7 @@ import { ClientError, ServerError, RateLimitError, NetworkError, isRetryableErro
 import type { ModrinthAPIVersion } from './types';
 import type { RetryBackoffStrategy } from '$lib/config/env.server';
 import { RATE_LIMIT_DEFAULT_RETRY_SECONDS } from '$lib/config/constants';
+import { logger } from '$lib/server/logger';
 
 /**
  * API Client configuration
@@ -92,7 +93,7 @@ export class ModrinthClient {
         } catch (error) {
             // Fallback to v2 on specific errors
             if (this.shouldFallbackToV2(error, preferredVersion)) {
-                console.warn(`${preferredVersion} API failed for ${endpoint}, falling back to v2`);
+                logger.warn('api_version_fallback', { endpoint, from: preferredVersion, to: 'v2' });
                 return await this.makeRequest<T>(
                     endpoint,
                     'v2',
@@ -162,6 +163,7 @@ export class ModrinthClient {
                 return this.handleResponse<T>(response, url);
             } catch (error) {
                 if (error instanceof Error && error.name === 'AbortError') {
+                    logger.warn('api_timeout', { url, timeoutMs: this.config.fetchTimeoutMs });
                     throw new NetworkError(
                         `Request timed out after ${this.config.fetchTimeoutMs}ms`,
                         error
@@ -231,7 +233,7 @@ export class ModrinthClient {
                         0,
                         this.config.resetIntervalSeconds * 1000 - timeSinceReset
                     );
-                    console.warn(`Rate limit reached. Waiting ${waitTime}ms...`);
+                    logger.warn('api_rate_limit_wait', { waitMs: waitTime });
                     await this.sleep(waitTime);
                     this.remainingRequests = this.config.maxRequestsPerMinute;
                     this.lastResetTime = Date.now();
@@ -348,22 +350,28 @@ export class ModrinthClient {
 
             // Don't retry if we've exhausted attempts
             if (attempt >= this.config.maxRetries) {
-                console.error(`Max retries reached for ${url}. Request failed.`);
+                logger.error('api_max_retries', { url, maxRetries: this.config.maxRetries });
                 throw error;
             }
 
             // Special handling for rate limit errors
             if (error instanceof RateLimitError && error.retryAfter !== 'never') {
-                console.warn(`Rate limited. Waiting ${error.retryAfter}s before retry...`);
+                logger.warn('api_rate_limited_retry', {
+                    retryAfterSec: error.retryAfter,
+                    endpoint: new URL(url).pathname
+                });
                 await this.sleep(error.retryAfter * 1000);
                 return this.withRetry(operation, url, attempt + 1);
             }
 
             // Calculate delay based on strategy
             const delay = this.calculateDelay(attempt);
-            console.warn(
-                `Retrying request to ${url}... Attempt ${attempt + 1}/${this.config.maxRetries}`
-            );
+            logger.warn('api_retry', {
+                endpoint: new URL(url).pathname,
+                attempt: attempt + 1,
+                maxRetries: this.config.maxRetries,
+                delayMs: Math.round(delay)
+            });
             await this.sleep(delay);
 
             return this.withRetry(operation, url, attempt + 1);

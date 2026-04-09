@@ -17,6 +17,7 @@ import {
     getErrorMessage,
     isModrinthAPIError
 } from '$lib/api/error';
+import { logger, serializeError } from '$lib/server/logger';
 
 export const GET: RequestHandler = async ({ params, url, platform }) => {
     const { id } = params;
@@ -84,7 +85,7 @@ export const GET: RequestHandler = async ({ params, url, platform }) => {
             throw error(404, err.message);
         }
 
-        console.error('Failed to fetch project:', err);
+        logger.error('project_fetch_failed', { projectId: id, ...serializeError(err) });
 
         const status = isModrinthAPIError(err) ? err.status : 500;
         const message = getErrorMessage(err);

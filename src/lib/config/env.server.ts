@@ -54,6 +54,9 @@ const envSchema = z.object({
     RESEND_API_KEY: z.string().optional(),
     ENABLE_EMAIL_SHARING: z.coerce.boolean().default(false),
 
+    // Logging
+    LOG_LEVEL: z.enum(['info', 'warn', 'error']).default('warn'),
+
     // Cloudflare Turnstile — server-side token verification
     TURNSTILE_SECRET_KEY: z.string().min(1)
 });
@@ -87,6 +90,7 @@ let _config: EnvConfig | null = null;
 export function getEnvConfig(): EnvConfig {
     if (!_config) {
         _config = parseEnv();
+        (globalThis as Record<string, unknown>).__LOG_LEVEL = _config.LOG_LEVEL;
     }
     return _config;
 }
@@ -110,5 +114,6 @@ export function getEnvConfigFromPlatform(
         return getEnvConfig();
     }
 
+    (globalThis as Record<string, unknown>).__LOG_LEVEL = result.data.LOG_LEVEL;
     return result.data;
 }

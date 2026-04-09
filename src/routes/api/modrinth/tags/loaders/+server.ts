@@ -10,6 +10,7 @@ import type { ModrinthLoader } from '$lib/api/types';
 import { getErrorMessage, isModrinthAPIError } from '$lib/api/error';
 import { EXCLUDED_LOADERS } from '$lib/config/constants';
 import { sanitizeSvg } from '$lib/utils/sanitize.server';
+import { logger, serializeError } from '$lib/server/logger';
 
 export const GET: RequestHandler = async ({ platform }) => {
     const client = createClientFromPlatform(platform);
@@ -56,7 +57,7 @@ export const GET: RequestHandler = async ({ platform }) => {
             }
         );
     } catch (error) {
-        console.error('Failed to fetch loaders:', error);
+        logger.error('loaders_fetch_failed', serializeError(error));
 
         const status = isModrinthAPIError(error) ? error.status : 500;
         const message = getErrorMessage(error);

@@ -14,6 +14,7 @@ import {
     isModrinthAPIError
 } from '$lib/api/error';
 import { COLLECTION_ID_PATTERN } from '$lib/config/constants';
+import { logger, serializeError } from '$lib/server/logger';
 
 export const GET: RequestHandler = async ({ params, platform }) => {
     const { id } = params;
@@ -59,7 +60,10 @@ export const GET: RequestHandler = async ({ params, platform }) => {
                 if (result.status === 'fulfilled') {
                     projects.push(...result.value);
                 } else {
-                    console.warn('Failed to fetch project chunk:', result.reason);
+                    logger.warn('project_chunk_fetch_failed', {
+                        collectionId: id,
+                        ...serializeError(result.reason)
+                    });
                 }
             }
         }
@@ -87,7 +91,7 @@ export const GET: RequestHandler = async ({ params, platform }) => {
             throw error(404, err.message);
         }
 
-        console.error('Failed to fetch collection:', err);
+        logger.error('collection_fetch_failed', { collectionId: id, ...serializeError(err) });
 
         const status = isModrinthAPIError(err) ? err.status : 500;
         const message = getErrorMessage(err);

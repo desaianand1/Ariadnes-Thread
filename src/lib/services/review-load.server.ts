@@ -19,6 +19,7 @@ import { InProcessResolutionCache } from './resolution-cache-fallback.server';
 import { toSerializableOptions } from './resolution-cache.types';
 import type { ResolutionCacheService } from './resolution-cache.types';
 import { decimalToHex } from '$lib/utils/colors';
+import { logger, serializeError } from '$lib/server/logger';
 
 import {
     MAX_TOTAL_PROJECTS,
@@ -110,7 +111,8 @@ async function fetchCollection(
 function buildEmptyResponse(
     reviewOptions: ReturnType<typeof parseReviewOptions>,
     loadError: string,
-    initialViewMode: 'simple' | 'detailed' = 'detailed'
+    initialViewMode: 'simple' | 'detailed' = 'detailed',
+    loadId?: string
 ) {
     const envConfig = getEnvConfig();
     return {
@@ -140,7 +142,7 @@ function buildEmptyResponse(
             { updated: string; description: string; projectType?: string }
         >,
         context: {
-            loadId: crypto.randomUUID(),
+            loadId: loadId ?? crypto.randomUUID(),
             gameVersion: reviewOptions.gameVersion,
             loader: reviewOptions.loader,
             collectionIds: reviewOptions.collectionIds,
@@ -334,7 +336,8 @@ function buildLargeLoadResponse(
     allGameVersions: ModrinthGameVersion[],
     totalProjects: number,
     initialViewMode: 'simple' | 'detailed',
-    skipAdvisor: boolean
+    skipAdvisor: boolean,
+    loadId?: string
 ) {
     const envConfig = getEnvConfig();
 
@@ -392,10 +395,10 @@ function buildLargeLoadResponse(
             forceRefresh
         })
         .catch(async (e) => {
-            console.warn(
-                'Cache service failed for large load, falling back to batched resolution:',
-                e
-            );
+            logger.warn('cache_fallback_large_load', {
+                ...serializeError(e),
+                projectCount: dedupedProjects.length
+            });
             const { batchPromises, allBatches } = createBatchedResolution(
                 client,
                 dedupedProjects,
@@ -569,7 +572,7 @@ function buildLargeLoadResponse(
             projectCount: m.projectCount
         })),
         context: {
-            loadId: crypto.randomUUID(),
+            loadId: loadId ?? crypto.randomUUID(),
             gameVersion: reviewOptions.gameVersion,
             loader: reviewOptions.loader,
             collectionIds: reviewOptions.collectionIds,
@@ -610,7 +613,9 @@ async function buildSuccessResponse(
     }>[],
     allGameVersions: ModrinthGameVersion[],
     initialViewMode: 'simple' | 'detailed' = 'detailed',
-    skipAdvisor = false
+    skipAdvisor = false,
+    log?: import('$lib/server/logger').Logger,
+    loadId?: string
 ) {
     const allDependencies: ResolvedProject[] = [];
     const allConflicts: ConflictEntry[] = [];
@@ -698,6 +703,13 @@ async function buildSuccessResponse(
             dedupedDependencies.reduce((sum, r) => sum + r.fileSize, 0)
     };
 
+    log?.info('load_complete', {
+        resolvedCount: stats.resolvedCount,
+        unresolvedCount: stats.unresolvedCount,
+        dependencyCount: stats.dependencyCount,
+        totalProjects: stats.totalProjects
+    });
+
     const envConfig = getEnvConfig();
 
     const advisorData: Promise<{
@@ -730,7 +742,7 @@ async function buildSuccessResponse(
         advisorData,
         unresolvedMetadata,
         context: {
-            loadId: crypto.randomUUID(),
+            loadId: loadId ?? crypto.randomUUID(),
             gameVersion: reviewOptions.gameVersion,
             loader: reviewOptions.loader,
             collectionIds: reviewOptions.collectionIds,
@@ -752,6 +764,8 @@ async function buildSuccessResponse(
 
 export async function loadReviewData(params: ReviewLoadParams) {
     const { url, platform, cookies, skipAdvisor = false } = params;
+    const loadId = crypto.randomUUID();
+    const log = logger.child({ loadId });
 
     const viewModeCookie = cookies.get(VIEW_MODE_COOKIE);
     const initialViewMode = viewModeCookie === 'simple' ? 'simple' : 'detailed';
@@ -763,6 +777,12 @@ export async function loadReviewData(params: ReviewLoadParams) {
 
     const parsedParams = parseResult.data;
     const reviewOptions = parseReviewOptions(parsedParams);
+
+    log.info('load_start', {
+        collectionIds: reviewOptions.collectionIds,
+        gameVersion: reviewOptions.gameVersion,
+        loader: reviewOptions.loader
+    });
 
     const resolutionOptions = {
         gameVersion: reviewOptions.gameVersion,
@@ -813,11 +833,16 @@ export async function loadReviewData(params: ReviewLoadParams) {
             prefetchTimeoutPromise
         ]);
     } catch {
+        log.warn('prefetch_timeout', {
+            collectionIds: reviewOptions.collectionIds,
+            timeoutMs: PREFETCH_TIMEOUT_MS
+        });
         clearTimeout(timeoutId!);
         return buildEmptyResponse(
             reviewOptions,
             RESOLUTION_MESSAGES.PREFETCH_TIMEOUT,
-            initialViewMode
+            initialViewMode,
+            loadId
         );
     }
 
@@ -835,6 +860,8 @@ export async function loadReviewData(params: ReviewLoadParams) {
 
     const isLargeLoad = totalProjects > LARGE_LOAD_THRESHOLD;
 
+    log.info('prefetch_complete', { totalProjects, isLargeLoad });
+
     if (isLargeLoad) {
         clearTimeout(timeoutId!);
         return buildLargeLoadResponse(
@@ -847,7 +874,8 @@ export async function loadReviewData(params: ReviewLoadParams) {
             gameVersionsResult,
             totalProjects,
             initialViewMode,
-            skipAdvisor
+            skipAdvisor,
+            loadId
         );
     }
 
@@ -914,7 +942,10 @@ export async function loadReviewData(params: ReviewLoadParams) {
                 forceRefresh
             });
         } catch (e) {
-            console.warn('Cache service failed, falling back to direct resolution:', e);
+            log.warn('cache_fallback_direct', {
+                ...serializeError(e),
+                projectCount: dedupedProjects.length
+            });
             const directResult = await resolveCollection(
                 client,
                 dedupedProjects,
@@ -971,12 +1002,17 @@ export async function loadReviewData(params: ReviewLoadParams) {
     } catch (e) {
         resolutionPromise.catch(() => {});
 
-        const message =
-            e instanceof Error && e.message === 'Request timed out'
-                ? RESOLUTION_MESSAGES.TIMEOUT
-                : RESOLUTION_MESSAGES.GENERIC;
+        const isTimeout = e instanceof Error && e.message === 'Request timed out';
+        log.warn(isTimeout ? 'load_timeout' : 'load_error', {
+            phase: 'resolution',
+            timeoutMs: PAGE_LOAD_TIMEOUT_MS,
+            totalProjects,
+            ...serializeError(e)
+        });
 
-        return buildEmptyResponse(reviewOptions, message, initialViewMode);
+        const message = isTimeout ? RESOLUTION_MESSAGES.TIMEOUT : RESOLUTION_MESSAGES.GENERIC;
+
+        return buildEmptyResponse(reviewOptions, message, initialViewMode, loadId);
     } finally {
         clearTimeout(timeoutId!);
     }
@@ -993,7 +1029,12 @@ export async function loadReviewData(params: ReviewLoadParams) {
     );
 
     if (successfulResults.length === 0) {
-        return buildEmptyResponse(reviewOptions, RESOLUTION_MESSAGES.ALL_FAILED, initialViewMode);
+        return buildEmptyResponse(
+            reviewOptions,
+            RESOLUTION_MESSAGES.ALL_FAILED,
+            initialViewMode,
+            loadId
+        );
     }
 
     try {
@@ -1005,10 +1046,17 @@ export async function loadReviewData(params: ReviewLoadParams) {
             successfulResults,
             gameVersionsResult,
             initialViewMode,
-            skipAdvisor
+            skipAdvisor,
+            log,
+            loadId
         );
     } catch (e) {
-        console.error('Post-resolution processing failed:', e);
-        return buildEmptyResponse(reviewOptions, RESOLUTION_MESSAGES.GENERIC, initialViewMode);
+        log.error('post_resolution_failed', serializeError(e));
+        return buildEmptyResponse(
+            reviewOptions,
+            RESOLUTION_MESSAGES.GENERIC,
+            initialViewMode,
+            loadId
+        );
     }
 }

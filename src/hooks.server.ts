@@ -3,6 +3,7 @@ import { dev } from '$app/environment';
 import { isLikelyBot } from '$lib/server/bot-detect';
 import { checkRateLimit, getClientIp, getRouteKey, getRateLimitInfo } from '$lib/server/rate-limit';
 import { RATE_LIMITS } from '$lib/config/constants';
+import { logger } from '$lib/server/logger';
 
 // Known limitation: No explicit CSRF token on /api/share/email — SvelteKit's
 // built-in origin check + honeypot + timing + rate limiting provides reasonable
@@ -14,6 +15,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     // Bot detection — before any expensive work
     if (pathname.startsWith('/api/') || pathname.startsWith('/review')) {
         if (isLikelyBot(event.request)) {
+            logger.warn('bot_blocked', { path: pathname });
             return new Response('Forbidden', { status: 403 });
         }
     }
@@ -23,6 +25,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (routeKey) {
         const result = checkRateLimit(ip, routeKey, RATE_LIMITS[routeKey]);
         if (!result.allowed) {
+            logger.warn('rate_limit_block', { route: routeKey, retryAfterMs: result.retryAfterMs });
             return new Response(JSON.stringify({ error: 'Too many requests' }), {
                 status: 429,
                 headers: {
@@ -35,7 +38,18 @@ export const handle: Handle = async ({ event, resolve }) => {
         }
     }
 
+    const requestStart = Date.now();
     const response = await resolve(event);
+    const durationMs = Date.now() - requestStart;
+
+    if (durationMs > 2000 || response.status >= 400) {
+        logger.info('request', {
+            method: event.request.method,
+            path: pathname,
+            status: response.status,
+            durationMs
+        });
+    }
 
     // Rate limit info headers on successful responses
     if (routeKey) {

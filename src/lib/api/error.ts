@@ -152,7 +152,15 @@ export function getErrorMessage(error: unknown): string {
         return error.message;
     }
     if (error instanceof Error) {
-        console.error('Unexpected error:', error.message);
+        console.error(
+            JSON.stringify({
+                level: 'error',
+                event: 'unexpected_error',
+                ts: Date.now(),
+                error: error.message,
+                errorName: error.name
+            })
+        );
         return error.message;
     }
     return 'An unexpected error occurred.';

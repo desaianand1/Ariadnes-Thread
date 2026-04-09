@@ -8,6 +8,7 @@ import type { RequestHandler } from './$types';
 import { createClientFromPlatform } from '$lib/api/client.server';
 import type { ModrinthGameVersion } from '$lib/api/types';
 import { getErrorMessage, isModrinthAPIError } from '$lib/api/error';
+import { logger, serializeError } from '$lib/server/logger';
 
 export const GET: RequestHandler = async ({ platform }) => {
     const client = createClientFromPlatform(platform);
@@ -33,7 +34,7 @@ export const GET: RequestHandler = async ({ platform }) => {
             }
         );
     } catch (error) {
-        console.error('Failed to fetch game versions:', error);
+        logger.error('game_versions_fetch_failed', serializeError(error));
 
         const status = isModrinthAPIError(error) ? error.status : 500;
         const message = getErrorMessage(error);

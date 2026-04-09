@@ -44,3 +44,4 @@ head_sampling_rate = 1
 [env.preview.vars]
 MODRINTH_USER_AGENT = "AriadnesThread/preview"
 PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
+LOG_LEVEL = "info"

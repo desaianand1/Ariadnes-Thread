@@ -7,6 +7,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { DurableObject } from 'cloudflare:workers';
+import { logger, serializeError } from '$lib/server/logger';
 import { resolveVersion } from '$lib/services/resolution.server';
 import { resolveDependencies } from '$lib/services/dependency.server';
 import type { DependencyCacheProvider } from '$lib/services/dependency.server';
@@ -182,19 +183,17 @@ export class ResolutionCache extends DurableObject {
             if (info && info.retryCount < 5) {
                 throw e;
             }
-            console.error('Cleanup alarm failed after max retries:', e);
+            logger.error('alarm_cleanup_failed', serializeError(e));
         }
 
         // Batch re-validation: check entries approaching TTL expiry
         try {
             await this.revalidateApproachingExpiry(now);
         } catch (e) {
-            console.error('Re-validation failed:', e);
+            logger.error('revalidation_failed', serializeError(e));
         }
 
-        console.log(
-            JSON.stringify({ event: 'alarm_cleanup', databaseSizeBytes: this.sql.databaseSize })
-        );
+        logger.info('alarm_cleanup', { databaseSizeBytes: this.sql.databaseSize });
         await this.ctx.storage.setAlarm(Date.now() + CACHE_ALARM_INTERVAL_MS);
     }
 
@@ -260,15 +259,13 @@ export class ResolutionCache extends DurableObject {
                     }
                 }
             } catch (e) {
-                console.warn('Re-validation batch failed:', e);
+                logger.warn('revalidation_batch_failed', serializeError(e));
                 break;
             }
         }
 
         if (allHashes.length > 0) {
-            console.log(
-                JSON.stringify({ event: 'revalidation', entriesChecked: allHashes.length })
-            );
+            logger.info('revalidation', { entriesChecked: allHashes.length });
         }
     }
 
@@ -693,7 +690,7 @@ export class ResolutionCache extends DurableObject {
                 });
             } catch (e) {
                 transactionFailed = true;
-                console.error('SQLite transaction failed, results still valid:', e);
+                logger.error('sqlite_transaction_failed', serializeError(e));
             }
 
             if (!transactionFailed) {
@@ -725,7 +722,7 @@ export class ResolutionCache extends DurableObject {
             dependencyTimeMs
         };
 
-        console.log(JSON.stringify({ event: 'resolve', ...cacheStats }));
+        logger.info('do_resolve', { ...cacheStats });
 
         return {
             resolved,
