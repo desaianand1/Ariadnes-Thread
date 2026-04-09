@@ -23,13 +23,13 @@ directory = ".svelte-kit/cloudflare"
 # - PUBLIC_TURNSTILE_SITE_KEY: Turnstile widget site key (required)
 
 [vars]
-LOG_LEVEL = "info"
+LOG_LEVEL = "warn"
 
 [observability]
 enabled = true
 # Free tier: 200k log events/day. Each request = 1 invocation log + N console.* calls.
-# At 10% sampling even 100k req/day × ~5 events = 50k — well within budget.
-head_sampling_rate = 1
+# At 20% sampling even 100k req/day × ~5 events = 100k — well within budget.
+head_sampling_rate = 0.2
 
 [durable_objects]
 bindings = [
