@@ -1,3 +1,9 @@
+## [1.26.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.26.1...v1.26.2) (2026-04-09)
+
+### Bug Fixes
+
+- **logging:** replace console.\* with structured JSON logger ([9d21741](https://github.com/desaianand1/Ariadnes-Thread/commit/9d217416f121709b4198c79e6655f469514b6476))
+
 ## [1.26.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.26.0...v1.26.1) (2026-04-09)
 
 ### Bug Fixes
