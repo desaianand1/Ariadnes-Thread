@@ -946,104 +946,106 @@
                     />
                 {/if}
 
-                <!-- Back link -->
-                <Button variant="ghost" size="sm" href="/">
-                    <ArrowLeftIcon class="mr-1.5 size-3.5" />
-                    Back to Collections
-                </Button>
+                {#if !isDownloading}
+                    <!-- Back link -->
+                    <Button variant="ghost" size="sm" href="/">
+                        <ArrowLeftIcon class="mr-1.5 size-3.5" />
+                        Back to Collections
+                    </Button>
 
-                <!-- Resolution Hero -->
-                <div bind:this={heroRef}>
-                    <ResolutionHero
-                        {resolutionState}
-                        {resolvedModCount}
-                        dependencyCount={depModCount}
-                        {autoFixedCount}
-                        {unavailableCount}
-                        gameVersion={data.context.gameVersion}
-                        loader={data.context.loader}
-                        {sideStats}
-                        {hasClientMods}
-                        {hasServerMods}
-                        {collectionNames}
-                        {bestAlternative}
-                        {showAdvisor}
-                        {advisorLoading}
-                        {advisorStatus}
-                        modpackSkippedCount={modpackWarnings.length}
-                        excludedCount={excludedIds.size}
-                        onAdvisorSwitch={handleAdvisorSwitch}
-                        onStartDownload={handleStartDownload}
-                        onShare={handleShare}
-                    />
-                </div>
-
-                <!-- Resolution details — only shown when there are issues -->
-                {#if resolutionState === 'hasIssues' && (autoResolution.items.length > 0 || activeConflictCount > 0 || visibleMissingDeps.length > 0)}
-                    <div
-                        bind:this={resolutionDetailsRef}
-                        transition:slide={safeTransition({ duration: 200 })}
-                    >
-                        <ResolutionDetails
-                            autoResolvedItems={autoResolution.items}
-                            conflicts={userConflicts}
-                            missingDeps={userMissingDeps}
-                            unresolvedRaw={data.unresolved}
-                            excludedIds={effectiveExcludedIds}
-                            {onExclude}
-                            {onRestore}
-                            modAvailability={advisorModAvailability}
-                            {advisorLoading}
-                            unresolvedMetadata={data.unresolvedMetadata}
+                    <!-- Resolution Hero -->
+                    <div bind:this={heroRef}>
+                        <ResolutionHero
+                            {resolutionState}
+                            {resolvedModCount}
+                            dependencyCount={depModCount}
+                            {autoFixedCount}
+                            {unavailableCount}
+                            gameVersion={data.context.gameVersion}
+                            loader={data.context.loader}
+                            {sideStats}
+                            {hasClientMods}
+                            {hasServerMods}
+                            {collectionNames}
+                            {bestAlternative}
                             {showAdvisor}
-                            bind:activeTab={resolutionDetailsTab}
+                            {advisorLoading}
+                            {advisorStatus}
+                            modpackSkippedCount={modpackWarnings.length}
+                            excludedCount={excludedIds.size}
+                            onAdvisorSwitch={handleAdvisorSwitch}
+                            onStartDownload={handleStartDownload}
+                            onShare={handleShare}
+                        />
+                    </div>
+
+                    <!-- Resolution details — only shown when there are issues -->
+                    {#if resolutionState === 'hasIssues' && (autoResolution.items.length > 0 || activeConflictCount > 0 || visibleMissingDeps.length > 0)}
+                        <div
+                            bind:this={resolutionDetailsRef}
+                            transition:slide={safeTransition({ duration: 200 })}
+                        >
+                            <ResolutionDetails
+                                autoResolvedItems={autoResolution.items}
+                                conflicts={userConflicts}
+                                missingDeps={userMissingDeps}
+                                unresolvedRaw={data.unresolved}
+                                excludedIds={effectiveExcludedIds}
+                                {onExclude}
+                                {onRestore}
+                                modAvailability={advisorModAvailability}
+                                {advisorLoading}
+                                unresolvedMetadata={data.unresolvedMetadata}
+                                {showAdvisor}
+                                bind:activeTab={resolutionDetailsTab}
+                            />
+                        </div>
+                    {/if}
+
+                    <!-- Modpack skip banner -->
+                    {#if showModpackBanner}
+                        <div
+                            class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-3 dark:border-blue-800 dark:bg-blue-950/20"
+                            transition:slide={safeTransition({ duration: 200 })}
+                        >
+                            <PackageIcon class="size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                            <p class="flex-1 text-sm text-blue-800 dark:text-blue-200">
+                                {modpackWarnings.length}
+                                {modpackWarnings.length === 1 ? 'modpack was' : 'modpacks were'} skipped
+                                — they're already packaged for launcher import.
+                            </p>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                class="size-7 shrink-0 p-0 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200"
+                                onclick={() => (modpackBannerDismissed = true)}
+                                aria-label="Dismiss"
+                            >
+                                <XIcon class="size-3.5" />
+                            </Button>
+                        </div>
+                    {/if}
+
+                    <!-- Mod list -->
+                    <div bind:this={modListRef}>
+                        <ModListSection
+                            projects={displayUserProjects}
+                            dependencies={displayDeps}
+                            projectTitleMap={data.projectTitleMap}
+                            {warningsByProject}
+                            {conflictProjectIds}
+                            loader={data.context.loader}
+                            excludedIds={effectiveExcludedIds}
+                            onExclude={toggleExclude}
+                            collectionNames={collectionNameMap}
+                            showCollectionNames={data.collections.length > 1}
+                            onSelectProject={handleSelectProject}
+                            collections={data.collections}
+                            {viewMode}
+                            onViewModeChange={handleViewModeChange}
                         />
                     </div>
                 {/if}
-
-                <!-- Modpack skip banner -->
-                {#if showModpackBanner}
-                    <div
-                        class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-3 dark:border-blue-800 dark:bg-blue-950/20"
-                        transition:slide={safeTransition({ duration: 200 })}
-                    >
-                        <PackageIcon class="size-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                        <p class="flex-1 text-sm text-blue-800 dark:text-blue-200">
-                            {modpackWarnings.length}
-                            {modpackWarnings.length === 1 ? 'modpack was' : 'modpacks were'} skipped —
-                            they're already packaged for launcher import.
-                        </p>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            class="size-7 shrink-0 p-0 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200"
-                            onclick={() => (modpackBannerDismissed = true)}
-                            aria-label="Dismiss"
-                        >
-                            <XIcon class="size-3.5" />
-                        </Button>
-                    </div>
-                {/if}
-
-                <!-- Mod list -->
-                <div bind:this={modListRef}>
-                    <ModListSection
-                        projects={displayUserProjects}
-                        dependencies={displayDeps}
-                        projectTitleMap={data.projectTitleMap}
-                        {warningsByProject}
-                        {conflictProjectIds}
-                        loader={data.context.loader}
-                        excludedIds={effectiveExcludedIds}
-                        onExclude={toggleExclude}
-                        collectionNames={collectionNameMap}
-                        showCollectionNames={data.collections.length > 1}
-                        onSelectProject={handleSelectProject}
-                        collections={data.collections}
-                        {viewMode}
-                        onViewModeChange={handleViewModeChange}
-                    />
-                </div>
             </div>
 
             <!-- Detail sheet -->
