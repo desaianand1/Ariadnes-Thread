@@ -2,12 +2,25 @@ import { describe, it, expect } from 'vitest';
 import { GET } from './+server';
 import { siteConfig } from '$lib/config/site';
 
+interface WebManifest {
+    name: string;
+    short_name: string;
+    theme_color: string;
+    display: string;
+    icons: Array<{ src: string; sizes: string; type: string }>;
+}
+
 function makeEvent() {
     return {} as Parameters<typeof GET>[0];
 }
 
 async function getResponse() {
     return await GET(makeEvent());
+}
+
+async function getManifest(): Promise<WebManifest> {
+    const response = await getResponse();
+    return (await response.json()) as WebManifest;
 }
 
 describe('GET /site.webmanifest', () => {
@@ -22,21 +35,18 @@ describe('GET /site.webmanifest', () => {
     });
 
     it('includes siteConfig name and shortName', async () => {
-        const response = await getResponse();
-        const body = await response.json();
+        const body = await getManifest();
         expect(body.name).toBe(siteConfig.name);
         expect(body.short_name).toBe(siteConfig.shortName);
     });
 
     it('includes theme color from siteConfig', async () => {
-        const response = await getResponse();
-        const body = await response.json();
+        const body = await getManifest();
         expect(body.theme_color).toBe(siteConfig.themeColor.light);
     });
 
     it('includes favicon and PNG icon entries', async () => {
-        const response = await getResponse();
-        const body = await response.json();
+        const body = await getManifest();
         expect(body.icons).toEqual([
             { src: siteConfig.icons.favicon, sizes: 'any', type: 'image/svg+xml' },
             { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
@@ -46,8 +56,7 @@ describe('GET /site.webmanifest', () => {
     });
 
     it('sets display to standalone', async () => {
-        const response = await getResponse();
-        const body = await response.json();
+        const body = await getManifest();
         expect(body.display).toBe('standalone');
     });
 });
