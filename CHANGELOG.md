@@ -1,3 +1,9 @@
+## [1.26.4](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.26.3...v1.26.4) (2026-04-09)
+
+### Bug Fixes
+
+- bump log level and sampling for prod pre-fetch diagnosis replication ([e601b61](https://github.com/desaianand1/Ariadnes-Thread/commit/e601b614aa914ed560ee5b69ebeb864fd97e89a7))
+
 ## [1.26.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.26.2...v1.26.3) (2026-04-09)
 
 ### Bug Fixes
