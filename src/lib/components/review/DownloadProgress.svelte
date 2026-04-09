@@ -11,6 +11,7 @@
     import * as Alert from '$lib/components/ui/alert';
     import * as Tabs from '$lib/components/ui/tabs';
     import { formatBytes, formatEta } from '$lib/utils/format';
+    import { useStableValue } from '$lib/utils/stable-value.svelte';
     import { LAUNCHER_GUIDES } from '$lib/config/install-guides';
     import { ANIMATION_DURATION } from '$lib/config/constants';
     import { detectOS } from '$lib/utils/platform';
@@ -68,6 +69,7 @@
 
     let completedCount = $derived(dlState.files.filter((f) => f.status === 'complete').length);
     let totalCount = $derived(dlState.files.length);
+    const stableEta = useStableValue(() => formatEta(dlState.eta), 1000);
 
     let userOS = $derived(detectOS());
     let sideLabel = $derived(dlState.targetSide === 'client' ? 'Mods' : 'Server Mods');
@@ -389,7 +391,7 @@
                 <div class="space-y-2">
                     <div class="flex items-center justify-between">
                         <span class="text-sm font-medium"
-                            >Downloading {otherSide === 'server' ? 'server' : 'client'} mods...</span
+                            >Downloading {dlState.targetSide === 'server' ? 'server' : 'client'} mods...</span
                         >
                         <Button
                             variant="ghost"
@@ -409,8 +411,8 @@
                             class="h-2 bg-emerald-100 dark:bg-emerald-950"
                         />
                     </div>
-                    <span class="text-xs text-muted-foreground">
-                        {completedCount}/{totalCount} files · ETA {formatEta(dlState.eta)}
+                    <span class="text-xs text-muted-foreground tabular-nums">
+                        {completedCount}/{totalCount} files · ETA {stableEta()}
                     </span>
                 </div>
             {:else}
