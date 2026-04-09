@@ -118,7 +118,7 @@ export async function validateCollectionEntry(index: number): Promise<void> {
     state.entries[index].error = undefined;
 
     try {
-        const response = await fetch(`/api/modrinth/collection/${collectionId}`);
+        const response = await fetch(`/api/modrinth/collection/${collectionId}?meta=true`);
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -129,9 +129,10 @@ export async function validateCollectionEntry(index: number): Promise<void> {
             );
         }
 
-        const { collection, projects } = (await response.json()) as {
+        const { collection, projectCount } = (await response.json()) as {
             collection: ModrinthCollection;
             projects: ModrinthProject[];
+            projectCount: number;
         };
 
         state.entries[index].status = 'valid';
@@ -141,13 +142,8 @@ export async function validateCollectionEntry(index: number): Promise<void> {
             description: collection.description,
             iconUrl: collection.icon_url,
             color: decimalToHex(collection.color),
-            projectCount: projects.length,
-            projects: projects.map((p) => ({
-                id: p.id,
-                title: p.title,
-                iconUrl: p.icon_url,
-                projectType: p.project_type
-            }))
+            projectCount: projectCount ?? collection.projects.length,
+            projects: []
         };
     } catch (err) {
         state.entries[index].status = 'invalid';

@@ -16,7 +16,7 @@ import {
 import { COLLECTION_ID_PATTERN } from '$lib/config/constants';
 import { logger, serializeError } from '$lib/server/logger';
 
-export const GET: RequestHandler = async ({ params, platform }) => {
+export const GET: RequestHandler = async ({ params, platform, url }) => {
     const { id } = params;
 
     // Validate collection ID format
@@ -32,6 +32,24 @@ export const GET: RequestHandler = async ({ params, platform }) => {
             pathParams: [id],
             preferredVersion: 'v3'
         });
+
+        // Meta-only mode: return collection metadata without fetching individual projects
+        const metaOnly = url.searchParams.get('meta') === 'true';
+        if (metaOnly) {
+            return json(
+                {
+                    collection,
+                    projects: [],
+                    projectCount: collection.projects.length
+                },
+                {
+                    headers: {
+                        'Cache-Control':
+                            'public, max-age=1800, s-maxage=1800, stale-while-revalidate=3600'
+                    }
+                }
+            );
+        }
 
         // Fetch basic info for all projects in the collection
         const projectIds = collection.projects;
