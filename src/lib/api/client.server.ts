@@ -15,7 +15,10 @@ import { ModrinthClient } from './client';
 let _sharedClient: ModrinthClient | null = null;
 
 export function createClientFromPlatform(platform?: App.Platform): ModrinthClient {
-    if (_sharedClient) return _sharedClient;
+    if (_sharedClient) {
+        _sharedClient.ensureFreshWindow();
+        return _sharedClient;
+    }
 
     const platformEnv = platform?.env as Record<string, string | undefined> | undefined;
     const config = getEnvConfigFromPlatform(platformEnv);
@@ -28,7 +31,8 @@ export function createClientFromPlatform(platform?: App.Platform): ModrinthClien
         maxRetries: config.MAX_RETRIES,
         retryDelayMs: config.RETRY_DELAY_MS,
         retryBackoffStrategy: config.RETRY_BACKOFF_STRATEGY,
-        fetchTimeoutMs: config.FETCH_TIMEOUT_MS
+        fetchTimeoutMs: config.FETCH_TIMEOUT_MS,
+        maxRateLimitWaitMs: config.MAX_RATE_LIMIT_WAIT_MS
     });
 
     return _sharedClient;

@@ -49,6 +49,7 @@ const envSchema = z.object({
 
     // Network
     FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+    MAX_RATE_LIMIT_WAIT_MS: z.coerce.number().int().positive().max(30_000).default(5_000),
 
     // Optional services
     RESEND_API_KEY: z.string().optional(),

@@ -5,7 +5,7 @@
 import { ClientError, ServerError, RateLimitError, NetworkError, isRetryableError } from './error';
 import type { ModrinthAPIVersion } from './types';
 import type { RetryBackoffStrategy } from '$lib/config/env.server';
-import { RATE_LIMIT_DEFAULT_RETRY_SECONDS } from '$lib/config/constants';
+import { RATE_LIMIT_DEFAULT_RETRY_SECONDS, MAX_RATE_LIMIT_WAIT_MS } from '$lib/config/constants';
 import { logger } from '$lib/server/logger';
 
 /**
@@ -20,6 +20,7 @@ export interface APIClientConfig {
     retryDelayMs: number;
     retryBackoffStrategy: RetryBackoffStrategy;
     fetchTimeoutMs: number;
+    maxRateLimitWaitMs: number;
 }
 
 /**
@@ -33,7 +34,8 @@ const DEFAULT_CONFIG: APIClientConfig = {
     maxRetries: 3,
     retryDelayMs: 1000,
     retryBackoffStrategy: 'exponential',
-    fetchTimeoutMs: 60_000
+    fetchTimeoutMs: 60_000,
+    maxRateLimitWaitMs: MAX_RATE_LIMIT_WAIT_MS
 };
 
 /**
@@ -45,6 +47,7 @@ export interface RequestOptions {
     queryParams?: Record<string, string>;
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
     body?: unknown;
+    signal?: AbortSignal;
 }
 
 /**
@@ -77,7 +80,8 @@ export class ModrinthClient {
             pathParams = [],
             queryParams = {},
             method = 'GET',
-            body
+            body,
+            signal
         } = options;
 
         // Try preferred version first
@@ -88,7 +92,8 @@ export class ModrinthClient {
                 pathParams,
                 queryParams,
                 method,
-                body
+                body,
+                signal
             );
         } catch (error) {
             // Fallback to v2 on specific errors
@@ -100,7 +105,8 @@ export class ModrinthClient {
                     pathParams,
                     queryParams,
                     method,
-                    body
+                    body,
+                    signal
                 );
             }
             throw error;
@@ -115,8 +121,16 @@ export class ModrinthClient {
         version: ModrinthAPIVersion,
         options: Omit<RequestOptions, 'preferredVersion'> = {}
     ): Promise<T> {
-        const { pathParams = [], queryParams = {}, method = 'GET', body } = options;
-        return this.makeRequest<T>(endpoint, version, pathParams, queryParams, method, body);
+        const { pathParams = [], queryParams = {}, method = 'GET', body, signal } = options;
+        return this.makeRequest<T>(
+            endpoint,
+            version,
+            pathParams,
+            queryParams,
+            method,
+            body,
+            signal
+        );
     }
 
     /**
@@ -140,9 +154,10 @@ export class ModrinthClient {
         pathParams: string[],
         queryParams: Record<string, string>,
         method: string,
-        body?: unknown
+        body?: unknown,
+        signal?: AbortSignal
     ): Promise<T> {
-        await this.handleRateLimit();
+        await this.handleRateLimit(signal);
 
         const url = this.buildUrl(endpoint, version, pathParams, queryParams);
 
@@ -150,12 +165,16 @@ export class ModrinthClient {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), this.config.fetchTimeoutMs);
 
+            const fetchSignal = signal
+                ? AbortSignal.any([controller.signal, signal])
+                : controller.signal;
+
             try {
                 const response = await fetch(url, {
                     method,
                     headers: this.getHeaders(),
                     body: body ? JSON.stringify(body) : undefined,
-                    signal: controller.signal
+                    signal: fetchSignal
                 });
 
                 this.updateRateLimitFromResponse(response);
@@ -163,6 +182,9 @@ export class ModrinthClient {
                 return this.handleResponse<T>(response, url);
             } catch (error) {
                 if (error instanceof Error && error.name === 'AbortError') {
+                    if (signal?.aborted) {
+                        throw signal.reason ?? new Error('Request aborted');
+                    }
                     logger.warn('api_timeout', { url, timeoutMs: this.config.fetchTimeoutMs });
                     throw new NetworkError(
                         `Request timed out after ${this.config.fetchTimeoutMs}ms`,
@@ -178,7 +200,7 @@ export class ModrinthClient {
             }
         };
 
-        return this.withRetry(requestFn, url);
+        return this.withRetry(requestFn, url, 0, signal);
     }
 
     /**
@@ -215,30 +237,43 @@ export class ModrinthClient {
      * Handles rate limiting with request tracking using queue-based approach
      * to prevent race conditions with concurrent requests
      */
-    private async handleRateLimit(): Promise<void> {
-        return new Promise((resolve) => {
+    private async handleRateLimit(signal?: AbortSignal): Promise<void> {
+        return new Promise((resolve, reject) => {
             this.requestQueue = this.requestQueue.then(async () => {
+                if (signal?.aborted) {
+                    reject(signal.reason ?? new Error('Request aborted'));
+                    return;
+                }
+
                 const now = Date.now();
 
-                // Determine when the current rate-limit window ends.
-                // lastResetTime may be a future server timestamp (from X-Ratelimit-Reset)
-                // or a past timestamp when we last reset the counter ourselves.
                 const windowEnd =
                     this.lastResetTime > now
                         ? this.lastResetTime
                         : this.lastResetTime + this.config.resetIntervalSeconds * 1000;
 
-                // Reset counter if we've passed the window end
                 if (now >= windowEnd) {
                     this.remainingRequests = this.config.maxRequestsPerMinute;
                     this.lastResetTime = now;
                 }
 
-                // Wait if we've exhausted our quota
                 if (this.remainingRequests <= 0) {
                     const waitTime = Math.max(0, windowEnd - now);
-                    logger.warn('api_rate_limit_wait', { waitMs: waitTime });
-                    await this.sleep(waitTime);
+                    const cappedWait = Math.min(waitTime, this.config.maxRateLimitWaitMs);
+                    if (cappedWait < waitTime) {
+                        logger.warn('api_rate_limit_wait_capped', {
+                            originalWaitMs: waitTime,
+                            cappedWaitMs: cappedWait
+                        });
+                    } else {
+                        logger.warn('api_rate_limit_wait', { waitMs: cappedWait });
+                    }
+                    try {
+                        await this.sleep(cappedWait, signal);
+                    } catch (err) {
+                        reject(err);
+                        return;
+                    }
                     this.remainingRequests = this.config.maxRequestsPerMinute;
                     this.lastResetTime = Date.now();
                 }
@@ -264,9 +299,12 @@ export class ModrinthClient {
         }
 
         if (reset !== null) {
-            const resetTime = parseInt(reset, 10) * 1000;
-            if (!isNaN(resetTime) && resetTime > this.lastResetTime) {
-                this.lastResetTime = resetTime;
+            const resetSeconds = parseInt(reset, 10);
+            if (!isNaN(resetSeconds) && resetSeconds > 0) {
+                const computedResetTime = Date.now() + resetSeconds * 1000;
+                if (computedResetTime > this.lastResetTime) {
+                    this.lastResetTime = computedResetTime;
+                }
             }
         }
     }
@@ -342,33 +380,32 @@ export class ModrinthClient {
     private async withRetry<T>(
         operation: () => Promise<T>,
         url: string,
-        attempt: number = 0
+        attempt: number = 0,
+        signal?: AbortSignal
     ): Promise<T> {
         try {
             return await operation();
         } catch (error) {
-            // Don't retry on non-retryable errors
+            if (signal?.aborted) throw signal.reason ?? error;
+
             if (!isRetryableError(error)) {
                 throw error;
             }
 
-            // Don't retry if we've exhausted attempts
             if (attempt >= this.config.maxRetries) {
                 logger.error('api_max_retries', { url, maxRetries: this.config.maxRetries });
                 throw error;
             }
 
-            // Special handling for rate limit errors
             if (error instanceof RateLimitError && error.retryAfter !== 'never') {
                 logger.warn('api_rate_limited_retry', {
                     retryAfterSec: error.retryAfter,
                     endpoint: new URL(url).pathname
                 });
-                await this.sleep(error.retryAfter * 1000);
-                return this.withRetry(operation, url, attempt + 1);
+                await this.sleep(error.retryAfter * 1000, signal);
+                return this.withRetry(operation, url, attempt + 1, signal);
             }
 
-            // Calculate delay based on strategy
             const delay = this.calculateDelay(attempt);
             logger.warn('api_retry', {
                 endpoint: new URL(url).pathname,
@@ -376,9 +413,9 @@ export class ModrinthClient {
                 maxRetries: this.config.maxRetries,
                 delayMs: Math.round(delay)
             });
-            await this.sleep(delay);
+            await this.sleep(delay, signal);
 
-            return this.withRetry(operation, url, attempt + 1);
+            return this.withRetry(operation, url, attempt + 1, signal);
         }
     }
 
@@ -409,8 +446,22 @@ export class ModrinthClient {
     /**
      * Sleep utility
      */
-    private sleep(ms: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, ms));
+    private sleep(ms: number, signal?: AbortSignal): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (signal?.aborted) {
+                reject(signal.reason);
+                return;
+            }
+            const timer = setTimeout(resolve, ms);
+            signal?.addEventListener(
+                'abort',
+                () => {
+                    clearTimeout(timer);
+                    reject(signal.reason);
+                },
+                { once: true }
+            );
+        });
     }
 
     /**
@@ -428,6 +479,23 @@ export class ModrinthClient {
             remaining: this.remainingRequests,
             resetAt: this.lastResetTime + this.config.resetIntervalSeconds * 1000
         };
+    }
+
+    /**
+     * Resets rate-limit counters if the current window has fully elapsed.
+     * Called before returning the singleton so stale state from a previous
+     * request doesn't force an unnecessary wait.
+     */
+    ensureFreshWindow(): void {
+        const now = Date.now();
+        const windowEnd =
+            this.lastResetTime > now
+                ? this.lastResetTime
+                : this.lastResetTime + this.config.resetIntervalSeconds * 1000;
+        if (now >= windowEnd) {
+            this.remainingRequests = this.config.maxRequestsPerMinute;
+            this.lastResetTime = now;
+        }
     }
 }
 
