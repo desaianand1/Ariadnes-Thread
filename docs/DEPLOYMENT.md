@@ -25,13 +25,14 @@ GitHub (push/PR)
 
 **Services used:**
 
-| Service              | Purpose                                  |
-| -------------------- | ---------------------------------------- |
-| Cloudflare Workers   | Hosting (edge SSR + static assets)       |
-| Cloudflare DNS       | DNS management, SSL termination          |
-| Cloudflare Turnstile | Bot protection for email form (required) |
-| Resend               | Transactional email sending (optional)   |
-| GitHub Actions       | CI/CD pipeline                           |
+| Service                    | Purpose                                                       |
+| -------------------------- | ------------------------------------------------------------- |
+| Cloudflare Workers         | Hosting (edge SSR + static assets)                            |
+| Cloudflare Durable Objects | SQLite-backed resolution cache (bypasses 50-subrequest limit) |
+| Cloudflare DNS             | DNS management, SSL termination                               |
+| Cloudflare Turnstile       | Bot protection for email form (required)                      |
+| Resend                     | Transactional email sending (optional)                        |
+| GitHub Actions             | CI/CD pipeline                                                |
 
 ---
 
@@ -156,7 +157,74 @@ For local development, Cloudflare test keys are pre-configured in `.env.developm
 
 ---
 
-## 5. GitHub Actions CI/CD
+## 5. Durable Objects (Resolution Cache)
+
+The app uses a Durable Object with SQLite storage to cache Modrinth version resolution results. This collapses the Worker's subrequest count from N (one per mod) to 1 (a single DO RPC call), bypassing the free-plan 50-subrequest limit.
+
+### How it works
+
+- The Worker delegates resolution to a single global DO instance via `RESOLUTION_CACHE.getByName('global')`
+- The DO checks its SQLite cache, fetches only cache misses from Modrinth, and returns the full result
+- When the `RESOLUTION_CACHE` binding is absent (local dev, VPS), the app falls back to in-process resolution automatically
+
+### wrangler.toml configuration
+
+The DO is configured in `wrangler.toml` (already committed):
+
+```toml
+[durable_objects]
+bindings = [
+    { name = "RESOLUTION_CACHE", class_name = "ResolutionCache" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ResolutionCache"]
+```
+
+**Migration tags**: Cloudflare tracks applied migrations by `tag`. The `new_sqlite_classes` entry declares a SQLite-backed DO. Future DO-level changes (renaming, transferring) need additional `[[migrations]]` entries — but internal SQLite schema changes are handled in application code via `blockConcurrencyWhile()`.
+
+### No manual Cloudflare setup needed
+
+Durable Objects are provisioned automatically on the first `wrangler deploy`. No dashboard configuration is required — wrangler creates the DO namespace and applies migrations from the config.
+
+### Build pipeline
+
+SvelteKit's `adapter-cloudflare` doesn't support exporting DO classes alongside the worker. A post-build Vite plugin (`injectDurableObject` in `vite.config.ts`) bundles the DO class with esbuild and appends it to `_worker.js`. The build log should show:
+
+```
+[inject-durable-object] Appended ResolutionCache to _worker.js
+```
+
+If this line is missing, the DO won't be available in production.
+
+### Monitoring
+
+The DO emits structured JSON logs via `console.log`:
+
+| Event           | Fields                                                                                  | When                                     |
+| --------------- | --------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `resolve`       | `hotHits`, `sqliteHits`, `misses`, `totalProjects`, `resolveTimeMs`, `dependencyTimeMs` | Every resolution RPC call                |
+| `revalidation`  | `entriesChecked`                                                                        | Daily alarm, after batch revalidation    |
+| `alarm_cleanup` | `databaseSizeBytes`                                                                     | Daily alarm, after expired entry cleanup |
+
+View these in Cloudflare Dashboard → **Workers & Pages → ariadnes-thread → Logs** (requires `[observability] enabled = true`, already set).
+
+### Rollback
+
+The DO is additive — rolling back requires no data migration:
+
+1. Remove the DO binding and migration from `wrangler.toml`
+2. Deploy — the app falls back to in-process resolution
+3. (Optional) Add `deleted_classes = ["ResolutionCache"]` in a new `[[migrations]]` entry to clean up the namespace
+
+### Deployment restarts
+
+Code deployments restart all DO instances, clearing in-memory state (hot cache). SQLite storage persists across deployments. The hot cache layer rebuilds naturally from subsequent requests.
+
+---
+
+## 6. GitHub Actions CI/CD
 
 ### Workflow overview
 
@@ -189,6 +257,8 @@ Go to repo → **Settings → Secrets and variables → Actions → New reposito
     - Account Resources: your account
 3. Copy the token
 
+> The "Edit Cloudflare Workers" template includes Durable Objects permissions. If using a custom token, ensure it has `Workers Scripts: Edit` scope — this covers DO namespace creation, migrations, and SQLite storage.
+
 ### Creating the GitHub PAT (`RELEASE_PAT`)
 
 semantic-release needs a PAT (not the default `GITHUB_TOKEN`) to create releases that trigger downstream workflows.
@@ -200,7 +270,7 @@ semantic-release needs a PAT (not the default `GITHUB_TOKEN`) to create releases
 
 ---
 
-## 6. Environment Variables Reference
+## 7. Environment Variables Reference
 
 All server-side env vars are validated via Zod in `src/lib/config/env.server.ts`. Every variable has a sensible default — you only need to set secrets and any overrides.
 
@@ -252,7 +322,7 @@ All server-side env vars are validated via Zod in `src/lib/config/env.server.ts`
 
 ---
 
-## 7. Domain Migration (Porkbun → Cloudflare)
+## 8. Domain Migration (Porkbun → Cloudflare)
 
 If you haven't already migrated your domain's nameservers:
 
@@ -269,7 +339,7 @@ After migration, manage all DNS records in Cloudflare — Porkbun's DNS settings
 
 ---
 
-## 8. Security Headers
+## 9. Security Headers
 
 The app sets security headers in `src/hooks.server.ts`. No Cloudflare configuration is needed for these — they're applied at the application layer:
 
@@ -282,7 +352,7 @@ The app sets security headers in `src/hooks.server.ts`. No Cloudflare configurat
 
 ---
 
-## 9. Deployment Checklist
+## 10. Deployment Checklist
 
 ### First-time setup
 
@@ -294,6 +364,8 @@ The app sets security headers in `src/hooks.server.ts`. No Cloudflare configurat
 - [ ] GitHub PAT (`RELEASE_PAT`) created and added to GitHub secrets
 - [ ] (Optional) Resend domain verified, DNS records added, API key set
 - [ ] Turnstile site created, keys set in Cloudflare env vars
+- [ ] Durable Object deployed (verify `[inject-durable-object] Appended ResolutionCache to _worker.js` in build logs)
+- [ ] DO logs visible in Cloudflare Dashboard → Workers → Logs (observability enabled)
 - [ ] (Optional) Email routing configured for `support@modrinth.download`
 - [ ] (Optional) Email templates synced via `pnpm run email:sync`
 
@@ -315,7 +387,7 @@ wrangler deploy
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 ### Build fails in CI
 
@@ -355,3 +427,12 @@ wrangler deploy
 - If variables/secrets are grayed out, run a manual deploy (`pnpm run build && wrangler deploy`) to initialize the worker script
 - Variables set in `wrangler.toml` under `[env.preview.vars]` only apply to preview deployments
 - Secrets cannot be set in `wrangler.toml` — use the dashboard or `wrangler secret put`
+
+### Durable Object issues
+
+- **"ResolutionCache is not exported"**: The post-build injection plugin failed. Check that `vite.config.ts` includes the `injectDurableObject()` plugin and that the build log shows the `[inject-durable-object]` success message
+- **Resolution works but ignores cache**: The `RESOLUTION_CACHE` binding may be missing. Check `wrangler.toml` has the `[durable_objects]` section and `[[migrations]]` entry. The app silently falls back to in-process resolution when the binding is absent
+- **"Too many subrequests" errors return after working**: The DO may have been removed or the binding disconnected. Verify the binding in Cloudflare Dashboard → Workers → ariadnes-thread → Settings → Bindings
+- **Stale cache data**: Append `?fresh=1` to the review URL to force a full re-fetch bypassing all cache layers. The daily alarm also prunes expired entries automatically
+- **SQLite storage full (`SQLITE_FULL`)**: The daily alarm should prevent this. Check Cloudflare Dashboard → Workers → Logs for `alarm_cleanup` events and the `databaseSizeBytes` value. If storage is consistently high, the alarm may be failing — check for `alarm` error logs
+- **Cold start after deployment**: Expected. Code deployments restart all DO instances, clearing the hot cache. SQLite data persists. The first request pays ~5-20ms constructor overhead; subsequent requests rebuild the hot cache naturally
