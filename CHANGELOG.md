@@ -1,3 +1,9 @@
+## [1.26.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.26.2...v1.26.3) (2026-04-09)
+
+### Bug Fixes
+
+- **api:** use server reset time for rate-limit wait calculation ([6daee91](https://github.com/desaianand1/Ariadnes-Thread/commit/6daee91cfd100a326a291a838f882b6058234f8e))
+
 ## [1.26.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.26.1...v1.26.2) (2026-04-09)
 
 ### Bug Fixes
