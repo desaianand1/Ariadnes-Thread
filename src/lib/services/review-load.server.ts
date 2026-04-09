@@ -16,6 +16,7 @@ import {
 import { resolveDependencies } from '$lib/services/dependency.server';
 import { DurableObjectResolutionCacheClient } from './resolution-cache-do-client.server';
 import { InProcessResolutionCache } from './resolution-cache-fallback.server';
+import { ResilientResolutionCacheService } from './resolution-cache-resilient.server';
 import { toSerializableOptions } from './resolution-cache.types';
 import type { ResolutionCacheService } from './resolution-cache.types';
 import { decimalToHex } from '$lib/utils/colors';
@@ -83,11 +84,13 @@ export interface ReviewLoadParams {
 
 async function fetchCollection(
     client: import('$lib/api/client').ModrinthClient,
-    collectionId: string
+    collectionId: string,
+    signal?: AbortSignal
 ): Promise<CollectionFetchResult> {
     const collection = await client.request<ModrinthCollection>('collection', {
         pathParams: [collectionId],
-        preferredVersion: 'v3'
+        preferredVersion: 'v3',
+        signal
     });
 
     const projectIds = collection.projects;
@@ -96,7 +99,8 @@ async function fetchCollection(
     for (let i = 0; i < projectIds.length; i += MODRINTH_BATCH_SIZE) {
         const chunk = projectIds.slice(i, i + MODRINTH_BATCH_SIZE);
         const batch = await client.requestVersion<ModrinthProject[]>('projects', 'v2', {
-            queryParams: { ids: JSON.stringify(chunk) }
+            queryParams: { ids: JSON.stringify(chunk) },
+            signal
         });
         projects.push(...batch);
     }
@@ -306,10 +310,13 @@ function buildAdvisorPromise(
             ),
             modAvailability: result.modAvailability
         }))
-        .catch(() => ({
-            alternatives: [] as AlternativeProbe[],
-            modAvailability: {} as Record<string, ModAvailability>
-        }));
+        .catch((err) => {
+            logger.warn('advisor_probe_error', serializeError(err));
+            return {
+                alternatives: [] as AlternativeProbe[],
+                modAvailability: {} as Record<string, ModAvailability>
+            };
+        });
 }
 
 // =============================================================================
@@ -556,10 +563,13 @@ function buildLargeLoadResponse(
                       modAvailability: probeResult.modAvailability
                   };
               })
-              .catch(() => ({
-                  alternatives: [] as AlternativeProbe[],
-                  modAvailability: {} as Record<string, ModAvailability>
-              }));
+              .catch((err) => {
+                  logger.warn('advisor_probe_error_large_load', serializeError(err));
+                  return {
+                      alternatives: [] as AlternativeProbe[],
+                      modAvailability: {} as Record<string, ModAvailability>
+                  };
+              });
 
     resolutionData.catch(() => {});
 
@@ -802,7 +812,10 @@ export async function loadReviewData(params: ReviewLoadParams) {
         | DurableObjectNamespace<import('$lib/server/resolution-cache-do').ResolutionCache>
         | undefined;
     const cacheService: ResolutionCacheService = resolutionCacheBinding
-        ? new DurableObjectResolutionCacheClient(resolutionCacheBinding)
+        ? new ResilientResolutionCacheService(
+              new DurableObjectResolutionCacheClient(resolutionCacheBinding),
+              client
+          )
         : new InProcessResolutionCache(client);
 
     const TIMEOUT_MS = PAGE_LOAD_TIMEOUT_MS;
@@ -814,23 +827,26 @@ export async function loadReviewData(params: ReviewLoadParams) {
     let prefetchResults: PromiseSettledResult<CollectionFetchResult>[];
     let gameVersionsResult: ModrinthGameVersion[];
 
-    const prefetchTimeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Prefetch timed out')), PREFETCH_TIMEOUT_MS);
-    });
+    const prefetchController = new AbortController();
+    const prefetchTimeoutId = setTimeout(
+        () => prefetchController.abort(new Error('Prefetch timed out')),
+        PREFETCH_TIMEOUT_MS
+    );
 
     try {
-        [prefetchResults, gameVersionsResult] = await Promise.race([
-            Promise.all([
-                Promise.allSettled(
-                    reviewOptions.collectionIds.map((id) => fetchCollection(client, id))
-                ),
-                skipAdvisor
-                    ? ([] as ModrinthGameVersion[])
-                    : client
-                          .requestVersion<ModrinthGameVersion[]>('tag/game_version', 'v2')
-                          .catch(() => [] as ModrinthGameVersion[])
-            ]),
-            prefetchTimeoutPromise
+        [prefetchResults, gameVersionsResult] = await Promise.all([
+            Promise.allSettled(
+                reviewOptions.collectionIds.map((id) =>
+                    fetchCollection(client, id, prefetchController.signal)
+                )
+            ),
+            skipAdvisor
+                ? ([] as ModrinthGameVersion[])
+                : client
+                      .requestVersion<ModrinthGameVersion[]>('tag/game_version', 'v2', {
+                          signal: prefetchController.signal
+                      })
+                      .catch(() => [] as ModrinthGameVersion[])
         ]);
     } catch {
         log.warn('prefetch_timeout', {
@@ -838,12 +854,15 @@ export async function loadReviewData(params: ReviewLoadParams) {
             timeoutMs: PREFETCH_TIMEOUT_MS
         });
         clearTimeout(timeoutId!);
+        clearTimeout(prefetchTimeoutId);
         return buildEmptyResponse(
             reviewOptions,
             RESOLUTION_MESSAGES.PREFETCH_TIMEOUT,
             initialViewMode,
             loadId
         );
+    } finally {
+        clearTimeout(prefetchTimeoutId);
     }
 
     const totalProjects = prefetchResults.reduce((sum, r) => {
