@@ -1,3 +1,22 @@
+# [1.27.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.26.4...v1.27.0) (2026-04-09)
+
+### Bug Fixes
+
+- **advisor:** replace console.warn with structured logger ([00be6f3](https://github.com/desaianand1/Ariadnes-Thread/commit/00be6f3950850d58789148bbb3e6e1a724c60079))
+- **api:** correct rate-limit header interpretation and cap wait time ([2083b5f](https://github.com/desaianand1/Ariadnes-Thread/commit/2083b5f5eb84be24d2ca8f38fec1c7c68984d3e4))
+- downgrade log level back to 'warn' and downsample for prod config post issue ([9f71d2b](https://github.com/desaianand1/Ariadnes-Thread/commit/9f71d2b0568e594575719f1d5ea48441207c622c))
+- **download:** correct mini-progress side label and add tabular-nums ([af6d986](https://github.com/desaianand1/Ariadnes-Thread/commit/af6d98650faa7d8be13df00e44fed26689a3f916))
+- **review:** hide hero UI after download completes ([c8fa144](https://github.com/desaianand1/Ariadnes-Thread/commit/c8fa1447c7949ca11ba8422a737652df240fe6f4))
+- **review:** wire abort signal through prefetch and add resilient DO fallback ([613edbe](https://github.com/desaianand1/Ariadnes-Thread/commit/613edbe5a2816f70c42649336068d6b739964f59))
+
+### Features
+
+- **ui:** add useStableValue utility to dampen ETA/speed jitter ([35fce8f](https://github.com/desaianand1/Ariadnes-Thread/commit/35fce8f097b5167ebe67a14a5c7f41436f46e76d))
+
+### Performance Improvements
+
+- **api:** skip project batch fetch for home page validation ([15a2c4e](https://github.com/desaianand1/Ariadnes-Thread/commit/15a2c4eb96702b1c65e2ee4b8823d709a5632ddb))
+
 ## [1.26.4](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.26.3...v1.26.4) (2026-04-09)
 
 ### Bug Fixes
