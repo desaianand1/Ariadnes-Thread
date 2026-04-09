@@ -219,20 +219,24 @@ export class ModrinthClient {
         return new Promise((resolve) => {
             this.requestQueue = this.requestQueue.then(async () => {
                 const now = Date.now();
-                const timeSinceReset = now - this.lastResetTime;
 
-                // Reset counter if interval has passed
-                if (timeSinceReset >= this.config.resetIntervalSeconds * 1000) {
+                // Determine when the current rate-limit window ends.
+                // lastResetTime may be a future server timestamp (from X-Ratelimit-Reset)
+                // or a past timestamp when we last reset the counter ourselves.
+                const windowEnd =
+                    this.lastResetTime > now
+                        ? this.lastResetTime
+                        : this.lastResetTime + this.config.resetIntervalSeconds * 1000;
+
+                // Reset counter if we've passed the window end
+                if (now >= windowEnd) {
                     this.remainingRequests = this.config.maxRequestsPerMinute;
                     this.lastResetTime = now;
                 }
 
                 // Wait if we've exhausted our quota
                 if (this.remainingRequests <= 0) {
-                    const waitTime = Math.max(
-                        0,
-                        this.config.resetIntervalSeconds * 1000 - timeSinceReset
-                    );
+                    const waitTime = Math.max(0, windowEnd - now);
                     logger.warn('api_rate_limit_wait', { waitMs: waitTime });
                     await this.sleep(waitTime);
                     this.remainingRequests = this.config.maxRequestsPerMinute;
