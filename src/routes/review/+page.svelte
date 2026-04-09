@@ -352,6 +352,7 @@
 
     // Show the full download view (file list + SummaryBar progress) only for non-mini downloads
     let showDownloadView = $derived(isDownloading && !dlState.isMiniProgress);
+    let hasCompletedDownload = $derived(dlState.completedSides.size > 0);
 
     // --- Derived from service functions ---
     let warningsByProject = $derived(buildWarningsMap(data.warnings));
@@ -946,7 +947,7 @@
                     />
                 {/if}
 
-                {#if !isDownloading}
+                {#if !isDownloading && !hasCompletedDownload}
                     <!-- Back link -->
                     <Button variant="ghost" size="sm" href="/">
                         <ArrowLeftIcon class="mr-1.5 size-3.5" />
