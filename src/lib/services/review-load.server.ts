@@ -14,7 +14,10 @@ import {
     mergeBatchResults
 } from '$lib/services/resolution.server';
 import { resolveDependencies } from '$lib/services/dependency.server';
-import { probeAlternatives } from '$lib/services/alternative-probe.server';
+import { DurableObjectResolutionCacheClient } from './resolution-cache-do-client.server';
+import { InProcessResolutionCache } from './resolution-cache-fallback.server';
+import { toSerializableOptions } from './resolution-cache.types';
+import type { ResolutionCacheService } from './resolution-cache.types';
 import { decimalToHex } from '$lib/utils/colors';
 
 import {
@@ -253,7 +256,7 @@ async function fetchUnresolvedMetadata(
 // =============================================================================
 
 function buildAdvisorPromise(
-    client: import('$lib/api/client').ModrinthClient,
+    cacheService: ResolutionCacheService,
     allResolved: ResolvedProject[],
     allUnresolved: UnresolvedDependency[],
     reviewOptions: ReturnType<typeof parseReviewOptions>,
@@ -273,22 +276,25 @@ function buildAdvisorPromise(
         });
     }
 
-    const projectTypes = new Map<string, string>();
-    for (const p of allResolved) projectTypes.set(p.projectId, p.projectType);
+    const projectTypes: Record<string, string> = {};
+    for (const p of allResolved) projectTypes[p.projectId] = p.projectType;
     for (const [id, meta] of Object.entries(unresolvedMetadata)) {
-        if (meta.projectType) projectTypes.set(id, meta.projectType);
+        if (meta.projectType) projectTypes[id] = meta.projectType;
     }
 
-    return probeAlternatives(
-        client,
-        allResolved,
-        unresolvedIds,
-        reviewOptions.gameVersion,
-        reviewOptions.loader,
-        allGameVersions,
-        reviewOptions.excludedConfigs.length > 0 ? reviewOptions.excludedConfigs : undefined,
-        projectTypes
-    )
+    return cacheService
+        .probeAlternatives({
+            resolvedProjects: allResolved,
+            unresolvedProjectIds: unresolvedIds,
+            gameVersion: reviewOptions.gameVersion,
+            loader: reviewOptions.loader,
+            allGameVersions,
+            excludeConfigs:
+                reviewOptions.excludedConfigs.length > 0
+                    ? reviewOptions.excludedConfigs
+                    : undefined,
+            projectTypes
+        })
         .then((result) => ({
             alternatives: result.alternatives.filter(
                 (a) =>
@@ -322,6 +328,8 @@ function buildLargeLoadResponse(
     reviewOptions: ReturnType<typeof parseReviewOptions>,
     resolutionOptions: Parameters<typeof resolveCollection>[2],
     client: import('$lib/api/client').ModrinthClient,
+    cacheService: ResolutionCacheService,
+    forceRefresh: boolean,
     prefetchResults: PromiseSettledResult<CollectionFetchResult>[],
     allGameVersions: ModrinthGameVersion[],
     totalProjects: number,
@@ -373,28 +381,30 @@ function buildLargeLoadResponse(
         }
     }
 
-    const { batchPromises, allBatches } = createBatchedResolution(
-        client,
-        dedupedProjects,
-        resolutionOptions,
-        RESOLUTION_BATCH_SIZE
-    );
-
-    const batchCount = batchPromises.length;
-    const loadSteps = computeLoadSteps(totalProjects, batchCount);
-
-    for (const bp of batchPromises) {
-        bp.catch(() => {});
-    }
-
-    const largeLoadTimeout = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Large load timed out')), LARGE_LOAD_TIMEOUT_MS);
-    });
-
-    const resolutionData = Promise.race([allBatches, largeLoadTimeout]).then(
-        async (batchResults) => {
+    // When DO is available, single RPC replaces all batching + dependency resolution.
+    // Batched path is kept as fallback when cache service is InProcessResolutionCache.
+    const cachePromise = cacheService
+        .resolve({
+            projects: dedupedProjects,
+            gameVersion: resolutionOptions.gameVersion,
+            loader: resolutionOptions.loader,
+            options: toSerializableOptions(resolutionOptions),
+            forceRefresh
+        })
+        .catch(async (e) => {
+            console.warn(
+                'Cache service failed for large load, falling back to batched resolution:',
+                e
+            );
+            const { batchPromises, allBatches } = createBatchedResolution(
+                client,
+                dedupedProjects,
+                resolutionOptions,
+                RESOLUTION_BATCH_SIZE
+            );
+            for (const bp of batchPromises) bp.catch(() => {});
+            const batchResults = await allBatches;
             const merged = mergeBatchResults(batchResults);
-
             const depResult = resolutionOptions.includeDependencies
                 ? await resolveDependencies(client, merged.resolved, resolutionOptions)
                 : {
@@ -403,9 +413,26 @@ function buildLargeLoadResponse(
                       warnings: [] as ResolutionWarning[],
                       unresolved: [] as UnresolvedDependency[]
                   };
-
             const mainIds = new Set(merged.resolved.map((r) => r.projectId));
-            const dedupedDeps = depResult.resolved.filter((d) => !mainIds.has(d.projectId));
+            return {
+                resolved: merged.resolved,
+                dependencies: depResult.resolved.filter((d) => !mainIds.has(d.projectId)),
+                conflicts: depResult.conflicts,
+                warnings: [...merged.warnings, ...depResult.warnings],
+                unresolved: [...merged.unresolved, ...depResult.unresolved]
+            };
+        });
+
+    const batchCount = Math.ceil(dedupedProjects.length / RESOLUTION_BATCH_SIZE);
+    const loadSteps = computeLoadSteps(totalProjects, batchCount);
+
+    const largeLoadTimeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Large load timed out')), LARGE_LOAD_TIMEOUT_MS);
+    });
+
+    const resolutionData = Promise.race([cachePromise, largeLoadTimeout]).then(
+        async (cacheResult) => {
+            const dedupedDeps = cacheResult.dependencies;
 
             const collections = buildCollectionGroups(
                 collectionMeta.map((meta) => ({
@@ -416,11 +443,11 @@ function buildLargeLoadResponse(
                     projectCount: meta.projectCount,
                     projectIds: new Set(meta.projects.map((p) => p.id))
                 })),
-                merged.resolved
+                cacheResult.resolved
             );
 
-            const allWarnings = [...allModpackWarnings, ...merged.warnings, ...depResult.warnings];
-            const allUnresolved = [...merged.unresolved, ...depResult.unresolved];
+            const allWarnings = [...allModpackWarnings, ...cacheResult.warnings];
+            const allUnresolved = [...cacheResult.unresolved];
 
             for (let i = 0; i < prefetchResults.length; i++) {
                 if (prefetchResults[i].status === 'rejected') {
@@ -454,7 +481,7 @@ function buildLargeLoadResponse(
                 resolvedCount: allResolved.length,
                 unresolvedCount: allUnresolved.length,
                 dependencyCount: dedupedDeps.length,
-                conflictCount: depResult.conflicts.length,
+                conflictCount: cacheResult.conflicts.length,
                 warningCount: allWarnings.length,
                 totalDownloadSize:
                     allResolved.reduce((sum, r) => sum + r.fileSize, 0) +
@@ -464,7 +491,7 @@ function buildLargeLoadResponse(
             return {
                 collections,
                 dependencies: dedupedDeps,
-                conflicts: depResult.conflicts,
+                conflicts: cacheResult.conflicts,
                 warnings: allWarnings,
                 unresolved: allUnresolved,
                 stats,
@@ -494,26 +521,26 @@ function buildLargeLoadResponse(
                       };
                   }
 
-                  const projectTypes = new Map<string, string>();
-                  for (const p of allResolved) projectTypes.set(p.projectId, p.projectType);
+                  const projectTypes: Record<string, string> = {};
+                  for (const p of allResolved) projectTypes[p.projectId] = p.projectType;
                   if (result.unresolvedMetadata) {
                       for (const [id, meta] of Object.entries(result.unresolvedMetadata)) {
-                          if (meta.projectType) projectTypes.set(id, meta.projectType);
+                          if (meta.projectType) projectTypes[id] = meta.projectType;
                       }
                   }
 
-                  const probeResult = await probeAlternatives(
-                      client,
-                      allResolved,
+                  const probeResult = await cacheService.probeAlternatives({
+                      resolvedProjects: allResolved,
                       unresolvedProjectIds,
-                      reviewOptions.gameVersion,
-                      reviewOptions.loader,
+                      gameVersion: reviewOptions.gameVersion,
+                      loader: reviewOptions.loader,
                       allGameVersions,
-                      reviewOptions.excludedConfigs.length > 0
-                          ? reviewOptions.excludedConfigs
-                          : undefined,
+                      excludeConfigs:
+                          reviewOptions.excludedConfigs.length > 0
+                              ? reviewOptions.excludedConfigs
+                              : undefined,
                       projectTypes
-                  );
+                  });
 
                   return {
                       alternatives: probeResult.alternatives.filter(
@@ -553,7 +580,7 @@ function buildLargeLoadResponse(
             retryCount: reviewOptions.retryCount
         },
         initialViewMode,
-        batchProgress: batchPromises,
+        batchProgress: [cachePromise],
         resolutionData,
         advisorData,
         emailEnabled: envConfig.ENABLE_EMAIL_SHARING && !!envConfig.RESEND_API_KEY,
@@ -568,6 +595,7 @@ function buildLargeLoadResponse(
 async function buildSuccessResponse(
     reviewOptions: ReturnType<typeof parseReviewOptions>,
     client: import('$lib/api/client').ModrinthClient,
+    cacheService: ResolutionCacheService,
     collectionResults: PromiseSettledResult<{
         collection: ModrinthCollection;
         result: Awaited<ReturnType<typeof resolveCollection>>;
@@ -681,7 +709,7 @@ async function buildSuccessResponse(
               modAvailability: {} as Record<string, ModAvailability>
           })
         : buildAdvisorPromise(
-              client,
+              cacheService,
               allResolved,
               allUnresolved,
               reviewOptions,
@@ -747,6 +775,15 @@ export async function loadReviewData(params: ReviewLoadParams) {
     };
 
     const client = createClientFromPlatform(platform);
+    const forceRefresh = url.searchParams.has('fresh');
+
+    const resolutionCacheBinding = (platform?.env as Record<string, unknown> | undefined)
+        ?.RESOLUTION_CACHE as
+        | DurableObjectNamespace<import('$lib/server/resolution-cache-do').ResolutionCache>
+        | undefined;
+    const cacheService: ResolutionCacheService = resolutionCacheBinding
+        ? new DurableObjectResolutionCacheClient(resolutionCacheBinding)
+        : new InProcessResolutionCache(client);
 
     const TIMEOUT_MS = PAGE_LOAD_TIMEOUT_MS;
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -804,6 +841,8 @@ export async function loadReviewData(params: ReviewLoadParams) {
             reviewOptions,
             resolutionOptions,
             client,
+            cacheService,
+            forceRefresh,
             prefetchResults,
             gameVersionsResult,
             totalProjects,
@@ -812,7 +851,51 @@ export async function loadReviewData(params: ReviewLoadParams) {
         );
     }
 
-    // ─── Small load path: synchronous resolution with timeout ───
+    // ─── Small load path: single cache call with deduplication ───
+
+    // 1. Collect all projects + metadata from prefetch results
+    const collectionData: Array<{
+        collection: ModrinthCollection;
+        projects: ModrinthProject[];
+        modpackWarnings: ResolutionWarning[];
+        totalProjectCount: number;
+    }> = [];
+
+    for (let idx = 0; idx < reviewOptions.collectionIds.length; idx++) {
+        const id = reviewOptions.collectionIds[idx];
+        const prefetched = prefetchResults[idx];
+        const { collection, projects } =
+            prefetched.status === 'fulfilled'
+                ? prefetched.value
+                : await fetchCollection(client, id);
+
+        const modpacks = projects.filter((p) => p.project_type === 'modpack');
+        const filtered = projects.filter((p) => p.project_type !== 'modpack');
+        collectionData.push({
+            collection,
+            projects: filtered,
+            modpackWarnings: modpacks.map((p) => ({
+                type: 'no-compatible-version' as const,
+                projectId: p.id,
+                message: `${p.title} is a modpack and was skipped`
+            })),
+            totalProjectCount: projects.length
+        });
+    }
+
+    // 2. Deduplicate all projects across collections
+    const seen = new Set<string>();
+    const dedupedProjects: ModrinthProject[] = [];
+    for (const cd of collectionData) {
+        for (const p of cd.projects) {
+            if (!seen.has(p.id)) {
+                seen.add(p.id);
+                dedupedProjects.push(p);
+            }
+        }
+    }
+
+    // 3. Single cache call
     let collectionResults: PromiseSettledResult<{
         collection: ModrinthCollection;
         result: Awaited<ReturnType<typeof resolveCollection>>;
@@ -820,33 +903,68 @@ export async function loadReviewData(params: ReviewLoadParams) {
         totalProjectCount: number;
     }>[];
 
-    const resolutionPromise = Promise.allSettled(
-        reviewOptions.collectionIds.map(async (id, idx) => {
-            const prefetched = prefetchResults[idx];
-            const { collection, projects } =
-                prefetched.status === 'fulfilled'
-                    ? prefetched.value
-                    : await fetchCollection(client, id);
+    const resolutionPromise = (async () => {
+        let cacheResult: import('./resolution-cache.types').ResolveResult;
+        try {
+            cacheResult = await cacheService.resolve({
+                projects: dedupedProjects,
+                gameVersion: resolutionOptions.gameVersion,
+                loader: resolutionOptions.loader,
+                options: toSerializableOptions(resolutionOptions),
+                forceRefresh
+            });
+        } catch (e) {
+            console.warn('Cache service failed, falling back to direct resolution:', e);
+            const directResult = await resolveCollection(
+                client,
+                dedupedProjects,
+                resolutionOptions
+            );
+            cacheResult = {
+                resolved: directResult.resolved,
+                dependencies: directResult.dependencies,
+                conflicts: directResult.conflicts,
+                warnings: directResult.warnings,
+                unresolved: directResult.unresolved
+            };
+        }
 
-            const modpacks = projects.filter((p) => p.project_type === 'modpack');
-            const filteredProjects = projects.filter((p) => p.project_type !== 'modpack');
+        // 4. Redistribute results per collection
+        const resolvedMap = new Map(cacheResult.resolved.map((r) => [r.projectId, r]));
 
-            const modpackWarnings: ResolutionWarning[] = modpacks.map((p) => ({
-                type: 'no-compatible-version' as const,
-                projectId: p.id,
-                message: `${p.title} is a modpack and was skipped`
-            }));
-
-            const result = await resolveCollection(client, filteredProjects, resolutionOptions);
+        return collectionData.map((cd) => {
+            const collectionResolved = cd.projects
+                .map((p) => resolvedMap.get(p.id))
+                .filter((r): r is ResolvedProject => r !== undefined);
 
             return {
-                collection,
-                result,
-                modpackWarnings,
-                totalProjectCount: projects.length
+                status: 'fulfilled' as const,
+                value: {
+                    collection: cd.collection,
+                    result: {
+                        resolved: collectionResolved,
+                        dependencies: cacheResult.dependencies,
+                        conflicts: cacheResult.conflicts,
+                        warnings: cacheResult.warnings,
+                        unresolved: cacheResult.unresolved,
+                        stats: {
+                            totalProjects: cd.projects.length,
+                            resolvedCount: collectionResolved.length,
+                            unresolvedCount: cacheResult.unresolved.length,
+                            dependencyCount: cacheResult.dependencies.length,
+                            conflictCount: cacheResult.conflicts.length,
+                            warningCount: cacheResult.warnings.length,
+                            totalDownloadSize:
+                                collectionResolved.reduce((sum, r) => sum + r.fileSize, 0) +
+                                cacheResult.dependencies.reduce((sum, r) => sum + r.fileSize, 0)
+                        }
+                    } satisfies Awaited<ReturnType<typeof resolveCollection>>,
+                    modpackWarnings: cd.modpackWarnings,
+                    totalProjectCount: cd.totalProjectCount
+                }
             };
-        })
-    );
+        });
+    })();
 
     try {
         collectionResults = await Promise.race([resolutionPromise, timeoutPromise]);
@@ -882,6 +1000,7 @@ export async function loadReviewData(params: ReviewLoadParams) {
         return await buildSuccessResponse(
             reviewOptions,
             client,
+            cacheService,
             collectionResults,
             successfulResults,
             gameVersionsResult,
