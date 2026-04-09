@@ -2,6 +2,11 @@ name = "ariadnes-thread"
 main = ".svelte-kit/cloudflare/_worker.js"
 compatibility_date = "2026-03-31"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+
+routes = [
+    { pattern = "modrinth.download", custom_domain = true }
+]
 
 [assets]
 binding = "ASSETS"
@@ -19,6 +24,9 @@ directory = ".svelte-kit/cloudflare"
 
 [observability]
 enabled = true
+# Free tier: 200k log events/day. Each request = 1 invocation log + N console.* calls.
+# At 10% sampling even 100k req/day × ~5 events = 50k — well within budget.
+head_sampling_rate = 0.1
 
 [durable_objects]
 bindings = [
@@ -28,6 +36,10 @@ bindings = [
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ResolutionCache"]
+
+[env.preview.observability]
+enabled = true
+head_sampling_rate = 1
 
 [env.preview.vars]
 MODRINTH_USER_AGENT = "AriadnesThread/preview"
