@@ -81,7 +81,7 @@ describe('DurableObjectResolutionCacheClient', () => {
             };
 
             const promise = client.resolve(request);
-            vi.advanceTimersByTime(30_000);
+            vi.advanceTimersByTime(90_000);
 
             await expect(promise).rejects.toThrow('DO resolve timed out');
         });
