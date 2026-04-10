@@ -1,3 +1,9 @@
+## [1.27.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.27.1...v1.27.2) (2026-04-10)
+
+### Bug Fixes
+
+- **do:** honor full Retry-After, batch SQL params, batch fallback resolution ([1fd3b7c](https://github.com/desaianand1/Ariadnes-Thread/commit/1fd3b7c86d3987b41f21d6c1f40e84437cf6e679))
+
 ## [1.27.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.27.0...v1.27.1) (2026-04-10)
 
 ### Performance Improvements
