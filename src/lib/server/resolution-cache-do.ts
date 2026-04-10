@@ -10,6 +10,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { logger, serializeError } from '$lib/server/logger';
 import { resolveVersion } from '$lib/services/resolution.server';
 import { preFilterIncompatibleProjects } from '$lib/services/prefilter';
+import { chunkArray } from '$lib/utils/array';
 import { resolveDependencies } from '$lib/services/dependency.server';
 import type { DependencyCacheProvider } from '$lib/services/dependency.server';
 import { ModrinthClient } from '$lib/api/client';
@@ -25,7 +26,12 @@ import {
     LOADER_AGNOSTIC_PROJECT_TYPES,
     CACHE_REVALIDATION_BATCH_SIZE,
     CACHE_REVALIDATION_MAX_ENTRIES,
-    DO_MAX_PROJECTS_PER_REQUEST
+    DO_MAX_PROJECTS_PER_REQUEST,
+    RESOLUTION_BATCH_SIZE,
+    RATE_LIMIT_SAFETY_MARGIN,
+    INTER_BATCH_DELAY_MS,
+    DO_MAX_RATE_LIMIT_WAIT_MS,
+    DO_SQL_PARAM_BATCH_SIZE
 } from '$lib/config/constants';
 import { probeAlternatives as probeAlternativesFn } from '$lib/services/alternative-probe.server';
 import {
@@ -131,7 +137,8 @@ export class ResolutionCache extends DurableObject {
             maxRetries: config.MAX_RETRIES,
             retryDelayMs: config.RETRY_DELAY_MS,
             retryBackoffStrategy: config.RETRY_BACKOFF_STRATEGY,
-            fetchTimeoutMs: config.FETCH_TIMEOUT_MS
+            fetchTimeoutMs: config.FETCH_TIMEOUT_MS,
+            maxRateLimitWaitMs: DO_MAX_RATE_LIMIT_WAIT_MS
         });
 
         ctx.blockConcurrencyWhile(async () => {
@@ -322,16 +329,21 @@ export class ResolutionCache extends DurableObject {
             lookupVersionObjects: (ids: string[]) => {
                 if (ids.length === 0) return { hits: [], misses: [] };
 
-                const { placeholders, args } = this.inClause(ids);
-                const rows = this.sql
-                    .exec<{ version_id: string; data: string; fetched_at: number }>(
-                        `SELECT version_id, data, fetched_at FROM version_object_cache
-                         WHERE version_id IN (${placeholders})`,
-                        ...args
-                    )
-                    .toArray();
+                const allRows: Array<{ version_id: string; data: string; fetched_at: number }> = [];
+                for (const chunk of chunkArray(ids, DO_SQL_PARAM_BATCH_SIZE)) {
+                    const { placeholders, args } = this.inClause(chunk);
+                    allRows.push(
+                        ...this.sql
+                            .exec<{ version_id: string; data: string; fetched_at: number }>(
+                                `SELECT version_id, data, fetched_at FROM version_object_cache
+                                 WHERE version_id IN (${placeholders})`,
+                                ...args
+                            )
+                            .toArray()
+                    );
+                }
 
-                const rowMap = new Map(rows.map((r) => [r.version_id, r]));
+                const rowMap = new Map(allRows.map((r) => [r.version_id, r]));
                 const hits: ModrinthVersion[] = [];
                 const misses: string[] = [];
 
@@ -362,16 +374,21 @@ export class ResolutionCache extends DurableObject {
             lookupProjects: (ids: string[]) => {
                 if (ids.length === 0) return { hits: [], misses: [] };
 
-                const { placeholders, args } = this.inClause(ids);
-                const rows = this.sql
-                    .exec<{ project_id: string; data: string; fetched_at: number }>(
-                        `SELECT project_id, data, fetched_at FROM project_cache
-                         WHERE project_id IN (${placeholders})`,
-                        ...args
-                    )
-                    .toArray();
+                const allRows: Array<{ project_id: string; data: string; fetched_at: number }> = [];
+                for (const chunk of chunkArray(ids, DO_SQL_PARAM_BATCH_SIZE)) {
+                    const { placeholders, args } = this.inClause(chunk);
+                    allRows.push(
+                        ...this.sql
+                            .exec<{ project_id: string; data: string; fetched_at: number }>(
+                                `SELECT project_id, data, fetched_at FROM project_cache
+                                 WHERE project_id IN (${placeholders})`,
+                                ...args
+                            )
+                            .toArray()
+                    );
+                }
 
-                const rowMap = new Map(rows.map((r) => [r.project_id, r]));
+                const rowMap = new Map(allRows.map((r) => [r.project_id, r]));
                 const hits: ModrinthProject[] = [];
                 const misses: string[] = [];
 
@@ -625,11 +642,38 @@ export class ResolutionCache extends DurableObject {
             unresolved.push(entry);
         }
 
-        // Phase 2: resolve remaining candidates via Modrinth API
+        // Phase 2: resolve cache misses via Modrinth API in rate-limit-safe chunks
+        // (mirrors createBatchedResolution pacing from resolution.server.ts)
         if (apiCandidates.length > 0) {
-            const results = await Promise.allSettled(
-                apiCandidates.map((project) => resolveVersion(this.client, project, options))
-            );
+            const chunks = chunkArray(apiCandidates, RESOLUTION_BATCH_SIZE);
+            const results: PromiseSettledResult<Awaited<ReturnType<typeof resolveVersion>>>[] = [];
+
+            for (let i = 0; i < chunks.length; i++) {
+                const chunk = chunks[i];
+                const state = this.client.getRateLimitState();
+                if (state.remaining < RATE_LIMIT_SAFETY_MARGIN) {
+                    // DOs can afford to wait the full Retry-After duration since they have no wall-clock
+                    // limit (unlike Workers which are bounded by PAGE_LOAD_TIMEOUT_MS / LARGE_LOAD_TIMEOUT_MS).
+                    // This prevents the cascading 429 avalanche seen when we capped at 5s.
+                    const timeUntilReset = Math.max(0, state.resetAt - Date.now());
+                    const waitTime = Math.min(
+                        Math.max(INTER_BATCH_DELAY_MS, timeUntilReset),
+                        DO_MAX_RATE_LIMIT_WAIT_MS
+                    );
+                    logger.info('do_rate_limit_wait', {
+                        waitMs: waitTime,
+                        remaining: state.remaining,
+                        batchIndex: i,
+                        totalBatches: chunks.length
+                    });
+                    await new Promise((r) => setTimeout(r, waitTime));
+                }
+
+                const chunkResults = await Promise.allSettled(
+                    chunk.map((project) => resolveVersion(this.client, project, options))
+                );
+                results.push(...chunkResults);
+            }
 
             const hotCacheUpdates: Array<{ key: string; data: string; fetchedAt: number }> = [];
             let transactionFailed = false;

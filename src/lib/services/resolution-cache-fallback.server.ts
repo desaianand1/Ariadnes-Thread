@@ -5,8 +5,10 @@
  */
 
 import type { ModrinthClient } from '$lib/api/client';
-import { resolveCollection } from './resolution.server';
+import { createBatchedResolution, mergeBatchResults } from './resolution.server';
+import { resolveDependencies } from './dependency.server';
 import { probeAlternatives as probeAlternativesFn } from './alternative-probe.server';
+import { RESOLUTION_BATCH_SIZE } from '$lib/config/constants';
 import {
     fromSerializableOptions,
     deserializeProjectTypes,
@@ -24,15 +26,34 @@ export class InProcessResolutionCache implements ResolutionCacheService {
         const { projects, options: serializableOptions } = request;
         const options = fromSerializableOptions(serializableOptions);
 
-        const eligible = projects.filter((p) => !options.excludedProjectIds.has(p.id));
-        const result = await resolveCollection(this.client, eligible, options);
+        // Worker-side fallback uses batched resolution to avoid overwhelming Cloudflare's
+        // concurrent fetch limit — resolveCollection() fires all projects simultaneously
+        // via Promise.allSettled, which triggers "stalled HTTP response" cancellations
+        // when in-flight fetches exceed the platform's internal concurrency cap.
+        const { allBatches } = createBatchedResolution(
+            this.client,
+            projects,
+            options,
+            RESOLUTION_BATCH_SIZE
+        );
+        const batchResults = await allBatches;
+        const merged = mergeBatchResults(batchResults);
+
+        // createBatchedResolution does not call resolveDependencies internally,
+        // so we must do it here to maintain behavioral parity with resolveCollection()
+        const depResult = options.includeDependencies
+            ? await resolveDependencies(this.client, merged.resolved, options)
+            : { resolved: [], conflicts: [], warnings: [], unresolved: [] };
+
+        const mainIds = new Set(merged.resolved.map((r) => r.projectId));
+        const dedupedDeps = depResult.resolved.filter((d) => !mainIds.has(d.projectId));
 
         return {
-            resolved: result.resolved,
-            dependencies: result.dependencies,
-            conflicts: result.conflicts,
-            warnings: result.warnings,
-            unresolved: result.unresolved
+            resolved: merged.resolved,
+            dependencies: dedupedDeps,
+            conflicts: depResult.conflicts,
+            warnings: [...merged.warnings, ...depResult.warnings],
+            unresolved: [...merged.unresolved, ...depResult.unresolved]
         };
     }
 

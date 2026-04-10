@@ -397,8 +397,8 @@ export const PAGE_LOAD_TIMEOUT_MS = 30_000;
 /** Timeout for the prefetch phase (collection + game version fetches) before resolution begins */
 export const PREFETCH_TIMEOUT_MS = 30_000;
 
-/** Overall timeout for the large-load streaming path (2 minutes) */
-export const LARGE_LOAD_TIMEOUT_MS = 120_000;
+/** Overall timeout for the large-load streaming path (3 minutes) */
+export const LARGE_LOAD_TIMEOUT_MS = 180_000;
 
 /** Max project IDs per batch when calling Modrinth bulk endpoints (GET /v2/projects, etc.) */
 export const MODRINTH_BATCH_SIZE = 100;
@@ -487,8 +487,9 @@ export const CACHE_ALARM_INTERVAL_MS = 86_400_000;
 /** In-memory hot cache size cap inside the DO */
 export const HOT_CACHE_MAX_ENTRIES = 2000;
 
-/** Worker-side timeout for a single DO RPC call */
-export const DO_RESOLVE_TIMEOUT_MS = 30_000;
+/** Worker-side timeout for a single DO RPC call — must leave headroom
+ *  below LARGE_LOAD_TIMEOUT_MS for post-processing and fallback */
+export const DO_RESOLVE_TIMEOUT_MS = 90_000;
 
 /** Worker-side timeout for advisor DO RPC — 5s above ADVISOR_PROBE_TIMEOUT_MS so
  *  the advisor's internal AbortController fires first for clean shutdown */
@@ -502,3 +503,12 @@ export const CACHE_REVALIDATION_MAX_ENTRIES = 500;
 
 /** Defense-in-depth: max projects accepted per single DO RPC call */
 export const DO_MAX_PROJECTS_PER_REQUEST = 1000;
+
+/** Max rate-limit wait inside the DO — Workers cap at MAX_RATE_LIMIT_WAIT_MS (5s) due to
+ *  request handler time pressure, but DOs have no wall-clock limit and aren't billed for
+ *  idle time, so we can honor Modrinth's full Retry-After header (typically 30–60s) */
+export const DO_MAX_RATE_LIMIT_WAIT_MS = 65_000;
+
+/** Max IDs per SQL IN-clause query — Cloudflare DO SQLite limits bound parameters
+ *  to 100 per statement (unlike standard SQLite's 32,766). We batch at 90 for headroom */
+export const DO_SQL_PARAM_BATCH_SIZE = 90;
