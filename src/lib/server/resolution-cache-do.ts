@@ -9,6 +9,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { logger, serializeError } from '$lib/server/logger';
 import { resolveVersion } from '$lib/services/resolution.server';
+import { preFilterIncompatibleProjects } from '$lib/services/prefilter';
 import { resolveDependencies } from '$lib/services/dependency.server';
 import type { DependencyCacheProvider } from '$lib/services/dependency.server';
 import { ModrinthClient } from '$lib/api/client';
@@ -611,10 +612,23 @@ export class ResolutionCache extends DurableObject {
             }
         }
 
-        // Phase 2: resolve cache misses via Modrinth API
-        if (cacheMisses.length > 0) {
+        // Phase 1.5: pre-filter cache misses that can't possibly have a matching version
+        const { candidates: apiCandidates, pruned: preFilterResults } =
+            preFilterIncompatibleProjects(
+                cacheMisses,
+                gameVersion,
+                loader,
+                options.enableCrossLoaderFallback
+            );
+        const preFilterPruned = preFilterResults.length;
+        for (const entry of preFilterResults) {
+            unresolved.push(entry);
+        }
+
+        // Phase 2: resolve remaining candidates via Modrinth API
+        if (apiCandidates.length > 0) {
             const results = await Promise.allSettled(
-                cacheMisses.map((project) => resolveVersion(this.client, project, options))
+                apiCandidates.map((project) => resolveVersion(this.client, project, options))
             );
 
             const hotCacheUpdates: Array<{ key: string; data: string; fetchedAt: number }> = [];
@@ -623,7 +637,7 @@ export class ResolutionCache extends DurableObject {
             // Collect results regardless of transaction outcome
             for (let i = 0; i < results.length; i++) {
                 const result = results[i];
-                const project = cacheMisses[i];
+                const project = apiCandidates[i];
                 const cacheLoader = this.effectiveLoader(project, loader);
 
                 if (result.status === 'fulfilled' && result.value) {
@@ -671,7 +685,7 @@ export class ResolutionCache extends DurableObject {
                         const result = results[i];
                         if (result.status !== 'fulfilled') continue;
 
-                        const project = cacheMisses[i];
+                        const project = apiCandidates[i];
                         const cacheLoader = this.effectiveLoader(project, loader);
 
                         const { row, now } = this.writeVersionCacheSql(
@@ -722,7 +736,7 @@ export class ResolutionCache extends DurableObject {
             dependencyTimeMs
         };
 
-        logger.info('do_resolve', { ...cacheStats });
+        logger.info('do_resolve', { ...cacheStats, preFilterPruned });
 
         return {
             resolved,
