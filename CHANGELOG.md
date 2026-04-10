@@ -1,3 +1,9 @@
+## [1.27.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.27.0...v1.27.1) (2026-04-10)
+
+### Performance Improvements
+
+- **do:** pre-filter incompatible projects before API calls ([cddbe7c](https://github.com/desaianand1/Ariadnes-Thread/commit/cddbe7cb973d418421ae314eb54bcf9cea367bf6))
+
 # [1.27.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.26.4...v1.27.0) (2026-04-09)
 
 ### Bug Fixes
