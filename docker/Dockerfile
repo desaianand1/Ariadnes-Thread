@@ -6,7 +6,7 @@ ARG PNPM_VERSION
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 WORKDIR /app
 RUN apk add --no-cache python3 make g++
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --prod=false
 
@@ -23,7 +23,8 @@ RUN pnpm build
 # --- prod-deps stage (prune dev deps from the already-compiled full install) ---
 FROM deps AS prod-deps
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod --ignore-scripts
+    pnpm install --frozen-lockfile --prod --ignore-scripts && \
+    pnpm rebuild better-sqlite3
 
 # --- runner stage ---
 FROM node:24-alpine AS runner
