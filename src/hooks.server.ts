@@ -19,8 +19,11 @@ export const handle: Handle = async ({ event, resolve }) => {
     const pathname = event.url.pathname;
     const ip = getClientIp(event);
 
-    // Bot detection — before any expensive work
-    if (pathname.startsWith('/api/') || pathname.startsWith('/review')) {
+    // Bot detection — before any expensive work (skip health endpoint for Docker HEALTHCHECK)
+    if (
+        (pathname.startsWith('/api/') && pathname !== '/api/health') ||
+        pathname.startsWith('/review')
+    ) {
         if (isLikelyBot(event.request)) {
             logger.warn('bot_blocked', { path: pathname });
             return new Response('Forbidden', { status: 403 });
