@@ -1,3 +1,9 @@
+# [1.28.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.27.2...v1.28.0) (2026-04-15)
+
+### Features
+
+- **vps:** add SQLite resolution cache for VPS deployment ([bfd2584](https://github.com/desaianand1/Ariadnes-Thread/commit/bfd2584b38db89651eb591235e2ad968833d2d58))
+
 ## [1.27.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.27.1...v1.27.2) (2026-04-10)
 
 ### Bug Fixes
