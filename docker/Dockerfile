@@ -20,11 +20,10 @@ COPY . .
 ENV ADAPTER=node
 RUN pnpm build
 
-# --- prod-deps stage (prune dev deps from the already-compiled full install) ---
+# --- prod-deps stage (prune dev deps, let onlyBuiltDependencies handle native addons) ---
 FROM deps AS prod-deps
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod --ignore-scripts && \
-    pnpm rebuild better-sqlite3
+    pnpm install --frozen-lockfile --prod
 
 # --- runner stage ---
 FROM node:24-alpine AS runner
