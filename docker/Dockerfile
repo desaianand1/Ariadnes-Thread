@@ -1,6 +1,6 @@
 ARG PNPM_VERSION=10.28.2
 
-# --- deps stage ---
+# --- deps stage (all deps including native compilation) ---
 FROM node:24-alpine AS deps
 ARG PNPM_VERSION
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
@@ -20,16 +20,10 @@ COPY . .
 ENV ADAPTER=node
 RUN pnpm build
 
-# --- prod-deps stage ---
-FROM node:24-alpine AS prod-deps
-ARG PNPM_VERSION
-RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
-RUN apk add --no-cache python3 make g++
-WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
+# --- prod-deps stage (prune dev deps from the already-compiled full install) ---
+FROM deps AS prod-deps
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --prod --frozen-lockfile --ignore-scripts && \
-    pnpm rebuild better-sqlite3
+    pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # --- runner stage ---
 FROM node:24-alpine AS runner
