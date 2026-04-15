@@ -1,3 +1,9 @@
+## [1.28.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.0...v1.28.1) (2026-04-15)
+
+### Bug Fixes
+
+- **docker:** skip prepare script in prod-deps, add DEPLOY_TARGET gate ([be7fdbe](https://github.com/desaianand1/Ariadnes-Thread/commit/be7fdbef1d9a4ae7f4933e8329e5a06005b05098))
+
 # [1.28.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.27.2...v1.28.0) (2026-04-15)
 
 ### Features
