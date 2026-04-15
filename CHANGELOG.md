@@ -1,3 +1,12 @@
+## [1.28.6](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.5...v1.28.6) (2026-04-15)
+
+### Bug Fixes
+
+- add cloudflare turnstile and challenge platform to CSP ([69f1a2e](https://github.com/desaianand1/Ariadnes-Thread/commit/69f1a2e894ddab88d92704934c08eafb9b617cf6))
+- **docker:** always pull latest image on deploy ([0db44c4](https://github.com/desaianand1/Ariadnes-Thread/commit/0db44c45d9274ef35af19f6ac12bfe0a0b81354c))
+- tooltip positioning and 'Not available found' text ([162aa48](https://github.com/desaianand1/Ariadnes-Thread/commit/162aa4832e4478803f5496daaf54b17200cd5e3d))
+- widen min-width on download progress counters ([3c58c74](https://github.com/desaianand1/Ariadnes-Thread/commit/3c58c74971ebc9b55b783b0b9cb9e2ec93bcfa61))
+
 ## [1.28.5](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.4...v1.28.5) (2026-04-15)
 
 ### Performance Improvements
