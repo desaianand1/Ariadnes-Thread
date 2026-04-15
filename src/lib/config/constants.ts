@@ -383,16 +383,16 @@ export const LARGE_LOAD_THRESHOLD = Math.floor(MODRINTH_RATE_LIMIT * 0.15);
 export const MAX_TOTAL_PROJECTS = 1000;
 
 /** Breathing room between resolution batches (ms) */
-export const INTER_BATCH_DELAY_MS = 500;
+export const INTER_BATCH_DELAY_MS = 1000;
 
 /** Upper bound on how long to wait for a rate-limit window reset between batches (ms) */
-export const MAX_RATE_LIMIT_WAIT_MS = 5_000;
+export const MAX_RATE_LIMIT_WAIT_MS = 30_000;
 
 /** Reserve this many requests before pausing for rate limit */
 export const RATE_LIMIT_SAFETY_MARGIN = 50;
 
 /** Page-level load timeout for /review (covers all resolution + fetching) */
-export const PAGE_LOAD_TIMEOUT_MS = 30_000;
+export const PAGE_LOAD_TIMEOUT_MS = 45_000;
 
 /** Timeout for the prefetch phase (collection + game version fetches) before resolution begins */
 export const PREFETCH_TIMEOUT_MS = 30_000;

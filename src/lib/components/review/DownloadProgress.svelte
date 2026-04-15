@@ -411,7 +411,7 @@
                             class="h-2 bg-emerald-100 dark:bg-emerald-950"
                         />
                     </div>
-                    <span class="text-xs text-muted-foreground tabular-nums">
+                    <span class="text-xs text-muted-foreground tabular-nums min-w-12">
                         {completedCount}/{totalCount} files · ETA {stableEta()}
                     </span>
                 </div>
