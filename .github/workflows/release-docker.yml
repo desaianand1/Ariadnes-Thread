@@ -19,6 +19,7 @@ env:
 jobs:
     docker:
         name: Build & Push Docker Image
+        if: vars.DEPLOY_TARGET == 'vps'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6

@@ -28,7 +28,8 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --prod --frozen-lockfile
+    pnpm install --prod --frozen-lockfile --ignore-scripts && \
+    pnpm rebuild better-sqlite3
 
 # --- runner stage ---
 FROM node:24-alpine AS runner
