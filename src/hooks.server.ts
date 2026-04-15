@@ -2,8 +2,15 @@ import type { Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { isLikelyBot } from '$lib/server/bot-detect';
 import { checkRateLimit, getClientIp, getRouteKey, getRateLimitInfo } from '$lib/server/rate-limit';
-import { RATE_LIMITS } from '$lib/config/constants';
+import { RATE_LIMITS, CACHE_ALARM_INTERVAL_MS } from '$lib/config/constants';
 import { logger } from '$lib/server/logger';
+
+// VPS: start daily cache cleanup interval
+if (typeof process !== 'undefined' && process.env?.ADAPTER === 'node') {
+    import('./lib/services/resolution-cache-sqlite.server').then(({ cleanupExpiredEntries }) => {
+        setInterval(() => cleanupExpiredEntries(), CACHE_ALARM_INTERVAL_MS);
+    });
+}
 
 // Known limitation: No explicit CSRF token on /api/share/email — SvelteKit's
 // built-in origin check + honeypot + timing + rate limiting provides reasonable

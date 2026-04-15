@@ -811,12 +811,18 @@ export async function loadReviewData(params: ReviewLoadParams) {
         ?.RESOLUTION_CACHE as
         | DurableObjectNamespace<import('$lib/server/resolution-cache-do').ResolutionCache>
         | undefined;
-    const cacheService: ResolutionCacheService = resolutionCacheBinding
-        ? new ResilientResolutionCacheService(
-              new DurableObjectResolutionCacheClient(resolutionCacheBinding),
-              client
-          )
-        : new InProcessResolutionCache(client);
+    let cacheService: ResolutionCacheService;
+    if (resolutionCacheBinding) {
+        cacheService = new ResilientResolutionCacheService(
+            new DurableObjectResolutionCacheClient(resolutionCacheBinding),
+            client
+        );
+    } else if (typeof process !== 'undefined' && process.env?.ADAPTER === 'node') {
+        const { SQLiteResolutionCache } = await import('./resolution-cache-sqlite.server');
+        cacheService = new SQLiteResolutionCache(client);
+    } else {
+        cacheService = new InProcessResolutionCache(client);
+    }
 
     const TIMEOUT_MS = PAGE_LOAD_TIMEOUT_MS;
     let timeoutId: ReturnType<typeof setTimeout>;
