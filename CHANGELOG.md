@@ -1,3 +1,9 @@
+## [1.28.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.1...v1.28.2) (2026-04-15)
+
+### Bug Fixes
+
+- exempt /api/health from bot detection for Docker HEALTHCHECK ([dd13987](https://github.com/desaianand1/Ariadnes-Thread/commit/dd13987ca6a8f833c7b4641e678f9e2ca67448c9))
+
 ## [1.28.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.0...v1.28.1) (2026-04-15)
 
 ### Bug Fixes
