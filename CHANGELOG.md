@@ -1,3 +1,9 @@
+## [1.28.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.2...v1.28.3) (2026-04-15)
+
+### Bug Fixes
+
+- **docker:** reuse deps stage for prod-deps to preserve native addon ([1afcb7e](https://github.com/desaianand1/Ariadnes-Thread/commit/1afcb7e68e4bbc828360a729ef116c644c3660cc))
+
 ## [1.28.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.1...v1.28.2) (2026-04-15)
 
 ### Bug Fixes
