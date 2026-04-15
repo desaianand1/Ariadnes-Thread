@@ -1,6 +1,7 @@
 services:
     app:
         image: ghcr.io/desaianand1/ariadnes-thread:latest
+        pull_policy: always
         restart: unless-stopped
         ports:
             - '3000:3000'
