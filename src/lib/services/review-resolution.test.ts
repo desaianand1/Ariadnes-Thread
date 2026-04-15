@@ -747,8 +747,12 @@ describe('formatTechnicalReason', () => {
         );
     });
 
-    it('replaces generic "no compatible version" with "Not available"', () => {
+    it('replaces generic "no compatible version" variants with "Not available"', () => {
         expect(formatTechnicalReason('no compatible version')).toBe('Not available');
+        expect(formatTechnicalReason('No compatible version found')).toBe('Not available');
+        expect(formatTechnicalReason('No compatible version found (stale cache)')).toBe(
+            'Not available'
+        );
     });
 
     it('passes through unrecognized reasons unchanged', () => {

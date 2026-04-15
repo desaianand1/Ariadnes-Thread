@@ -516,7 +516,7 @@
                                                         {#snippet child({ props })}
                                                             <p
                                                                 class={cn(
-                                                                    'cursor-default text-xs',
+                                                                    'w-fit cursor-default text-xs',
                                                                     stale
                                                                         ? 'font-medium text-amber-600/80 dark:text-amber-400/80'
                                                                         : 'text-muted-foreground/60'

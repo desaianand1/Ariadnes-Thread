@@ -311,7 +311,7 @@
                                         <Tooltip.Trigger>
                                             {#snippet child({ props })}
                                                 <p
-                                                    class="cursor-default text-sm font-medium"
+                                                    class="w-fit cursor-default text-sm font-medium"
                                                     {...props}
                                                 >
                                                     {formatRelativeTime(lastUpdated)}

@@ -173,7 +173,7 @@ export function formatTechnicalReason(reason: string): string {
             (_, l, v) => `No ${getLoaderDisplayName(l)} version for ${v}`
         )
         .replace(/^No compatible version for ([\d.]+)$/, (_, v) => `Not available for ${v}`)
-        .replace(/no compatible version/i, 'Not available')
+        .replace(/no compatible version\b.*/i, 'Not available')
         .replace(
             /using version built for ([\d.]+\S*) instead of ([\d.]+\S*)/i,
             (_, actual, target) => `Using ${actual} build (target: ${target})`
