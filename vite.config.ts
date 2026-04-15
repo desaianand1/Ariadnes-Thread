@@ -101,12 +101,13 @@ function injectDurableObject(): Plugin {
     };
 }
 
+const isNode = process.env.ADAPTER === 'node';
+
 export default defineConfig({
     plugins: [
         tailwindcss(),
         sveltekit(),
-        cloudflareNodeCompat(),
-        injectDurableObject(),
+        ...(isNode ? [] : [cloudflareNodeCompat(), injectDurableObject()]),
         devtoolsJson()
     ],
     optimizeDeps: { include: ['qrcode'] },
