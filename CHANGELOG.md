@@ -1,3 +1,11 @@
+## [1.28.4](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.3...v1.28.4) (2026-04-15)
+
+### Bug Fixes
+
+- **ci:** allow semantic-release to run when one build job is skipped ([a72a961](https://github.com/desaianand1/Ariadnes-Thread/commit/a72a9610f7c8916ecd35254abb58bdafc6dd9ff8))
+- **docker:** include pnpm-workspace.yaml and rebuild better-sqlite3 native addon ([29efb5b](https://github.com/desaianand1/Ariadnes-Thread/commit/29efb5b0bf49fea8bef802fea0fd623c5d4f295f))
+- **docker:** let pnpm 10 onlyBuiltDependencies handle better-sqlite3 native addon ([4005d17](https://github.com/desaianand1/Ariadnes-Thread/commit/4005d179c79d9f6ff4ee10ae7bb64dde49aa5d55))
+
 ## [1.28.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.2...v1.28.3) (2026-04-15)
 
 ### Bug Fixes
