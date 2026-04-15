@@ -1,0 +1,19 @@
+services:
+  app:
+    image: ghcr.io/desaianand1/ariadnes-thread:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - cache-data:/app/data
+    environment:
+      - ADAPTER=node
+      - ORIGIN=${ORIGIN:?}
+      - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY:?}
+      - PUBLIC_TURNSTILE_SITE_KEY=${PUBLIC_TURNSTILE_SITE_KEY:?}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-warn}
+      - ENABLE_EMAIL_SHARING=${ENABLE_EMAIL_SHARING:-false}
+
+volumes:
+  cache-data:
