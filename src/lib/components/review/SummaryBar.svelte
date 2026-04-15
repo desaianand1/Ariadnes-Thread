@@ -72,7 +72,7 @@
                 </span>
                 {#if downloadPhase === 'downloading'}
                     <span
-                        class="hidden shrink-0 text-xs text-muted-foreground tabular-nums sm:inline sm:min-w-16"
+                        class="hidden shrink-0 text-xs text-muted-foreground tabular-nums sm:inline sm:min-w-20"
                     >
                         {stableSpeed()} · ETA {stableEta()}
                     </span>
