@@ -1,3 +1,9 @@
+## [1.28.5](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.4...v1.28.5) (2026-04-15)
+
+### Performance Improvements
+
+- improve config limits for better rate limits ([4e54db0](https://github.com/desaianand1/Ariadnes-Thread/commit/4e54db03d538f76d8543709026b71e00c483121f))
+
 ## [1.28.4](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.3...v1.28.4) (2026-04-15)
 
 ### Bug Fixes
