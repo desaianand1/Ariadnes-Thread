@@ -23,6 +23,10 @@
         <a href={resolve('/')} class="flex items-center gap-2" aria-label="{siteConfig.name} home">
             <img src={logo} alt="" class="size-8" />
             <span class="hidden font-semibold sm:inline">{siteConfig.name}</span>
+            <span class="hidden items-center gap-1.5 lg:inline-flex">
+                <span class="text-muted-foreground/40">&middot;</span>
+                <span class="text-xs text-muted-foreground">{siteConfig.tagline}</span>
+            </span>
         </a>
 
         <div class="flex items-center gap-1">

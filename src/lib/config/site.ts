@@ -1,6 +1,7 @@
 export const siteConfig = {
     name: "Ariadne's Thread",
     shortName: 'Ariadne',
+    tagline: 'Your guide through the mod maze',
     description: 'Turn Modrinth collections into ready-to-play mod packs',
     url: 'https://modrinth.download',
     domain: 'modrinth.download',

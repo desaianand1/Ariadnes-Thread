@@ -1,7 +1,8 @@
 <script lang="ts">
     import { siteConfig } from '$lib/config/site';
-    import { APP_VERSION, MODRINTH_ATTRIBUTION_URL } from '$lib/config/constants';
+    import { APP_VERSION, MODRINTH_ATTRIBUTION_URL, MINECRAFT_URL } from '$lib/config/constants';
     import ModrinthWordmark from '$lib/components/icons/ModrinthWordmark.svelte';
+    import MinecraftWordmark from '$lib/components/icons/MinecraftWordmark.svelte';
     import { SiGithub, SiKofi, SiBuymeacoffee } from '@icons-pack/svelte-simple-icons';
     import MailIcon from '@lucide/svelte/icons/mail';
     import * as Tooltip from '$lib/components/ui/tooltip';
@@ -12,7 +13,7 @@
 
 <footer class="border-t">
     <div
-        class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-3"
+        class="mx-auto flex max-w-7xl flex-col items-center gap-3 px-4 py-3 text-center sm:flex-row sm:justify-between sm:text-left"
     >
         <!-- Left: brand + links -->
         <div class="flex flex-wrap items-center gap-1">
@@ -84,7 +85,9 @@
         </div>
 
         <!-- Right: attribution + copyright -->
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <div
+            class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:justify-end"
+        >
             <span class="flex items-center gap-1.5">
                 Not affiliated with
                 <a
@@ -95,6 +98,16 @@
                     aria-label="Modrinth"
                 >
                     <ModrinthWordmark class="h-3.5 w-auto" />
+                </a>
+                or
+                <a
+                    href={MINECRAFT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer external"
+                    class="inline-flex items-center underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                    aria-label="Minecraft"
+                >
+                    <MinecraftWordmark class="h-3 w-auto" />
                 </a>
             </span>
             <span class="text-muted-foreground/50">&middot;</span>
