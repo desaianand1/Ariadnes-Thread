@@ -365,6 +365,23 @@ export const RESOLUTION_MESSAGES = {
     GENERIC: 'Something went wrong while processing results. Please try again.'
 } as const;
 
+/** Centralized error messages for the download pipeline */
+export const DOWNLOAD_MESSAGES = {
+    FILES_FAILED: 'Some mods failed to download. Try again or reduce concurrent downloads.',
+    SINGLE_FILE_FAILED: 'This mod failed to download after multiple attempts.',
+    HASH_MISMATCH: 'This file could not be verified and may have been corrupted. Please try again.',
+    TIMEOUT: 'The download timed out. Check your connection and try again.',
+    NETWORK_ERROR: 'A network error occurred. Check your connection and try again.',
+    HTTP_FORBIDDEN:
+        'Access to this file was denied. The download link may have expired — please try again.',
+    HTTP_NOT_FOUND:
+        'This file was not found on the server. It may have been removed from Modrinth.',
+    HTTP_SERVER_ERROR: 'The download server encountered an error. Please try again later.',
+    HTTP_GENERIC: 'The download failed due to a server issue. Please try again.',
+    ZIP_FAILED: 'Failed to build the download ZIP. Please try again.',
+    UNKNOWN: 'An unexpected error occurred during download. Please try again.'
+} as const;
+
 /** Projects per version-resolution batch */
 export const RESOLUTION_BATCH_SIZE = 50;
 

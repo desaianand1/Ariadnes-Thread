@@ -14,9 +14,15 @@ import {
     MIN_RETRY_COUNT,
     MAX_RETRY_COUNT_LIMIT,
     RETRY_DELAY_MS,
-    INLINE_DOWNLOAD_FILE_THRESHOLD
+    INLINE_DOWNLOAD_FILE_THRESHOLD,
+    DOWNLOAD_MESSAGES
 } from '$lib/config/constants';
 import { downloadFiles, type DownloadCallbacks } from '$lib/services/download';
+import {
+    isAbortError,
+    getDownloadErrorMessage,
+    getFileErrorMessage
+} from '$lib/services/download-errors';
 import { buildSideZips, type ZipFileInfo } from '$lib/services/zip';
 import type { ResolvedProject, SideClassification } from '$lib/services/types';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
@@ -220,6 +226,10 @@ export function initDownload(
 export async function startDownload(): Promise<void> {
     if (!state.abortController) return;
 
+    // Capture signal once so abort checks remain valid even after
+    // cancelDownload() nulls state.abortController mid-pipeline.
+    const signal = state.abortController.signal;
+
     const hasFilesToDownload = state.files.length > 0;
 
     if (hasFilesToDownload) {
@@ -250,7 +260,7 @@ export async function startDownload(): Promise<void> {
                 const file = filesByUrl.get(fileUrl);
                 if (file) {
                     file.status = 'error';
-                    file.error = error.message;
+                    file.error = getFileErrorMessage(error.message);
                 }
             }
         };
@@ -281,25 +291,27 @@ export async function startDownload(): Promise<void> {
                     concurrency,
                     maxRetries,
                     retryDelayMs: RETRY_DELAY_MS,
-                    signal: state.abortController.signal
+                    signal
                 },
                 callbacks
             );
 
-            if (state.abortController.signal.aborted) return;
+            if (signal.aborted) return;
         } catch (error) {
-            if (state.abortController?.signal.aborted) return;
+            if (signal.aborted || isAbortError(error)) return;
             state.phase = 'error';
-            state.errorMessage = error instanceof Error ? error.message : String(error);
+            state.errorMessage = getDownloadErrorMessage(error);
             return;
         }
     }
 
-    if (state.abortController?.signal.aborted) return;
+    if (signal.aborted) return;
 
     // Verification phase
     state.phase = 'verifying';
     await new Promise((resolve) => setTimeout(resolve, 0));
+
+    if (signal.aborted) return;
 
     // Build ZIPs using all accumulated file infos + full cache
     state.phase = 'zipping';
@@ -319,9 +331,9 @@ export async function startDownload(): Promise<void> {
         if (state.targetSide) state.completedSides.add(state.targetSide);
         state.phase = 'complete';
     } catch (error) {
-        if (state.abortController?.signal.aborted) return;
+        if (signal.aborted || isAbortError(error)) return;
         state.phase = 'error';
-        state.errorMessage = error instanceof Error ? error.message : String(error);
+        state.errorMessage = DOWNLOAD_MESSAGES.ZIP_FAILED;
     }
 }
 

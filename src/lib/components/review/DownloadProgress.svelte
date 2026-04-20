@@ -13,7 +13,7 @@
     import { formatBytes, formatEta } from '$lib/utils/format';
     import { useStableValue } from '$lib/utils/stable-value.svelte';
     import { LAUNCHER_GUIDES } from '$lib/config/install-guides';
-    import { ANIMATION_DURATION } from '$lib/config/constants';
+    import { ANIMATION_DURATION, DOWNLOAD_MESSAGES } from '$lib/config/constants';
     import { detectOS } from '$lib/utils/platform';
     import { SiCurseforge, SiModrinth } from '@icons-pack/svelte-simple-icons';
     import VanillaIcon from '$lib/components/icons/VanillaIcon.svelte';
@@ -433,7 +433,7 @@
             <AlertCircleIcon class="size-4" />
             <Alert.Title>Download failed</Alert.Title>
             <Alert.Description>
-                {dlState.errorMessage ?? 'An unknown error occurred during download.'}
+                {dlState.errorMessage ?? DOWNLOAD_MESSAGES.UNKNOWN}
             </Alert.Description>
         </Alert.Root>
         <div class="flex gap-2">
