@@ -7,6 +7,7 @@ import { checkRecipientRateLimit } from '$lib/server/rate-limit';
 import { verifyTurnstileToken } from '$lib/server/turnstile';
 import { MIN_FORM_SUBMIT_TIME_MS, EMAIL_RECIPIENT_LIMITS } from '$lib/config/constants';
 import { siteConfig } from '$lib/config/site';
+import { neutralizeLinks } from '$lib/utils/email-sanitize';
 
 export const POST: RequestHandler = async ({ request }) => {
     const config = getEnvConfig();
@@ -29,8 +30,18 @@ export const POST: RequestHandler = async ({ request }) => {
 
     const data = parsed.data;
 
-    // Defense-in-depth: reject share URLs not from our domain
-    if (!data.shareUrl.startsWith(`${siteConfig.url}/`)) {
+    // Defense-in-depth: re-validate the shareUrl scheme/host/port in case the
+    // schema check were ever weakened. Cheap and explicit.
+    try {
+        const parsedUrl = new URL(data.shareUrl);
+        if (
+            parsedUrl.protocol !== 'https:' ||
+            parsedUrl.hostname !== siteConfig.domain ||
+            parsedUrl.port !== ''
+        ) {
+            return json({ error: 'Invalid share URL' }, { status: 400 });
+        }
+    } catch {
         return json({ error: 'Invalid share URL' }, { status: 400 });
     }
 
@@ -42,7 +53,8 @@ export const POST: RequestHandler = async ({ request }) => {
         return json({ success: true });
     }
 
-    // Turnstile verification
+    // Turnstile verification — action must match the widget's `action` prop in
+    // SharePanel.svelte, otherwise a token minted on one form can't be replayed here.
     const remoteIp =
         request.headers.get('CF-Connecting-IP') ??
         request.headers.get('X-Forwarded-For') ??
@@ -51,7 +63,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const turnstileResult = await verifyTurnstileToken(
         config.TURNSTILE_SECRET_KEY,
         data.turnstileToken,
-        remoteIp
+        { action: 'share-email', remoteIp }
     );
 
     if (!turnstileResult.success) {
@@ -70,7 +82,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
     const result = await sendShareEmail(data.recipientEmail, {
         curatorName: data.curatorName,
-        message: data.message ?? '',
+        // Defang URLs in the personal message so email clients can't auto-linkify
+        // sender-supplied text as if it were from modrinth.download.
+        message: neutralizeLinks(data.message ?? ''),
         collectionNames: data.collectionNames,
         shareUrl: data.shareUrl
     });

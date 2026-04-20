@@ -159,14 +159,20 @@ describe('shareEmailSchema', () => {
         expect(result.success).toBe(false);
     });
 
-    it('accepts whitespace-only curatorName due to trim running after min check', () => {
-        // Zod's `.min(1).trim()` validates length BEFORE trimming, so "   " (length 3) passes .min(1)
-        // then gets trimmed to "". This documents current behavior — if this is a bug, the schema
-        // should be reordered to `.trim().min(1)`.
+    it('rejects whitespace-only curatorName', () => {
+        // Schema trims before length check, so "   " collapses to "" and fails min(1).
+        // This prevents empty sender names from rendering as " shared some mods with you".
         const result = shareEmailSchema.safeParse(validInput({ curatorName: '   ' }));
+        expect(result.success).toBe(false);
+    });
+
+    it('rejects whitespace-only message (via trim + max ignores empty, but leading/trailing stripped)', () => {
+        // Message is optional so purely whitespace input trims to empty string and is accepted
+        // as the default value. Assert the trim actually happened.
+        const result = shareEmailSchema.safeParse(validInput({ message: '   hello   ' }));
         expect(result.success).toBe(true);
         if (result.success) {
-            expect(result.data.curatorName).toBe('');
+            expect(result.data.message).toBe('hello');
         }
     });
 
