@@ -1,11 +1,28 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount, untrack } from 'svelte';
     import { browser } from '$app/environment';
 
     interface Props {
         siteKey: string;
         theme?: 'auto' | 'light' | 'dark';
-        size?: 'normal' | 'flexible' | 'compact';
+        /**
+         * `invisible` renders no visible widget; pair with `appearance="execute"`
+         * or `interaction-only` and call `execute()` imperatively to trigger a
+         * challenge. `flexible` is the default managed-mode widget.
+         */
+        size?: 'normal' | 'flexible' | 'compact' | 'invisible';
+        /**
+         * Controls when the challenge UI surfaces:
+         *  - `always`: visible widget at render
+         *  - `execute`: no UI until `execute()` is called, then prompt if needed
+         *  - `interaction-only`: no UI unless the challenge requires interaction
+         */
+        appearance?: 'always' | 'execute' | 'interaction-only';
+        /**
+         * Action label, verified server-side. Use a distinct action per form so
+         * a token for one form can't be replayed against another.
+         */
+        action?: string;
         onVerify: (token: string) => void;
         onError?: (errorCode: string) => void;
         onExpire?: () => void;
@@ -15,6 +32,8 @@
         siteKey,
         theme = 'auto',
         size = 'flexible',
+        appearance = 'always',
+        action,
         onVerify,
         onError,
         onExpire
@@ -37,6 +56,8 @@
             sitekey: siteKey,
             theme,
             size,
+            appearance,
+            action,
             callback: (token: string) => onVerify(token),
             'error-callback': (errorCode: string) => onError?.(errorCode),
             'expired-callback': () => {
@@ -66,6 +87,16 @@
         }
     }
 
+    /**
+     * Trigger an invisible/execute-mode challenge on demand. No-op if the widget
+     * isn't rendered yet (caller should await script load or read scriptLoaded).
+     */
+    export function execute() {
+        if (widgetId !== undefined && window.turnstile?.execute) {
+            window.turnstile.execute(widgetId);
+        }
+    }
+
     onMount(() => {
         loadScript();
 
@@ -78,7 +109,7 @@
 
     $effect(() => {
         if (scriptLoaded && container) {
-            renderWidget();
+            untrack(() => renderWidget());
         }
     });
 </script>

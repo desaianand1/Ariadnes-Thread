@@ -6,7 +6,7 @@
 interface TurnstileRenderOptions {
     sitekey: string;
     theme?: 'auto' | 'light' | 'dark';
-    size?: 'normal' | 'flexible' | 'compact';
+    size?: 'normal' | 'flexible' | 'compact' | 'invisible';
     callback?: (token: string) => void;
     'error-callback'?: (errorCode: string) => void;
     'expired-callback'?: () => void;

@@ -456,6 +456,7 @@
                             <Turnstile
                                 bind:this={turnstileRef}
                                 siteKey={turnstileSiteKey}
+                                action="share-email"
                                 onVerify={(token) => (turnstileToken = token)}
                                 onExpire={() => (turnstileToken = '')}
                                 onError={() => (turnstileToken = '')}
