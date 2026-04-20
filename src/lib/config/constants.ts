@@ -454,13 +454,26 @@ export const BOT_SCORE_WEIGHTS = {
     KNOWN_BOT_UA: 3
 } as const;
 
-/** Score threshold at which a request is classified as bot. Must be >= 3. */
+/** Score threshold for strict scopes (API, /review). Must be >= 3. */
 export const BOT_SCORE_THRESHOLD = 3;
+
+/**
+ * Looser threshold for non-API routes (hero page, sitemap, static pages).
+ * 5 = empty-UA (3) + missing Accept-Language (2); or missing Accept (3)
+ * + missing Accept-Language (2). Real browsers always send at least one.
+ * Trips on obvious bot baselines without false-positives from older clients.
+ */
+export const BOT_SCORE_THRESHOLD_GENERAL = 5;
 
 /**
  * Modrinth attribution URL
  */
 export const MODRINTH_ATTRIBUTION_URL = 'https://modrinth.com';
+
+/**
+ * Minecraft official URL (for footer attribution)
+ */
+export const MINECRAFT_URL = 'https://www.minecraft.net';
 
 // =============================================================================
 // Durable Object Resolution Cache

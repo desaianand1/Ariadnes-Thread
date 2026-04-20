@@ -59,7 +59,17 @@ const envSchema = z.object({
     LOG_LEVEL: z.enum(['info', 'warn', 'error']).default('warn'),
 
     // Cloudflare Turnstile — server-side token verification
-    TURNSTILE_SECRET_KEY: z.string().min(1)
+    TURNSTILE_SECRET_KEY: z.string().min(1),
+
+    // SvelteKit adapter-node reads this for its CSRF origin check. A typo here
+    // (missing scheme, trailing slash, wrong port) silently breaks every POST
+    // with 403 in production. Validate shape here so boot fails loudly instead.
+    // Optional: on non-node adapters (Cloudflare Workers) ORIGIN is unused.
+    ORIGIN: z
+        .string()
+        .url()
+        .refine((u) => !u.endsWith('/'), 'ORIGIN must not end with /')
+        .optional()
 });
 
 /**

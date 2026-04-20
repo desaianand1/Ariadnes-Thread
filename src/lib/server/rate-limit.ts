@@ -133,9 +133,12 @@ export function getClientIp(event: RequestEvent): string {
 }
 
 export function getRouteKey(pathname: string): keyof typeof RATE_LIMITS | null {
-    if (pathname.startsWith('/api/modrinth')) return 'API';
     if (pathname === '/review') return 'REVIEW';
     if (pathname.startsWith('/api/share')) return 'EMAIL';
+    // /api/modrinth, /api/challenge/*, /api/csp-report, /api/resolve, etc. — the
+    // general API bucket (60/min/IP) applies. /api/health is intentionally
+    // unrated: Docker HEALTHCHECK polls every 30s and must never be blocked.
+    if (pathname.startsWith('/api/') && pathname !== '/api/health') return 'API';
     return null;
 }
 

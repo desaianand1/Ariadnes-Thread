@@ -1,8 +1,14 @@
 import type { Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
-import { isLikelyBot } from '$lib/server/bot-detect';
+import { getBotScore } from '$lib/server/bot-detect';
+import { isScannerPath } from '$lib/server/scanner-paths';
 import { checkRateLimit, getClientIp, getRouteKey, getRateLimitInfo } from '$lib/server/rate-limit';
-import { RATE_LIMITS, CACHE_ALARM_INTERVAL_MS } from '$lib/config/constants';
+import {
+    RATE_LIMITS,
+    CACHE_ALARM_INTERVAL_MS,
+    BOT_SCORE_THRESHOLD,
+    BOT_SCORE_THRESHOLD_GENERAL
+} from '$lib/config/constants';
 import { logger } from '$lib/server/logger';
 
 // VPS: start daily cache cleanup interval
@@ -10,6 +16,15 @@ if (typeof process !== 'undefined' && process.env?.ADAPTER === 'node') {
     import('./lib/services/resolution-cache-sqlite.server').then(({ cleanupExpiredEntries }) => {
         setInterval(() => cleanupExpiredEntries(), CACHE_ALARM_INTERVAL_MS);
     });
+
+    // adapter-node uses ORIGIN for CSRF origin checks. Without it every POST
+    // returns 403 in production — a very easy symptom to misdiagnose as a
+    // cookie or CORS issue. Warn loudly at boot.
+    if (!process.env?.ORIGIN) {
+        logger.warn('origin_missing', {
+            note: 'ADAPTER=node but ORIGIN is unset — SvelteKit CSRF checks will reject all POSTs'
+        });
+    }
 }
 
 // Known limitation: No explicit CSRF token on /api/share/email — SvelteKit's
@@ -19,13 +34,27 @@ export const handle: Handle = async ({ event, resolve }) => {
     const pathname = event.url.pathname;
     const ip = getClientIp(event);
 
-    // Bot detection — before any expensive work (skip health endpoint for Docker HEALTHCHECK)
-    if (
-        (pathname.startsWith('/api/') && pathname !== '/api/health') ||
-        pathname.startsWith('/review')
-    ) {
-        if (isLikelyBot(event.request)) {
-            logger.warn('bot_blocked', { path: pathname });
+    // Opportunistic scanner short-circuit: match wp-*/phpMyAdmin/.git/.env etc.
+    // and respond 404 so scanners can't tell we filter. Fires before bot scoring
+    // so we don't waste the header inspection on obvious junk.
+    if (isScannerPath(pathname)) {
+        logger.warn('scanner_blocked', { path: pathname, ip });
+        return new Response('Not Found', { status: 404 });
+    }
+
+    // Bot detection — stricter on the expensive/abuse-prone paths (API, /review),
+    // looser on the public site. /api/health is exempt so Docker's HEALTHCHECK
+    // curl probe (no browser headers) doesn't get blocked.
+    if (pathname !== '/api/health') {
+        const apiOrReview = pathname.startsWith('/api/') || pathname.startsWith('/review');
+        const threshold = apiOrReview ? BOT_SCORE_THRESHOLD : BOT_SCORE_THRESHOLD_GENERAL;
+        const score = getBotScore(event.request);
+        if (score >= threshold) {
+            logger.warn('bot_blocked', {
+                path: pathname,
+                score,
+                scope: apiOrReview ? 'strict' : 'lax'
+            });
             return new Response('Forbidden', { status: 403 });
         }
     }
@@ -76,13 +105,19 @@ export const handle: Handle = async ({ event, resolve }) => {
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
     response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    // Report-to group names a violation collector. The matching `report-uri`
+    // keeps legacy browsers working; modern Chrome/Firefox honour report-to.
+    response.headers.set('Reporting-Endpoints', 'csp-endpoint="/api/csp-report"');
     response.headers.set(
         'Content-Security-Policy',
         [
             "default-src 'self'",
             // Known limitation: unsafe-inline needed for SvelteKit hydration.
             // Could use nonce-based CSP with adapter config for stronger policy.
-            `script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com${!dev ? " 'unsafe-eval'" : ''}${dev && pathname.startsWith('/email-preview') ? " 'wasm-unsafe-eval'" : ''}`,
+            // 'wasm-unsafe-eval' permits WASM JIT only for the dev email-preview
+            // route (better-svelte-email uses a wasm renderer). Production has
+            // no eval permission — any dependency that tries eval() fails CSP.
+            `script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com${dev && pathname.startsWith('/email-preview') ? " 'wasm-unsafe-eval'" : ''}`,
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' https://cdn.modrinth.com https://cdn-raw.modrinth.com https://www.bisecthosting.com data:",
             "font-src 'self'",
@@ -90,7 +125,9 @@ export const handle: Handle = async ({ event, resolve }) => {
             "frame-src 'self' https://challenges.cloudflare.com",
             "frame-ancestors 'none'",
             "base-uri 'self'",
-            "form-action 'self'"
+            "form-action 'self'",
+            'report-uri /api/csp-report',
+            'report-to csp-endpoint'
         ].join('; ')
     );
 
