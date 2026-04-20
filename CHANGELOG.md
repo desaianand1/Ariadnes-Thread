@@ -1,3 +1,9 @@
+## [1.29.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.29.1...v1.29.2) (2026-04-20)
+
+### Bug Fixes
+
+- **download:** show user-friendly errors instead of technical details ([d3e4717](https://github.com/desaianand1/Ariadnes-Thread/commit/d3e4717408aaaf75286ef3f27630fbd95df6bcce))
+
 ## [1.29.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.29.0...v1.29.1) (2026-04-20)
 
 ### Bug Fixes
