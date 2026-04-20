@@ -13,7 +13,12 @@ const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 export default defineConfig(
     includeIgnoreFile(gitignorePath),
     {
-        ignores: ['docs/archive/**', 'docs/chart-reference/**', 'docs/loader-reference/**']
+        ignores: [
+            'docs/archive/**',
+            'docs/chart-reference/**',
+            'docs/loader-reference/**',
+            'docs/component-references/**'
+        ]
     },
     js.configs.recommended,
     ...ts.configs.recommended,
@@ -63,6 +68,13 @@ export default defineConfig(
     {
         // Footer links are all external URLs (GitHub, Ko-Fi, mailto:, etc.)
         files: ['src/lib/components/layout/Footer.svelte'],
+        rules: {
+            'svelte/no-navigation-without-resolve': 'off'
+        }
+    },
+    {
+        // LogoMarquee href links are external logo URLs, not SvelteKit routes
+        files: ['src/lib/components/effects/LogoMarquee.svelte'],
         rules: {
             'svelte/no-navigation-without-resolve': 'off'
         }
