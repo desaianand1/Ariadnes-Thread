@@ -3,8 +3,17 @@ services:
         image: ghcr.io/desaianand1/ariadnes-thread:latest
         pull_policy: always
         restart: unless-stopped
+        # Bind to loopback only — Traefik on the host reaches 127.0.0.1:3000.
+        # Prevents direct :3000 access from the public network or cloud-network
+        # neighbours, forcing all traffic through Traefik's TLS + access log.
         ports:
-            - '3000:3000'
+            - '127.0.0.1:3000:3000'
+        # Read-only root FS: blocks an attacker with RCE from persisting files
+        # into /app (node_modules, build output). Writable surfaces are the
+        # named cache-data volume (/app/data for SQLite) and tmpfs /tmp.
+        read_only: true
+        tmpfs:
+            - /tmp
         volumes:
             - cache-data:/app/data
         deploy:
