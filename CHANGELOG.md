@@ -1,3 +1,17 @@
+# [1.29.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.6...v1.29.0) (2026-04-20)
+
+### Bug Fixes
+
+- **security:** harden share email validation and defang user-supplied URLs ([98a53b7](https://github.com/desaianand1/Ariadnes-Thread/commit/98a53b740bbfb50b953d2d8af7d27a89e7a1972c))
+
+### Features
+
+- **docker:** harden container with read-only rootfs and loopback binding ([0ed5122](https://github.com/desaianand1/Ariadnes-Thread/commit/0ed5122b62a4b1fa35a58c99cd660c685b551646))
+- **landing:** redesign hero section with bento feature grid ([f7ae566](https://github.com/desaianand1/Ariadnes-Thread/commit/f7ae566c0ec9e3747bba0f6a87550327735058e4))
+- **security:** add scanner path blocking, tiered bot scoring, and CSP reporting ([271e7fc](https://github.com/desaianand1/Ariadnes-Thread/commit/271e7fc737757f50e7617dba19cd4cedd90d5cdc))
+- **security:** harden Turnstile with action/hostname verification and invisible mode ([9ad18d1](https://github.com/desaianand1/Ariadnes-Thread/commit/9ad18d13ac24d814d9a8d5b06c2a35e4c6d81eff))
+- **ui:** add tagline to header and Minecraft attribution to footer ([ec0f107](https://github.com/desaianand1/Ariadnes-Thread/commit/ec0f107c4668a5f4813dfd6feeec1235c73f5edc))
+
 ## [1.28.6](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.5...v1.28.6) (2026-04-15)
 
 ### Bug Fixes
