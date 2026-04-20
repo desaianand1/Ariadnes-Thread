@@ -94,7 +94,7 @@
     // Responsive avatar count
     let isDesktop = $state(true);
 
-    onMount(async () => {
+    onMount(() => {
         dotFieldReady = true;
 
         const mql = window.matchMedia('(min-width: 1024px)');
@@ -105,14 +105,29 @@
         mql.addEventListener('change', onMediaChange);
 
         if (!prefersReducedMotion) {
-            const { gsap } = await import('gsap');
-
-            const tl = gsap.timeline();
-            tl.fromTo(heroEl, { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0);
-            tl.fromTo(badgeEl, { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3 }, 0.15);
-            tl.fromTo(headlineEl, { y: 15, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 0.3);
-            tl.fromTo(subtitleEl, { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3 }, 0.45);
-            tl.fromTo(formEl, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 0.6);
+            import('gsap').then(({ gsap }) => {
+                const tl = gsap.timeline();
+                tl.fromTo(heroEl, { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0);
+                tl.fromTo(
+                    badgeEl,
+                    { y: -10, opacity: 0 },
+                    { y: 0, opacity: 1, duration: 0.3 },
+                    0.15
+                );
+                tl.fromTo(
+                    headlineEl,
+                    { y: 15, opacity: 0 },
+                    { y: 0, opacity: 1, duration: 0.4 },
+                    0.3
+                );
+                tl.fromTo(
+                    subtitleEl,
+                    { y: 10, opacity: 0 },
+                    { y: 0, opacity: 1, duration: 0.3 },
+                    0.45
+                );
+                tl.fromTo(formEl, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 0.6);
+            });
         }
 
         return () => mql.removeEventListener('change', onMediaChange);

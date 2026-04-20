@@ -43,7 +43,7 @@
     )}
 >
     {#each displayedAvatars as avatar (avatar.src)}
-        <Tooltip.Root openDelay={100}>
+        <Tooltip.Root delayDuration={100}>
             <Tooltip.Trigger>
                 <Avatar.Root
                     class={cn(
