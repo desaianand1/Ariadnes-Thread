@@ -1,3 +1,9 @@
+## [1.29.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.29.0...v1.29.1) (2026-04-20)
+
+### Bug Fixes
+
+- dockerignore out/ directory ignore ([27ee6d4](https://github.com/desaianand1/Ariadnes-Thread/commit/27ee6d45e785e87dde7b970c204eaa2d0513547b))
+
 # [1.29.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.28.6...v1.29.0) (2026-04-20)
 
 ### Bug Fixes
