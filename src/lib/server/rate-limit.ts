@@ -60,6 +60,9 @@ export function checkRateLimit(
     if (!entry || now >= entry.resetAt) {
         const resetAt = now + config.windowMs;
         windows.set(key, { count: 1, resetAt });
+        if (config.maxRequests < 1) {
+            return { allowed: false, remaining: 0, resetAt, retryAfterMs: config.windowMs };
+        }
         return { allowed: true, remaining: config.maxRequests - 1, resetAt, retryAfterMs: 0 };
     }
 
@@ -124,12 +127,16 @@ export function getRateLimitInfo(
 }
 
 export function getClientIp(event: RequestEvent): string {
-    return (
-        event.request.headers.get('cf-connecting-ip') ??
-        event.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-        event.getClientAddress() ??
-        'unknown'
-    );
+    const cfIp = event.request.headers.get('cf-connecting-ip');
+    if (cfIp) return cfIp;
+
+    const forwarded = event.request.headers.get('x-forwarded-for');
+    if (forwarded) {
+        const firstIp = forwarded.split(',')[0]?.trim();
+        if (firstIp) return firstIp;
+    }
+
+    return event.getClientAddress() ?? 'unknown';
 }
 
 export function getRouteKey(pathname: string): keyof typeof RATE_LIMITS | null {

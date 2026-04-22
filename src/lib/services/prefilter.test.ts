@@ -127,6 +127,59 @@ describe('preFilterIncompatibleProjects', () => {
             expect(candidates).toHaveLength(0);
             expect(pruned).toHaveLength(1);
         });
+
+        it('prunes a mod with empty game_versions and loaders arrays', () => {
+            const project = makeProject({
+                id: 'empty-mod',
+                game_versions: [],
+                loaders: []
+            });
+
+            const { candidates, pruned } = preFilterIncompatibleProjects(
+                [project],
+                '1.21.1',
+                'fabric',
+                false
+            );
+
+            expect(candidates).toHaveLength(0);
+            expect(pruned).toHaveLength(1);
+            expect(pruned[0].projectId).toBe('empty-mod');
+        });
+
+        it('prunes forge mod when neoforge is selected without cross-loader fallback', () => {
+            const project = makeProject({
+                id: 'forge-mod',
+                game_versions: ['1.21.1'],
+                loaders: ['forge']
+            });
+
+            const { candidates, pruned } = preFilterIncompatibleProjects(
+                [project],
+                '1.21.1',
+                'neoforge',
+                false
+            );
+
+            expect(candidates).toHaveLength(0);
+            expect(pruned).toHaveLength(1);
+        });
+
+        it('keeps mod with exact snapshot version match', () => {
+            const project = makeProject({
+                game_versions: ['24w42a', '1.21.1'],
+                loaders: ['fabric']
+            });
+
+            const { candidates } = preFilterIncompatibleProjects(
+                [project],
+                '24w42a',
+                'fabric',
+                false
+            );
+
+            expect(candidates).toHaveLength(1);
+        });
     });
 
     describe('loader-agnostic projects (shaders, resourcepacks, datapacks, plugins)', () => {

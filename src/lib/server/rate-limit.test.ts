@@ -120,6 +120,26 @@ describe('checkRateLimit', () => {
         expect(result.retryAfterMs).toBe(7000);
         vi.useRealTimers();
     });
+
+    it('blocks first request when maxRequests is 0', () => {
+        const zeroConfig = { maxRequests: 0, windowMs: 10_000 };
+        const r1 = checkRateLimit('1.2.3.4', 'API', zeroConfig);
+
+        expect(r1.allowed).toBe(false);
+        expect(r1.remaining).toBe(0);
+    });
+
+    it('allows request N = maxRequests with remaining 0', () => {
+        const config = { maxRequests: 2, windowMs: 10_000 };
+        checkRateLimit('1.2.3.4', 'EXACT', config);
+        const r2 = checkRateLimit('1.2.3.4', 'EXACT', config);
+
+        expect(r2.allowed).toBe(true);
+        expect(r2.remaining).toBe(0);
+
+        const r3 = checkRateLimit('1.2.3.4', 'EXACT', config);
+        expect(r3.allowed).toBe(false);
+    });
 });
 
 describe('getRouteKey', () => {
@@ -171,6 +191,12 @@ describe('getClientIp', () => {
     it('falls back to getClientAddress', () => {
         const event = mockEvent({}, '192.168.1.1');
         expect(getClientIp(event)).toBe('192.168.1.1');
+    });
+
+    it('falls through to getClientAddress for x-forwarded-for with leading commas', () => {
+        const event = mockEvent({ 'x-forwarded-for': ',,10.0.0.1,10.0.0.2' });
+        // Empty first entry is skipped, falls through to getClientAddress
+        expect(getClientIp(event)).toBe('127.0.0.1');
     });
 });
 

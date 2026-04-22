@@ -202,4 +202,18 @@ describe('isScannerPath', () => {
         // Assert
         expect(result).toBe(true);
     });
+
+    it('does not match URL-encoded scanner paths', () => {
+        // No URL decoding is performed — %77 is 'w' but stays encoded
+        const result = isScannerPath('/%77p-login.php');
+
+        expect(result).toBe(false);
+    });
+
+    it('matches scanner path prefix even with appended query string', () => {
+        // Prefix match on /wp- catches the path regardless of trailing content
+        const result = isScannerPath('/wp-login.php?redirect_to=X');
+
+        expect(result).toBe(true);
+    });
 });

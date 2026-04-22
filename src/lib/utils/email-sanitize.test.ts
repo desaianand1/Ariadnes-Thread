@@ -89,4 +89,70 @@ describe('neutralizeLinks', () => {
         // Assert
         expect(result).toBe('');
     });
+
+    it('passes ftp:// URLs through unchanged', () => {
+        // Arrange — intentional scope: only http/https are defanged
+        const input = 'download from ftp://files.example.com/setup.exe';
+
+        // Act
+        const result = neutralizeLinks(input);
+
+        // Assert
+        expect(result).toBe('download from ftp://files.example.com/setup.exe');
+    });
+
+    it('defangs URLs with fragment identifiers', () => {
+        // Arrange
+        const input = 'visit https://evil.com/page#phishing';
+
+        // Act
+        const result = neutralizeLinks(input);
+
+        // Assert
+        expect(result).toBe('visit https[:]//evil.com/page#phishing');
+    });
+
+    it('defangs URLs with auth credentials', () => {
+        // Arrange
+        const input = 'visit https://user:pass@evil.com/path';
+
+        // Act
+        const result = neutralizeLinks(input);
+
+        // Assert
+        expect(result).toBe('visit https[:]//user:pass@evil.com/path');
+    });
+
+    it('is idempotent on already-defanged input', () => {
+        // Arrange — https[:]// should not be re-defanged
+        const input = 'already defanged https[:]//evil.com';
+
+        // Act
+        const result = neutralizeLinks(input);
+
+        // Assert
+        expect(result).toBe('already defanged https[:]//evil.com');
+    });
+
+    it('defangs URLs inside markdown link syntax', () => {
+        // Arrange
+        const input = '[click here](https://evil.com/phishing)';
+
+        // Act
+        const result = neutralizeLinks(input);
+
+        // Assert
+        expect(result).toBe('[click here](https[:]//evil.com/phishing)');
+    });
+
+    it('defangs URLs with path, query, and fragment', () => {
+        // Arrange
+        const input = 'see https://example.com/path?q=search&lang=en#section';
+
+        // Act
+        const result = neutralizeLinks(input);
+
+        // Assert
+        expect(result).toBe('see https[:]//example.com/path?q=search&lang=en#section');
+    });
 });

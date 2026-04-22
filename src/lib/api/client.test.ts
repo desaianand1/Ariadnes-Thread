@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ModrinthClient } from './client';
+import { ClientError, ServerError, RateLimitError, NetworkError } from './error';
 
 vi.mock('$lib/server/logger', () => ({
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
@@ -208,5 +209,399 @@ describe('abort signal', () => {
         await expect(client.request('test', { signal: controller.signal })).rejects.toThrow(
             'Pre-aborted'
         );
+    });
+});
+
+// =========================================================================
+// Error classification
+// =========================================================================
+
+describe('error classification', () => {
+    it('classifies 400 as ClientError', async () => {
+        const client = createClient();
+        mockFetchResponse({ error: 'bad request' }, 400);
+
+        await expect(client.request('test')).rejects.toBeInstanceOf(ClientError);
+    });
+
+    it('classifies 500 as ServerError', async () => {
+        const client = createClient();
+        mockFetchResponse({ error: 'internal error' }, 500);
+
+        await expect(client.request('test')).rejects.toBeInstanceOf(ServerError);
+    });
+
+    it('classifies 429 with Retry-After header as RateLimitError with correct retryAfter', async () => {
+        const client = createClient();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(JSON.stringify({}), {
+                    status: 429,
+                    headers: makeHeaders({ 'Retry-After': '30' })
+                })
+            )
+        );
+
+        try {
+            await client.request('test');
+            expect.unreachable('should have thrown');
+        } catch (err) {
+            expect(err).toBeInstanceOf(RateLimitError);
+            expect((err as RateLimitError).retryAfter).toBe(30);
+        }
+    });
+
+    it('classifies 429 with body retry_after as RateLimitError', async () => {
+        const client = createClient();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(JSON.stringify({ retry_after: 42 }), {
+                    status: 429,
+                    headers: makeHeaders()
+                })
+            )
+        );
+
+        try {
+            await client.request('test');
+            expect.unreachable('should have thrown');
+        } catch (err) {
+            expect(err).toBeInstanceOf(RateLimitError);
+            expect((err as RateLimitError).retryAfter).toBe(42);
+        }
+    });
+
+    it('classifies 429 with no hints as RateLimitError with default retry', async () => {
+        const client = createClient();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(JSON.stringify({}), {
+                    status: 429,
+                    headers: makeHeaders()
+                })
+            )
+        );
+
+        try {
+            await client.request('test');
+            expect.unreachable('should have thrown');
+        } catch (err) {
+            expect(err).toBeInstanceOf(RateLimitError);
+            // RATE_LIMIT_DEFAULT_RETRY_SECONDS is mocked to 5
+            expect((err as RateLimitError).retryAfter).toBe(5);
+        }
+    });
+});
+
+// =========================================================================
+// Retry logic
+// =========================================================================
+
+describe('retry logic', () => {
+    it('retries on ServerError up to maxRetries then succeeds', async () => {
+        vi.useRealTimers();
+        const client = createClient({
+            maxRetries: 2,
+            retryDelayMs: 1,
+            retryBackoffStrategy: 'fixed'
+        });
+        let callCount = 0;
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockImplementation(() => {
+                callCount++;
+                if (callCount <= 2) {
+                    return Promise.resolve(
+                        new Response(JSON.stringify({ error: 'server error' }), {
+                            status: 500,
+                            headers: makeHeaders()
+                        })
+                    );
+                }
+                return Promise.resolve(
+                    new Response(JSON.stringify({ data: 'ok' }), {
+                        status: 200,
+                        headers: makeHeaders()
+                    })
+                );
+            })
+        );
+
+        const result = await client.request('test');
+
+        expect(result).toEqual({ data: 'ok' });
+        expect(callCount).toBe(3);
+    });
+
+    it('retries on NetworkError from TypeError', async () => {
+        vi.useRealTimers();
+        const client = createClient({
+            maxRetries: 1,
+            retryDelayMs: 1,
+            retryBackoffStrategy: 'fixed'
+        });
+        let callCount = 0;
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockImplementation(() => {
+                callCount++;
+                if (callCount === 1) {
+                    return Promise.reject(new TypeError('Failed to fetch'));
+                }
+                return Promise.resolve(
+                    new Response(JSON.stringify({ data: 'recovered' }), {
+                        status: 200,
+                        headers: makeHeaders()
+                    })
+                );
+            })
+        );
+
+        const result = await client.request('test');
+
+        expect(result).toEqual({ data: 'recovered' });
+        expect(callCount).toBe(2);
+    });
+
+    it('does NOT retry on ClientError', async () => {
+        vi.useRealTimers();
+        const client = createClient({ maxRetries: 2, retryDelayMs: 1 });
+        // Use 400 (not 404) — 404 triggers v3→v2 fallback which is a separate path
+        mockFetchResponse({ error: 'bad request' }, 400);
+
+        await expect(client.request('test')).rejects.toBeInstanceOf(ClientError);
+        expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    });
+
+    it('exhausts maxRetries then throws', async () => {
+        vi.useRealTimers();
+        const client = createClient({
+            maxRetries: 2,
+            retryDelayMs: 1,
+            retryBackoffStrategy: 'fixed'
+        });
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(JSON.stringify({ error: 'down' }), {
+                    status: 500,
+                    headers: makeHeaders()
+                })
+            )
+        );
+
+        await expect(client.request('test')).rejects.toBeInstanceOf(ServerError);
+        // initial + 2 retries = 3 total calls
+        expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+    });
+
+    it('applies exponential backoff delay pattern', async () => {
+        vi.useRealTimers();
+        const client = createClient({
+            maxRetries: 2,
+            retryDelayMs: 1,
+            retryBackoffStrategy: 'exponential'
+        });
+        vi.stubGlobal(
+            'fetch',
+            vi
+                .fn()
+                .mockResolvedValue(
+                    new Response(JSON.stringify({}), { status: 500, headers: makeHeaders() })
+                )
+        );
+
+        await expect(client.request('test')).rejects.toBeInstanceOf(ServerError);
+        expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+    });
+
+    it('applies linear backoff delay pattern', async () => {
+        vi.useRealTimers();
+        const client = createClient({
+            maxRetries: 2,
+            retryDelayMs: 1,
+            retryBackoffStrategy: 'linear'
+        });
+        vi.stubGlobal(
+            'fetch',
+            vi
+                .fn()
+                .mockResolvedValue(
+                    new Response(JSON.stringify({}), { status: 500, headers: makeHeaders() })
+                )
+        );
+
+        await expect(client.request('test')).rejects.toBeInstanceOf(ServerError);
+        expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+    });
+
+    it('applies fixed backoff delay pattern', async () => {
+        vi.useRealTimers();
+        const client = createClient({
+            maxRetries: 2,
+            retryDelayMs: 1,
+            retryBackoffStrategy: 'fixed'
+        });
+        vi.stubGlobal(
+            'fetch',
+            vi
+                .fn()
+                .mockResolvedValue(
+                    new Response(JSON.stringify({}), { status: 500, headers: makeHeaders() })
+                )
+        );
+
+        await expect(client.request('test')).rejects.toBeInstanceOf(ServerError);
+        expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+    });
+});
+
+// =========================================================================
+// v3 → v2 fallback
+// =========================================================================
+
+describe('v3 → v2 fallback', () => {
+    it('falls back to v2 on 404 from v3', async () => {
+        const client = createClient();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockImplementation((url: string) => {
+                if (url.includes('/v3/')) {
+                    return Promise.resolve(
+                        new Response(JSON.stringify({ error: 'not found' }), {
+                            status: 404,
+                            headers: makeHeaders()
+                        })
+                    );
+                }
+                return Promise.resolve(
+                    new Response(JSON.stringify({ data: 'v2-response' }), {
+                        status: 200,
+                        headers: makeHeaders()
+                    })
+                );
+            })
+        );
+
+        const result = await client.request('test');
+        expect(result).toEqual({ data: 'v2-response' });
+        const calls = vi.mocked(fetch).mock.calls;
+        expect(calls[0][0]).toContain('/v3/');
+        expect(calls[1][0]).toContain('/v2/');
+    });
+
+    it('falls back to v2 on 410 from v3', async () => {
+        const client = createClient();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockImplementation((url: string) => {
+                if (url.includes('/v3/')) {
+                    return Promise.resolve(
+                        new Response(JSON.stringify({ error: 'gone' }), {
+                            status: 410,
+                            headers: makeHeaders()
+                        })
+                    );
+                }
+                return Promise.resolve(
+                    new Response(JSON.stringify({ data: 'v2-response' }), {
+                        status: 200,
+                        headers: makeHeaders()
+                    })
+                );
+            })
+        );
+
+        const result = await client.request('test');
+        expect(result).toEqual({ data: 'v2-response' });
+    });
+
+    it('does NOT fallback on 400 from v3', async () => {
+        const client = createClient();
+        mockFetchResponse({ error: 'bad request' }, 400);
+
+        await expect(client.request('test')).rejects.toBeInstanceOf(ClientError);
+        expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    });
+});
+
+// =========================================================================
+// Rate limit header edge cases
+// =========================================================================
+
+describe('rate limit header edge cases', () => {
+    it('ignores non-numeric X-Ratelimit-Remaining', async () => {
+        vi.setSystemTime(1_000_000);
+        const client = createClient();
+        mockFetchResponse({}, 200, { 'X-Ratelimit-Remaining': 'not-a-number' });
+
+        await client.request('test');
+
+        // Non-numeric value skipped; remaining decremented by handleRateLimit only
+        expect(client.getRemainingRequests()).toBe(299);
+    });
+
+    it('handles missing rate limit headers gracefully', async () => {
+        vi.setSystemTime(1_000_000);
+        const client = createClient();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(JSON.stringify({}), {
+                    status: 200,
+                    headers: new Headers({ 'content-type': 'application/json' })
+                })
+            )
+        );
+
+        await client.request('test');
+
+        expect(client.getRemainingRequests()).toBe(299);
+    });
+});
+
+// =========================================================================
+// Fetch timeout
+// =========================================================================
+
+describe('fetch timeout', () => {
+    it('throws NetworkError when exceeding fetchTimeoutMs', async () => {
+        vi.useRealTimers();
+        const client = createClient({ fetchTimeoutMs: 50 });
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+                return new Promise((resolve, reject) => {
+                    const timer = setTimeout(
+                        () =>
+                            resolve(
+                                new Response(JSON.stringify({}), {
+                                    status: 200,
+                                    headers: makeHeaders()
+                                })
+                            ),
+                        5000
+                    );
+                    init?.signal?.addEventListener('abort', () => {
+                        clearTimeout(timer);
+                        reject(new DOMException('The operation was aborted.', 'AbortError'));
+                    });
+                });
+            })
+        );
+
+        await expect(client.request('test')).rejects.toBeInstanceOf(NetworkError);
+    });
+
+    it('does not throw when response arrives before timeout', async () => {
+        vi.useRealTimers();
+        const client = createClient({ fetchTimeoutMs: 5_000 });
+        mockFetchResponse({ data: 'ok' });
+
+        const result = await client.request('test');
+        expect(result).toEqual({ data: 'ok' });
     });
 });

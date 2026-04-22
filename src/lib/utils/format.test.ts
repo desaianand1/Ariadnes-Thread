@@ -6,7 +6,12 @@ import {
     formatRelativeTime,
     formatSpeed,
     formatEta,
-    getLoaderDisplayName
+    getLoaderDisplayName,
+    formatSlugToReadableText,
+    formatVersionNumber,
+    getModrinthProjectUrl,
+    isStaleUpdate,
+    formatFullDate
 } from './format';
 
 describe('capitalize', () => {
@@ -190,9 +195,104 @@ describe('formatRelativeTime', () => {
         expect(formatRelativeTime(twoYearsAgo.toISOString())).toBe('2y ago');
     });
 
-    it('handles future dates without crashing', () => {
-        const tomorrow = new Date(Date.now() + 86_400_000);
+    it('returns today for future dates', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2024-06-15T12:00:00Z'));
+        const tomorrow = new Date('2024-06-16T12:00:00Z');
         const result = formatRelativeTime(tomorrow.toISOString());
-        expect(typeof result).toBe('string');
+        expect(result).toBe('today');
+    });
+});
+
+describe('formatSlugToReadableText', () => {
+    it('converts hyphenated slug to title case', () => {
+        expect(formatSlugToReadableText('my-cool-mod')).toBe('My Cool Mod');
+    });
+
+    it('capitalizes a single word', () => {
+        expect(formatSlugToReadableText('fabric')).toBe('Fabric');
+    });
+
+    it('returns empty string for empty input', () => {
+        expect(formatSlugToReadableText('')).toBe('');
+    });
+
+    it('handles consecutive hyphens by producing extra spaces', () => {
+        expect(formatSlugToReadableText('hello--world')).toBe('Hello  World');
+    });
+});
+
+describe('formatVersionNumber', () => {
+    it('prepends v to numeric-prefixed version', () => {
+        expect(formatVersionNumber('1.0.0')).toBe('v1.0.0');
+    });
+
+    it('leaves alpha-prefixed version unchanged', () => {
+        expect(formatVersionNumber('beta-1.0')).toBe('beta-1.0');
+    });
+
+    it('prepends v to version starting with 0', () => {
+        expect(formatVersionNumber('0.1.0')).toBe('v0.1.0');
+    });
+});
+
+describe('getModrinthProjectUrl', () => {
+    it('builds mod URL', () => {
+        expect(getModrinthProjectUrl('mod', 'sodium')).toBe('https://modrinth.com/mod/sodium');
+    });
+
+    it('builds resourcepack URL', () => {
+        expect(getModrinthProjectUrl('resourcepack', 'faithless')).toBe(
+            'https://modrinth.com/resourcepack/faithless'
+        );
+    });
+});
+
+describe('isStaleUpdate', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('returns true when date exceeds threshold', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2024-06-15'));
+        expect(isStaleUpdate('2024-01-01T00:00:00Z', 30)).toBe(true);
+    });
+
+    it('returns false when within threshold', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2024-01-15'));
+        expect(isStaleUpdate('2024-01-01T00:00:00Z', 30)).toBe(false);
+    });
+
+    it('returns false for today with threshold of 1', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2024-06-15T12:00:00Z'));
+        expect(isStaleUpdate('2024-06-15T00:00:00Z', 1)).toBe(false);
+    });
+});
+
+describe('formatFullDate', () => {
+    it('formats a known ISO date with year and month', () => {
+        const result = formatFullDate('2024-06-15T14:30:00Z');
+        expect(result).toContain('2024');
+    });
+
+    it('formats epoch date', () => {
+        const result = formatFullDate('1970-01-01T00:00:00Z');
+        expect(result).toContain('1970');
+    });
+});
+
+describe('formatEta — boundary cases', () => {
+    it('rounds up at boundary value 59.999 to 60s', () => {
+        // Math.ceil(59.999) = 60 — documents that sub-minute display can show "60s"
+        expect(formatEta(59.999)).toBe('60s');
+    });
+});
+
+describe('formatBytes — TB range', () => {
+    it('caps at GB for TB-range values since no TB unit exists', () => {
+        expect(formatBytes(2 * 1024 ** 4)).toBe('2048 GB');
     });
 });

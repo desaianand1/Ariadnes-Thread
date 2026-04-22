@@ -70,6 +70,27 @@ describe('buildReviewUrl', () => {
         expect(parsed.searchParams.get('from_v')).toBe('1.20.6');
         expect(parsed.searchParams.get('from_l')).toBe('quilt');
     });
+
+    it('naturally deduplicates IDs passed in a Set', () => {
+        const result = buildReviewUrl(url('/review?c=abc'), {
+            x: new Set(['id1', 'id1', 'id2', 'id2'])
+        });
+        const parsed = new URL(result, 'http://localhost');
+        const ids = parsed.searchParams.get('x')!.split(',');
+        expect(ids).toHaveLength(2);
+        expect(ids).toEqual(expect.arrayContaining(['id1', 'id2']));
+    });
+
+    it('distinguishes undefined x (preserve) from empty Set x (remove)', () => {
+        const baseUrl = url('/review?c=abc&x=existing');
+
+        const preserved = buildReviewUrl(baseUrl, {});
+        expect(preserved).toContain('x=existing');
+
+        const removed = buildReviewUrl(baseUrl, { x: new Set() });
+        const parsed = new URL(removed, 'http://localhost');
+        expect(parsed.searchParams.has('x')).toBe(false);
+    });
 });
 
 describe('buildAdvisorSwitchUrl', () => {

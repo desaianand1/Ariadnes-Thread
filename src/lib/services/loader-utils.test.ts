@@ -35,6 +35,14 @@ describe('buildLoaderList', () => {
     it('returns only primary for unknown loader', () => {
         expect(buildLoaderList('paper', true)).toEqual(['paper']);
     });
+
+    it('returns array with empty string for empty string input', () => {
+        expect(buildLoaderList('', true)).toEqual(['']);
+    });
+
+    it('returns only primary when loader has no fallback entry even with fallback enabled', () => {
+        expect(buildLoaderList('forge', true)).toEqual(['forge']);
+    });
 });
 
 describe('buildUnresolvedReason', () => {
@@ -72,5 +80,10 @@ describe('buildUnresolvedReason', () => {
     it('uses the correct loader from options', () => {
         const result = buildUnresolvedReason('mod', makeOptions({ loader: 'forge' }));
         expect(result).toBe('No compatible version for forge on 1.20.1');
+    });
+
+    it('handles empty gameVersion and loader strings', () => {
+        const result = buildUnresolvedReason('mod', makeOptions({ gameVersion: '', loader: '' }));
+        expect(result).toBe('No compatible version for  on ');
     });
 });

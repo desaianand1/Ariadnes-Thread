@@ -541,4 +541,52 @@ describe('resolveDependencies', () => {
         expect(result.resolved).toHaveLength(1);
         expect(result.resolved[0].versionId).toBe('vdep-pinned');
     });
+
+    it('skips self-referencing dependency', async () => {
+        const resolved = [makeResolvedProject({ projectId: 'self', versionId: 'vself' })];
+
+        const selfVersion = makeVersion({
+            id: 'vself',
+            project_id: 'self',
+            dependencies: [{ project_id: 'self', dependency_type: 'required' }]
+        });
+
+        vi.spyOn(client, 'requestVersion').mockImplementation(async (endpoint, _v, opts) => {
+            const queryParams = opts?.queryParams ?? {};
+            if (endpoint === 'versions' && queryParams.ids) return [selfVersion];
+            return [];
+        });
+
+        const result = await resolveDependencies(client, resolved, makeOptions());
+        expect(result.resolved).toHaveLength(0);
+    });
+
+    it('returns empty result when no initial versions are provided', async () => {
+        vi.spyOn(client, 'requestVersion').mockImplementation(async () => []);
+
+        const result = await resolveDependencies(client, [], makeOptions());
+        expect(result.resolved).toHaveLength(0);
+        expect(result.conflicts).toHaveLength(0);
+        expect(result.warnings).toHaveLength(0);
+        expect(result.unresolved).toHaveLength(0);
+    });
+
+    it('skips dependencies with null project_id', async () => {
+        const resolved = [makeResolvedProject({ projectId: 'main', versionId: 'vmain' })];
+
+        const parentVersion = makeVersion({
+            id: 'vmain',
+            project_id: 'main',
+            dependencies: [{ project_id: null as unknown as string, dependency_type: 'required' }]
+        });
+
+        vi.spyOn(client, 'requestVersion').mockImplementation(async (endpoint, _v, opts) => {
+            const queryParams = opts?.queryParams ?? {};
+            if (endpoint === 'versions' && queryParams.ids) return [parentVersion];
+            return [];
+        });
+
+        const result = await resolveDependencies(client, resolved, makeOptions());
+        expect(result.resolved).toHaveLength(0);
+    });
 });

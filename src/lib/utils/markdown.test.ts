@@ -102,6 +102,23 @@ describe('renderMarkdown', () => {
             expect(result).not.toContain('onerror');
             expect(result).not.toContain('alert');
         });
+
+        it('strips onclick handler from div element', async () => {
+            const result = await renderMarkdown('<div onclick="alert(1)">content</div>');
+
+            expect(result).not.toContain('onclick');
+            expect(result).not.toContain('alert');
+            expect(result).toContain('content');
+        });
+
+        it('strips data: URI from img src attribute', async () => {
+            const result = await renderMarkdown(
+                '<img src="data:text/html,<script>alert(1)</script>">'
+            );
+
+            expect(result).not.toContain('data:text/html');
+            expect(result).not.toContain('alert');
+        });
     });
 
     describe('edge cases', () => {

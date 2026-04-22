@@ -393,4 +393,71 @@ describe('downloadFiles', () => {
         const result = await promise;
         expect(result.size).toBe(0);
     });
+
+    it('falls back to arrayBuffer when response.body is null', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            body: null,
+            arrayBuffer: () => Promise.resolve(KNOWN_CONTENT.buffer.slice(0)),
+            headers: new Headers({ 'Content-Length': String(KNOWN_CONTENT.length) })
+        });
+        const callbacks = makeCallbacks();
+        const controller = new AbortController();
+
+        const result = await downloadFiles(
+            [makeFile('https://cdn.modrinth.com/mod.jar')],
+            { concurrency: 2, maxRetries: 0, retryDelayMs: 0, signal: controller.signal },
+            callbacks
+        );
+
+        expect(result.size).toBe(1);
+        expect(callbacks.completes).toContain('https://cdn.modrinth.com/mod.jar');
+    });
+
+    it('skips SHA-512 verification when hash is empty string', async () => {
+        globalThis.fetch = mockFetchSuccess();
+        const callbacks = makeCallbacks();
+        const controller = new AbortController();
+
+        const result = await downloadFiles(
+            [makeFile('https://cdn.modrinth.com/mod.jar', KNOWN_SHA1, '')],
+            { concurrency: 2, maxRetries: 0, retryDelayMs: 0, signal: controller.signal },
+            callbacks
+        );
+
+        expect(result.size).toBe(1);
+        expect(callbacks.completes).toContain('https://cdn.modrinth.com/mod.jar');
+    });
+
+    it('allows CDN URLs with query parameters', async () => {
+        globalThis.fetch = mockFetchSuccess();
+        const callbacks = makeCallbacks();
+        const controller = new AbortController();
+
+        const result = await downloadFiles(
+            [makeFile('https://cdn.modrinth.com/data/abc/versions/123/mod.jar?token=xyz')],
+            { concurrency: 2, maxRetries: 0, retryDelayMs: 0, signal: controller.signal },
+            callbacks
+        );
+
+        expect(result.size).toBe(1);
+    });
+
+    it('treats HTTP 403 as download error', async () => {
+        globalThis.fetch = vi
+            .fn()
+            .mockResolvedValue(new Response(null, { status: 403, statusText: 'Forbidden' }));
+        const callbacks = makeCallbacks();
+        const controller = new AbortController();
+
+        await expect(
+            downloadFiles(
+                [makeFile('https://cdn.modrinth.com/mod.jar')],
+                { concurrency: 2, maxRetries: 0, retryDelayMs: 0, signal: controller.signal },
+                callbacks
+            )
+        ).rejects.toThrow('failed to download');
+    });
 });
