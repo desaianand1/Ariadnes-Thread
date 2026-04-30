@@ -1,3 +1,9 @@
+## [1.29.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.29.2...v1.29.3) (2026-04-30)
+
+### Bug Fixes
+
+- **security:** harden bot protection based on production log analysis ([9c7a87f](https://github.com/desaianand1/Ariadnes-Thread/commit/9c7a87f4680b13bbaae062b27ae39572ac973463))
+
 ## [1.29.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.29.1...v1.29.2) (2026-04-20)
 
 ### Bug Fixes
