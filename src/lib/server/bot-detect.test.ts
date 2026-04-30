@@ -179,3 +179,45 @@ describe('isLikelyBot', () => {
         expect(isLikelyBot(req)).toBe(false);
     });
 });
+
+describe('new bot UA patterns', () => {
+    const scannerUAs = [
+        ['zgrab/0.x', 'zgrab'],
+        ['Censys/1.0', 'censys'],
+        ['Shodan.io', 'shodan'],
+        ['Mozilla/5.0 (compatible; MJ12bot/v1.4.8)', 'mj12bot'],
+        ['Mozilla/5.0 (compatible; DotBot/1.2)', 'dotbot'],
+        ['Mozilla/5.0 (compatible; PetalBot; +https://webmaster.petalsearch.com/)', 'petalbot'],
+        ['Mozilla/5.0 (compatible; Bytespider)', 'bytespider'],
+        ['GPTBot/1.0', 'gptbot'],
+        ['ClaudeBot/1.0', 'claudebot'],
+        ['CCBot/2.0', 'ccbot'],
+        ['HeadlessChrome/120.0.0.0', 'headlesschrome'],
+        ['Mozilla/5.0 PhantomJS', 'phantomjs'],
+        ['Selenium/4.0', 'selenium'],
+        ['libwww-perl/6.67', 'libwww-perl'],
+        ['Nikto/2.1.6', 'nikto'],
+        ['Mozilla/5.0 (compatible; SemrushBot/7)', 'semrush'],
+        ['Mozilla/5.0 (compatible; AhrefsBot/7.0)', 'ahref'],
+        ['DataForSeoBot/1.0', 'dataforseo']
+    ] as const;
+
+    for (const [ua, label] of scannerUAs) {
+        it(`scores 3 for ${label} UA pattern`, () => {
+            const req = makeRequest({
+                'user-agent': ua,
+                accept: '*/*',
+                'accept-language': 'en',
+                'sec-fetch-site': 'none'
+            });
+            expect(getBotScore(req)).toBe(3);
+        });
+    }
+
+    it('does not block Nmap UA when it appears in the allowlisted Googlebot string', () => {
+        const req = makeRequest({
+            'user-agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; nmap-like)'
+        });
+        expect(getBotScore(req)).toBe(0);
+    });
+});

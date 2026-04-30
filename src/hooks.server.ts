@@ -45,7 +45,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     // Bot detection — stricter on the expensive/abuse-prone paths (API, /review),
     // looser on the public site. /api/health is exempt so Docker's HEALTHCHECK
     // curl probe (no browser headers) doesn't get blocked.
-    if (pathname !== '/api/health') {
+    if (pathname !== '/api/health' && pathname !== '/api/csp-report') {
         const apiOrReview = pathname.startsWith('/api/') || pathname.startsWith('/review');
         const threshold = apiOrReview ? BOT_SCORE_THRESHOLD : BOT_SCORE_THRESHOLD_GENERAL;
         const score = getBotScore(event.request);

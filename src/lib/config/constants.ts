@@ -443,7 +443,28 @@ export const BOT_UA_PATTERNS = [
     'undici',
     'scrapy',
     'crawler',
-    'spider'
+    'spider',
+    'libwww-perl',
+    'nikto',
+    'nmap',
+    'masscan',
+    'zgrab',
+    'censys',
+    'shodan',
+    'netcraft',
+    'semrush',
+    'ahref',
+    'mj12bot',
+    'dotbot',
+    'petalbot',
+    'bytespider',
+    'gptbot',
+    'claudebot',
+    'ccbot',
+    'dataforseo',
+    'headlesschrome',
+    'phantomjs',
+    'selenium'
 ] as const;
 
 /** Search engine crawlers to allow through bot detection */
