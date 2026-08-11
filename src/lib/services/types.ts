@@ -1,4 +1,10 @@
-import type { ProjectType, SideRequirement, VersionType, DependencyType } from '$lib/api/types';
+import type {
+    ProjectType,
+    SideRequirement,
+    VersionType,
+    DependencyType,
+    EnvironmentEnum
+} from '$lib/api/types';
 
 // =============================================================================
 // Side Classification
@@ -43,8 +49,11 @@ export interface ResolvedProject {
 
     side: SideClassification;
     folder: string;
-    clientSide: SideRequirement;
-    serverSide: SideRequirement;
+    /** @deprecated Use `environment` instead */
+    clientSide?: SideRequirement;
+    /** @deprecated Use `environment` instead */
+    serverSide?: SideRequirement;
+    environment?: EnvironmentEnum;
 
     /** Set when this project was resolved as a dependency of another */
     dependencyOf?: string;

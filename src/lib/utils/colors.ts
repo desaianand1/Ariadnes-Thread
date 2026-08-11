@@ -2,6 +2,7 @@
  * Color utilities for mod loaders and Modrinth color values
  */
 
+import type { EnvironmentEnum } from '$lib/api/types';
 import type { KnownLoader } from '$lib/config/constants';
 import { RESOLUTION_PERCENTAGE_THRESHOLDS } from '$lib/config/constants';
 import MonitorIcon from '@lucide/svelte/icons/monitor';
@@ -153,6 +154,19 @@ export const SEMANTIC_BANNER_COLORS = {
         border: 'border-emerald-200 dark:border-emerald-800'
     }
 } as const;
+
+export const ENVIRONMENT_DISPLAY_LABELS: Record<EnvironmentEnum, string> = {
+    client_only: 'Client only',
+    server_only: 'Server only — works in singleplayer',
+    dedicated_server_only: 'Dedicated server only',
+    client_and_server: 'Required on both client and server',
+    server_only_client_optional: 'Server required, optional on client',
+    client_only_server_optional: 'Client required, optional on server',
+    client_or_server: 'Works on client or server independently',
+    client_or_server_prefers_both: 'Works on either, best on both',
+    singleplayer_only: 'Singleplayer only',
+    unknown: 'Unknown'
+};
 
 export const SIDE_ICONS = {
     client: MonitorIcon,

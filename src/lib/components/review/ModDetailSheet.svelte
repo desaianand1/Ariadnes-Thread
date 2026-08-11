@@ -10,7 +10,11 @@
     import { Button } from '$lib/components/ui/button';
     import ModBadgeRow from './ModBadgeRow.svelte';
     import ModrinthWordmark from '$lib/components/icons/ModrinthWordmark.svelte';
-    import { SEMANTIC_BANNER_COLORS, decimalToHex } from '$lib/utils/colors';
+    import {
+        SEMANTIC_BANNER_COLORS,
+        ENVIRONMENT_DISPLAY_LABELS,
+        decimalToHex
+    } from '$lib/utils/colors';
     import {
         formatSlugToReadableText,
         formatBytes,
@@ -242,6 +246,11 @@
                                     {#if project.usedFallbackLoader && project.resolvedLoader}
                                         <Badge variant="outline" class="text-xs">
                                             Via {getLoaderDisplayName(project.resolvedLoader)}
+                                        </Badge>
+                                    {/if}
+                                    {#if project.environment && project.environment !== 'unknown'}
+                                        <Badge variant="outline" class="text-xs">
+                                            {ENVIRONMENT_DISPLAY_LABELS[project.environment]}
                                         </Badge>
                                     {/if}
                                     {#if warnings.length > 0}

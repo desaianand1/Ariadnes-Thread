@@ -1,7 +1,7 @@
 import type { ModrinthClient } from '$lib/api/client';
 import type { ModrinthProject, ModrinthVersion, ModrinthFile } from '$lib/api/types';
 import { getProjectFolder } from '$lib/api/types';
-import { classifySide } from './side-classification';
+import { classifyProject } from './side-classification';
 import {
     LOADER_AGNOSTIC_PROJECT_TYPES,
     RATE_LIMIT_SAFETY_MARGIN,
@@ -392,7 +392,7 @@ function buildResolvedProject(
         resolvedGameVersion?: string;
     }
 ): ResolvedProject {
-    const side = classifySide(project.client_side, project.server_side);
+    const side = classifyProject(version.environment, project.client_side, project.server_side);
     return {
         projectId: project.id,
         projectSlug: project.slug,
@@ -413,6 +413,7 @@ function buildResolvedProject(
         folder: getProjectFolder(project.project_type),
         clientSide: project.client_side,
         serverSide: project.server_side,
+        environment: version.environment,
         usedFallbackLoader: overrides?.usedFallbackLoader ?? false,
         resolvedLoader: overrides?.resolvedLoader,
         resolvedGameVersion: overrides?.resolvedGameVersion,

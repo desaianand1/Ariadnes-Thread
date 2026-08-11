@@ -4,7 +4,19 @@
  */
 
 import type { SideClassification } from '$lib/services/types';
-import { classifySide } from '$lib/services/side-classification';
+import { classifyProject } from '$lib/services/side-classification';
+
+export type EnvironmentEnum =
+    | 'client_only'
+    | 'server_only'
+    | 'dedicated_server_only'
+    | 'client_and_server'
+    | 'server_only_client_optional'
+    | 'client_only_server_optional'
+    | 'client_or_server'
+    | 'client_or_server_prefers_both'
+    | 'singleplayer_only'
+    | 'unknown';
 
 /**
  * API Version types
@@ -144,9 +156,12 @@ export interface ModrinthProject {
     thread_id?: string;
     monetization_status?: 'monetized' | 'demonetized' | 'force-demonetized';
 
-    // Side requirements - important for server/client categorization
-    client_side: SideRequirement;
-    server_side: SideRequirement;
+    // Side requirements
+    /** @deprecated Use `environment` from the resolved version instead */
+    client_side?: SideRequirement;
+    /** @deprecated Use `environment` from the resolved version instead */
+    server_side?: SideRequirement;
+    environment?: EnvironmentEnum[];
 }
 
 // =============================================================================
@@ -219,6 +234,7 @@ export interface ModrinthVersion {
     dependencies: ModrinthDependency[];
     game_versions: string[];
     loaders: string[];
+    environment?: EnvironmentEnum;
 }
 
 // =============================================================================
@@ -275,8 +291,8 @@ export interface ParsedProject {
     description: string;
     iconUrl?: string;
     projectType: ProjectType;
-    clientSide: SideRequirement;
-    serverSide: SideRequirement;
+    clientSide?: SideRequirement;
+    serverSide?: SideRequirement;
     categories: string[];
     gameVersions: string[];
     loaders: string[];
@@ -295,8 +311,8 @@ export interface ResolvedMod {
     fileName: string;
     fileUrl: string;
     fileSize: number;
-    clientSide: SideRequirement;
-    serverSide: SideRequirement;
+    clientSide?: SideRequirement;
+    serverSide?: SideRequirement;
     dependencies: ModrinthDependency[];
 }
 
@@ -305,15 +321,12 @@ export interface ResolvedMod {
  */
 export type ModCategory = SideClassification;
 
-/**
- * Get mod category based on client_side and server_side requirements.
- * Delegates to the shared classifySide function for consistency.
- */
 export function getModCategory(
-    clientSide: SideRequirement,
-    serverSide: SideRequirement
+    clientSide?: SideRequirement,
+    serverSide?: SideRequirement,
+    environment?: EnvironmentEnum
 ): ModCategory {
-    return classifySide(clientSide, serverSide);
+    return classifyProject(environment, clientSide, serverSide);
 }
 
 /**

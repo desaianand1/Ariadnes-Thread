@@ -1,7 +1,7 @@
 import type { ModrinthClient } from '$lib/api/client';
 import type { ModrinthProject, ModrinthVersion } from '$lib/api/types';
 import { getProjectFolder } from '$lib/api/types';
-import { classifySide } from './side-classification';
+import { classifyProject } from './side-classification';
 import { MAX_DEPENDENCY_DEPTH } from '$lib/config/constants';
 import { chunkArray } from '$lib/utils/array';
 import { resolveVersion } from './resolution.server';
@@ -348,7 +348,7 @@ function processPinnedDeps(
             });
         }
 
-        const side = classifySide(project.client_side, project.server_side);
+        const side = classifyProject(version.environment, project.client_side, project.server_side);
 
         resolved.push({
             projectId: project.id,
@@ -370,6 +370,7 @@ function processPinnedDeps(
             folder: getProjectFolder(project.project_type),
             clientSide: project.client_side,
             serverSide: project.server_side,
+            environment: version.environment,
             dependencyOf: node.requiredBy,
             dependencyType: node.dependencyType,
             dependencyDepth: node.depth,

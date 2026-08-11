@@ -1,4 +1,4 @@
-import type { SideRequirement } from '$lib/api/types';
+import type { SideRequirement, EnvironmentEnum } from '$lib/api/types';
 import type { SideClassification } from './types';
 
 /**
@@ -49,5 +49,39 @@ export function classifySide(
         return 'client';
     }
 
+    return 'both';
+}
+
+export function classifyEnvironment(env: EnvironmentEnum): SideClassification {
+    switch (env) {
+        case 'client_only':
+        case 'singleplayer_only':
+            return 'client';
+        case 'server_only':
+        case 'dedicated_server_only':
+            return 'server';
+        case 'client_and_server':
+        case 'server_only_client_optional':
+        case 'client_only_server_optional':
+        case 'client_or_server':
+        case 'client_or_server_prefers_both':
+        case 'unknown':
+            return 'both';
+        default:
+            return 'both';
+    }
+}
+
+export function classifyProject(
+    versionEnvironment?: EnvironmentEnum,
+    projectClientSide?: SideRequirement,
+    projectServerSide?: SideRequirement
+): SideClassification {
+    if (versionEnvironment && versionEnvironment !== 'unknown') {
+        return classifyEnvironment(versionEnvironment);
+    }
+    if (projectClientSide && projectServerSide) {
+        return classifySide(projectClientSide, projectServerSide);
+    }
     return 'both';
 }
