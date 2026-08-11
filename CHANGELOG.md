@@ -1,3 +1,9 @@
+# [1.30.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.29.3...v1.30.0) (2026-08-11)
+
+### Features
+
+- **api:** migrate to Modrinth environment API for side classification ([81db76c](https://github.com/desaianand1/Ariadnes-Thread/commit/81db76cacf11d69a55b66d27fe817ea009c0857e))
+
 ## [1.29.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.29.2...v1.29.3) (2026-04-30)
 
 ### Bug Fixes
