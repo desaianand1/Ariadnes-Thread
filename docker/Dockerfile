@@ -1,7 +1,7 @@
 ARG PNPM_VERSION=10.28.2
 
 # --- deps stage (all deps including native compilation) ---
-FROM node:24-alpine AS deps
+FROM node:24.22.1-alpine AS deps
 ARG PNPM_VERSION
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 WORKDIR /app
@@ -11,7 +11,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --prod=false
 
 # --- builder stage ---
-FROM node:24-alpine AS builder
+FROM node:24.22.1-alpine AS builder
 ARG PNPM_VERSION
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 WORKDIR /app
@@ -26,7 +26,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --prod
 
 # --- runner stage ---
-FROM node:24-alpine AS runner
+FROM node:24.22.1-alpine AS runner
 WORKDIR /app
 
 RUN addgroup -g 1001 -S sveltekit && \
