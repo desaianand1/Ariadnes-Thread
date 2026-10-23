@@ -1,3 +1,9 @@
+## [1.30.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.30.0...v1.30.1) (2026-10-23)
+
+### Bug Fixes
+
+- **security:** bump Node.js Docker image 24-alpine → 24.22.1-alpine (Brotli RCE, TLS bypass) ([bfec7a8](https://github.com/desaianand1/Ariadnes-Thread/commit/bfec7a8589f358364b53227ac3e0d3eff74c2651))
+
 # [1.30.0](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.29.3...v1.30.0) (2026-08-11)
 
 ### Features
