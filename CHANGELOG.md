@@ -1,3 +1,9 @@
+## [1.30.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.30.1...v1.30.2) (2026-11-04)
+
+### Bug Fixes
+
+- **security:** update pnpm to v10.34.5 [security] ([#3](https://github.com/desaianand1/Ariadnes-Thread/issues/3)) ([f7db4bc](https://github.com/desaianand1/Ariadnes-Thread/commit/f7db4bc51d0f4279470a6d3ad4da0a72669c56d0))
+
 ## [1.30.1](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.30.0...v1.30.1) (2026-10-23)
 
 ### Bug Fixes
