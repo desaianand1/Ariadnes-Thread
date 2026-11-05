@@ -1,3 +1,9 @@
+## [1.30.3](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.30.2...v1.30.3) (2026-11-05)
+
+### Bug Fixes
+
+- **deps:** update node.js to v24.22.2 ([#8](https://github.com/desaianand1/Ariadnes-Thread/issues/8)) ([601244c](https://github.com/desaianand1/Ariadnes-Thread/commit/601244c0bc9784e869c09ffe53471ac8121a9aaa))
+
 ## [1.30.2](https://github.com/desaianand1/Ariadnes-Thread/compare/v1.30.1...v1.30.2) (2026-11-04)
 
 ### Bug Fixes
