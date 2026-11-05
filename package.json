@@ -19,7 +19,7 @@
         "email:sync": "npx tsx src/lib/server/email/sync-templates.ts"
     },
     "devDependencies": {
-        "@better-svelte-email/preview": "2.0.0-beta.2",
+        "@better-svelte-email/preview": "2.3.0",
         "@cloudflare/workers-types": "^4.20260402.1",
         "@commitlint/cli": "^20.5.0",
         "@commitlint/config-conventional": "^20.5.0",
